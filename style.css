@@ -38,11 +38,11 @@ table {
 	margin: 2em 0;
 }
 tr {
-	border-bottom: 1px solid $color-border;
+	border-bottom: 1px solid silver;
 }
 td, th {
 	text-align: start;
-	padding: $padding / 2;
+	padding: 0.5em;
 	vertical-align: top;
 }
 
