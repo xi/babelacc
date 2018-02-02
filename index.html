@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>Babelacc</title>
+	<link rel="stylesheet" href="style.css" />
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+</head>
+
+<body>
+	<h1>Babelacc</h1>
+
+	<p>Enter some HTML to compare different implementations of the text alternative computation.</p>
+	<p>Inline CSS is supported, but no javascript or external CSS.</p>
+
+	<form id="ba-form" method="GET">
+		<textarea name="input" maxlength="1000"></textarea>
+		<button>Calculate</button>
+	</form>
+
+	<table>
+		<thead>
+			<tr>
+				<th>Implementation</th>
+				<th>Name</th>
+				<th>Description</th>
+			</tr>
+		</thead>
+		<tbody id="ba-results">
+		</tbody>
+	</table>
+
+	<div id="ba-preview"></div>
+
+	<!-- Implementations -->
+	<script src="lib/aria-api.js"></script>
+	<script src="lib/accdc.js"></script>
+
+	<script src="babel.js"></script>
+
+
+	<h2><abbr>FAQ</abbr></h2>
+
+	<h3>What is this?</h3>
+	<p>Babelacc is an interactive tool to compare different implementations of
+	the <a href="https://www.w3.org/TR/accname-aam-1.1/">Accessible Name and
+	Description Computation</a>. It can be used by developers of these tools to
+	find incompatibilities. It can also be used by web authors to check their
+	content.</p>
+
+	<h3>Testing manually is tedious. Is there an automated test suite I can use?</h3>
+	<p>An automated test suite is planned, but not yet available. However, you
+	can help building one by finding interesting test cases on this page.</p>
+
+	<h3>I also implemented this algorithm. Can you add my implementation?</h3>
+	<p>Sure! Just create a pull request at TODO.</p>
+
+	<h3>Why is the output of real browsers not included in the comparison?</h3>
+	<p>The output of real browsers is actually more important than all of
+	these tools. We would love to include it, but that is not that easy. If you
+	have an idea how that could be done, feel free to submit a pull request.</p>
+	<p>Also note that the code is rendered below the list of results. So if you
+	have assitive technologoes available you can check the output there.</p>
+
+	<h3>I found an interesting case where implementations do not agree. What should I do with it?</h3>
+	<p>Awesome! Please create a pull request so we can include this case in our test suite.</p>
+</body>
