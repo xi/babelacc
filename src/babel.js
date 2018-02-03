@@ -7,24 +7,32 @@ var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
 var results = document.querySelector('#ba-results');
 
+var ex = function(fn, args, _this) {
+	try {
+		return fn.apply(_this, args);
+	} catch (error) {
+		return error;
+	}
+};
+
 var implementations = {
 	'aria-api': function(el) {
 		return {
-			name: ariaApi.getName(el),
-			desc: ariaApi.getDescription(el)
+			name: ex(ariaApi.getName, [el]),
+			desc: ex(ariaApi.getDescription, [el]),
 		};
 	},
 	'accdc': accdc.calcNames,
 	'axe': function(el) {
 		return {
-			name: axe.commons.text.accessibleText(el),
-			desc: null,
+			name: ex(axe.commons.text.accessibleText, [el]),
+			desc: '-',
 		};
 	},
 	'axs': function(el) {
 		return {
-			name: axs.properties.findTextAlternatives(el, {}),
-			desc: null,
+			name: ex(axs.properties.findTextAlternatives, [el, {}]),
+			desc: '-',
 		};
 	},
 };
