@@ -1,2 +1,2 @@
-babel.js: src/babel.js
+babel.js: src/babel.js lib/*.js
 	browserify $< -o $@
