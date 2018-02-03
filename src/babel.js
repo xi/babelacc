@@ -1,5 +1,6 @@
 var ariaApi = require('aria-api');
 var accdc = require('../lib/accdc');
+var axe = require('axe-core');
 
 var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
@@ -13,6 +14,12 @@ var implementations = {
 		};
 	},
 	'accdc': accdc.calcNames,
+	'axe': function(el) {
+		return {
+			name: axe.commons.text.accessibleText(el),
+			desc: null,
+		};
+	},
 };
 
 var createTd = function(text) {
