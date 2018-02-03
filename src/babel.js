@@ -1,3 +1,6 @@
+var ariaApi = require('aria-api');
+var accdc = require('../lib/accdc');
+
 var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
 var results = document.querySelector('#ba-results');
@@ -5,11 +8,11 @@ var results = document.querySelector('#ba-results');
 var implementations = {
 	'aria-api': function(el) {
 		return {
-			name: aria.getName(el),
-			desc: aria.getDescription(el)
+			name: ariaApi.getName(el),
+			desc: ariaApi.getDescription(el)
 		};
 	},
-	'accdc': calcNames
+	'accdc': accdc.calcNames,
 };
 
 var createTd = function(text) {
