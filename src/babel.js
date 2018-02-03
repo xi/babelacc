@@ -20,7 +20,7 @@ var implementations = {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
-			role: ex(ariaApi.getRole, [el.children[0]]),
+			role: ex(ariaApi.getRole, [el]),
 		};
 	},
 	'accdc': accdc.calcNames,
@@ -28,7 +28,7 @@ var implementations = {
 		return {
 			name: ex(axe.commons.text.accessibleText, [el]),
 			desc: '-',
-			role: el.children[0].getAttribute('role') || ex(axe.commons.aria.implicitRole, [el.children[0]]),
+			role: el.getAttribute('role') || ex(axe.commons.aria.implicitRole, [el]),
 		};
 	},
 	'axs': function(el) {
@@ -36,7 +36,7 @@ var implementations = {
 			name: ex(axs.properties.findTextAlternatives, [el, {}]),
 			desc: '-',
 			role: ex(function() {
-				var roles = axs.utils.getRoles(el.children[0], true);
+				var roles = axs.utils.getRoles(el, true);
 				if (roles) {
 					return roles.roles.map(x => x.name).join(' ');
 				}
@@ -56,7 +56,7 @@ var run = function(html) {
 	results.innerHTML = '';
 
 	return Promise.all(Object.keys(implementations).map(function(key) {
-		var p = implementations[key](preview);
+		var p = implementations[key](preview.children[0] || preview);
 
 		return Promise.resolve(p).then(function(result) {
 			var tr = document.createElement('tr');
