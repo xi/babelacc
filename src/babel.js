@@ -1,6 +1,7 @@
 var ariaApi = require('aria-api');
 var accdc = require('../lib/accdc');
 var axe = require('axe-core');
+var axs = require('../lib/axs');
 
 var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
@@ -17,6 +18,12 @@ var implementations = {
 	'axe': function(el) {
 		return {
 			name: axe.commons.text.accessibleText(el),
+			desc: null,
+		};
+	},
+	'axs': function(el) {
+		return {
+			name: axs.properties.findTextAlternatives(el, {}),
 			desc: null,
 		};
 	},
