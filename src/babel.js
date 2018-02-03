@@ -56,19 +56,9 @@ var run = function(html) {
 	results.innerHTML = '';
 
 	return Promise.all(Object.keys(implementations).map(function(key) {
-		var promise;
+		var p = implementations[key](preview);
 
-		try {
-			p = implementations[key](preview);
-			promise = Promise.resolve(p);
-		} catch (error) {
-			promise = Promise.resolve({
-				name: error,
-				description: error,
-			});
-		}
-
-		return promise.then(function(result) {
+		return Promise.resolve(p).then(function(result) {
 			var tr = document.createElement('tr');
 
 			tr.appendChild(createTd(key));
