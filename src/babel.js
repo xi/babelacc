@@ -1,5 +1,5 @@
 var ariaApi = require('aria-api');
-var accdc = require('../lib/accdc');
+var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
 var axs = require('../lib/axs');
 
