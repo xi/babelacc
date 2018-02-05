@@ -1,7 +1,7 @@
 var ariaApi = require('aria-api');
 var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
-var axs = require('../lib/axs');
+var axs = require('./axs');
 
 var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
