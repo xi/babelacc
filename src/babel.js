@@ -71,15 +71,6 @@ var run = function(html) {
 	}));
 };
 
-location.search.substr(1).split('&').forEach(function(part) {
-	var p = part.split('=');
-	if (p[0] === 'input') {
-		var html = decodeURIComponent(p[1].replace(/\+/g, ' '));
-		form.input.value = html;
-		run(html);
-	}
-});
-
 // https://stackoverflow.com/questions/454202
 var resize = function(event) {
 	/* 0-timeout to get the already changed text */
@@ -90,3 +81,16 @@ var resize = function(event) {
 };
 form.input.addEventListener('keydown', resize);
 resize({target: form.input});
+
+try {
+	eval('alert("This tools requires a browser that supports CSP. Please update!")');
+} catch (error) {
+	location.search.substr(1).split('&').forEach(function(part) {
+		var p = part.split('=');
+		if (p[0] === 'input') {
+			var html = decodeURIComponent(p[1].replace(/\+/g, ' '));
+			form.input.value = html;
+			run(html);
+		}
+	});
+}
