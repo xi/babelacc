@@ -56,7 +56,7 @@ var run = function(html) {
 	results.innerHTML = '';
 
 	return Promise.all(Object.keys(implementations).map(function(key) {
-		var p = implementations[key](preview.children[0] || preview);
+		var p = implementations[key](preview.querySelector('#test') || preview.children[0] || preview);
 
 		return Promise.resolve(p).then(function(result) {
 			var tr = document.createElement('tr');
