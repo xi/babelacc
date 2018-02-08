@@ -1,367 +1,4 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/*!
-calcNames 1.2, compute the Name and Description property values for a DOM node
-Returns an object with 'name' and 'desc' properties.
-Authored by Bryan Garaventa plus contrabutions by Tobias Bengfort
-Distributed under the terms of the Open Source Initiative OSI - MIT License
-*/
-
-var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
-	if (!node || node.nodeType !== 1) {
-		return;
-	}
-
-	var trim = function(str) {
-		if (typeof str !== 'string') {
-			return '';
-		}
-
-		return str.replace(/^\s+|\s+$/g, '');
-	};
-
-	var walkDOM = function(node, fn, refNode) {
-		if (!node) {
-			return;
-		}
-		fn(node);
-
-		if (!isException(node, refNode)) {
-			node = node.firstChild;
-
-			while (node) {
-				walkDOM(node, fn, refNode);
-				node = node.nextSibling;
-			}
-		}
-	};
-
-	var isFocusable = function(node) {
-		var nodeName = node.nodeName.toLowerCase();
-
-		if (node.getAttribute('tabindex')) {
-			return true;
-		}
-		if (nodeName === 'a' && node.getAttribute('href')) {
-			return true;
-		}
-		if (['input', 'select', 'button'].indexOf(nodeName) !== -1 && node.getAttribute('type') !== 'hidden') {
-			return true;
-		}
-		return false;
-	};
-
-	var isException = function(node, refNode) {
-		if (!refNode || !node || refNode.nodeType !== 1 || node.nodeType !== 1) {
-			return false;
-		}
-
-		var list1 = {
-			roles: ['link', 'button', 'checkbox', 'option', 'radio', 'switch', 'tab', 'treeitem', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'cell', 'columnheader', 'rowheader', 'tooltip', 'heading'],
-			tags: ['a', 'button', 'summary', 'input', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'menuitem', 'option', 'td', 'th']
-		};
-
-		var list2 = {
-			roles: ['application', 'alert', 'log', 'marquee', 'timer', 'alertdialog', 'dialog', 'banner', 'complementary', 'form', 'main', 'navigation', 'region', 'search', 'article', 'document', 'feed', 'figure', 'img', 'math', 'toolbar', 'menu', 'menubar', 'grid', 'listbox', 'radiogroup', 'textbox', 'searchbox', 'spinbutton', 'scrollbar', 'slider', 'tablist', 'tabpanel', 'tree', 'treegrid', 'separator'],
-			tags: ['article', 'aside', 'body', 'select', 'datalist', 'optgroup', 'dialog', 'figure', 'footer', 'form', 'header', 'hr', 'img', 'textarea', 'input', 'main', 'math', 'menu', 'nav', 'section']
-		};
-
-		var list3 = {
-			roles: ['combobox', 'term', 'definition', 'directory', 'list', 'group', 'note', 'status', 'table', 'rowgroup', 'row', 'contentinfo'],
-			tags: ['dl', 'ul', 'ol', 'dd', 'details', 'output', 'table', 'thead', 'tbody', 'tfoot', 'tr']
-		};
-
-		var inList = function(node, list) {
-			var role = node.getAttribute('role');
-			var tag = node.nodeName.toLowerCase();
-			return (
-				list.roles.indexOf(role) >= 0 ||
-				(!role && list2.tags.indexOf(tag) >= 0)
-			);
-		};
-
-		if (inList(node, list2)) {
-			return true;
-		} else if (inList(node, list3)) {
-			if (node === refNode) {
-				return !isFocusable(node);
-			} else {
-				return !inList(refNode, list1);
-			}
-		} else {
-			return false;
-		}
-	};
-
-	var isHidden = function(node, refNode) {
-		if (node.nodeType !== 1 || node == refNode) {
-			return false;
-		}
-
-		if (node.getAttribute('aria-hidden') === 'true') {
-			return true;
-		}
-
-		var style = {};
-		if (document.defaultView && document.defaultView.getComputedStyle) {
-			style = document.defaultView.getComputedStyle(node, '');
-		} else if (node.currentStyle) {
-			style = node.currentStyle;
-		}
-		if (style['display'] === 'none' || style['visibility'] === 'hidden') {
-			return true;
-		}
-
-		return false;
-	};
-
-	var getCSSText = function(node, refNode) {
-		if (node.nodeType !== 1 || node == refNode || ['input', 'select', 'textarea', 'img', 'iframe'].indexOf(node.nodeName.toLowerCase()) !== -1) {
-						return {before: '', after: ''};
-		}
-
-		var getText = function(node, position) {
-			var text = document.defaultView.getComputedStyle(node, position).getPropertyValue('content').replace(/^\"|\"$/g, '');
-			if (!text || text === 'none') {
-								return '';
-			} else {
-				return text;
-			}
-		};
-
-		if (document.defaultView && document.defaultView.getComputedStyle) {
-			return {
-				before: getText(node, ':before'),
-				after: getText(node, ':after')
-			};
-		} else {
-			return {before: '', after: ''};
-		}
-	};
-
-	var hasParentLabel = function(node, noLabel, refNode) {
-		while (node && node !== refNode) {
-			node = node.parentNode;
-
-			if (node.getAttribute) {
-				if (['presentation', 'none'].indexOf(node.getAttribute('role')) === -1) {
-					if (!noLabel && node.getAttribute('aria-label')) {
-						return true;
-					}
-					if (isHidden(node, refNode)) {
-						return true;
-					}
-				}
-			}
-		}
-
-		return false;
-	};
-
-	var walk = function(refNode, stop, skip) {
-		var fullName = '';
-		var nodes = [];
-		var cssOP = {
-			before: '',
-			after: ''
-		};
-
-		if (nodes.indexOf(refNode) === -1) {
-			nodes.push(refNode);
-			cssOP = getCSSText(refNode, null);
-
-			// Enabled in Visual ARIA to prevent self referencing by Visual ARIA tooltips
-			if (preventVisualARIASelfCSSRef) {
-				if (cssOP.before.indexOf(' [ARIA] ') !== -1 || cssOP.before.indexOf(' aria-') !== -1) 
-					cssOP.before = '';
-				if (cssOP.after.indexOf(' [ARIA] ') !== -1 || cssOP.after.indexOf(' aria-') !== -1)  
-					cssOP.after = '';
-			}
-		}
-
-		walkDOM(refNode, function(node) {
-			if (skip || !node || (isHidden(node, refNode))) {
-				return;
-			}
-
-			var name = '';
-			var cssO = {
-				before: '',
-				after: ''
-			};
-
-			var parent = refNode === node ? node : node.parentNode;
-			if (nodes.indexOf(parent) === -1) {
-				nodes.push(parent);
-				cssO = getCSSText(parent, refNode);
-
-				// Enabled in Visual ARIA to prevent self referencing by Visual ARIA tooltips
-				if (preventVisualARIASelfCSSRef) {
-					if (cssO.before.indexOf(' [ARIA] ') !== -1 || cssO.before.indexOf(' aria-') !== -1) 
-						cssO.before = '';
-					if (cssO.after.indexOf(' [ARIA] ') !== -1 || cssO.after.indexOf(' aria-') !== -1)  
-						cssO.after = '';
-				}
-
-			}
-
-			if (node.nodeType === 1) {
-				var aLabelledby = node.getAttribute('aria-labelledby') || '';
-				var aLabel = node.getAttribute('aria-label') || '';
-				var nTitle = node.getAttribute('title') || '';
-				var rolePresentation = ['presentation', 'none'].indexOf(node.getAttribute('role')) !== -1;
-
-				if (!node.firstChild || (node == refNode && (aLabelledby || aLabel)) || (node.firstChild && node != refNode && aLabel)) {
-					if (!stop && node === refNode && aLabelledby) {
-						if (!rolePresentation) {
-							var ids = aLabelledby.split(/\s+/);
-							var parts = [];
-
-							for (var i = 0; i < ids.length; i++) {
-								var element = document.getElementById(ids[i]);
-								parts.push(walk(element, true, skip));
-							}
-							name = parts.join(' ');
-						}
-
-						if (name || rolePresentation) {
-							skip = true;
-						}
-					}
-
-/*!@ Add values of custom controls here if recursive controls with values */
-
-					if (!name && !rolePresentation && aLabel) {
-						name = aLabel;
-
-						if (name && node === refNode) {
-							skip = true;
-						}
-					}
-
-					if (!name && !rolePresentation && ['input', 'select', 'textarea'].indexOf(node.nodeName.toLowerCase()) !== -1 && node.id && document.querySelectorAll('label[for="' + node.id + '"]').length) {
-						var label = document.querySelector('label[for="' + node.id + '"]');
-						name = walk(label, true, skip);
-					}
-
-					if (!name && !rolePresentation && node.nodeName.toLowerCase() == 'img' && node.getAttribute('alt')) {
-						name = node.getAttribute('alt');
-					}
-
-					if (!name && !rolePresentation && nTitle) {
-						name = nTitle;
-					}
-				}
-			} else if (node.nodeType === 3) {
-				name = node.data;
-			}
-
-			name = cssO.before + name + cssO.after;
-
-			if (name && !hasParentLabel(node, false, refNode)) {
-				fullName += name;
-			}
-		}, refNode);
-
-		fullName = cssOP.before + fullName + cssOP.after;
-		return fullName;
-	};
-
-	if (isHidden(node, document.body) || hasParentLabel(node, true, document.body)) {
-		return;
-	}
-
-	var accName = walk(node, false);
-	var accDesc = '';
-
-	if (['presentation', 'none'].indexOf(node.getAttribute('role')) === -1) {
-		var desc = '';
-
-		var title = node.getAttribute('title') || '';
-		if (title) {
-			if (!accName) {
-				accName = title;
-			} else {
-				accDesc = title;
-			}
-		}
-
-		var describedby = node.getAttribute('aria-describedby') || '';
-		if (describedby) {
-			var ids = describedby.split(/\s+/);
-			var parts = [];
-
-			for (var j = 0; j < ids.length; j++) {
-				var element = document.getElementById(ids[j]);
-				parts.push(walk(element, true));
-			}
-
-			if (parts.length) {
-				accDesc = parts.join(' ');
-			}
-		}
-	}
-
-	accName = trim(accName.replace(/\s+/g, ' '));
-	accDesc = trim(accDesc.replace(/\s+/g, ' '));
-
-	if (accName === accDesc) {
-		accDesc = '';
-	}
-
-	var props = {
-		name: accName,
-		desc: accDesc
-	};
-
-	if (fnc && typeof fnc == 'function') {
-		return fnc.apply(node, [
-			node,
-			props
-		]);
-	} else {
-		return props;
-	}
-};
-
-// Customize returned string
-
-var getNames = function(node) {
-	var props = calcNames(node);
-	return 'accName: "' + props.name + '"\n\naccDesc: "' + props.desc + '"';
-};
-
-if (typeof module === 'object' && module.exports) {
-	module.exports = {
-		getNames: getNames,
-		calcNames: calcNames,
-	};
-}
-},{}],2:[function(require,module,exports){
-(function (global){
-global.goog = {
-	provide: function() {},
-	require: function() {},
-};
-global.axs = {
-	browserUtils: {},
-	color: {},
-	constants: {},
-	dom: {},
-	utils: {},
-	properties: {},
-};
-
-require('accessibility-developer-tools/src/js/Constants');
-require('accessibility-developer-tools/src/js/AccessibilityUtils');
-require('accessibility-developer-tools/src/js/BrowserUtils');
-require('accessibility-developer-tools/src/js/Color');
-require('accessibility-developer-tools/src/js/DOMUtils');
-require('accessibility-developer-tools/src/js/Properties');
-
-module.exports = global.axs;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"accessibility-developer-tools/src/js/AccessibilityUtils":3,"accessibility-developer-tools/src/js/BrowserUtils":4,"accessibility-developer-tools/src/js/Color":5,"accessibility-developer-tools/src/js/Constants":6,"accessibility-developer-tools/src/js/DOMUtils":7,"accessibility-developer-tools/src/js/Properties":8}],3:[function(require,module,exports){
 // Copyright 2012 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1644,7 +1281,7 @@ axs.utils.findDescendantsWithRole = function(element, role) {
     return result;
 };
 
-},{}],4:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 // Copyright 2013 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1681,7 +1318,7 @@ axs.browserUtils.matchSelector = function(element, selector) {
     return false;
 };
 
-},{}],5:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 // Copyright 2015 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2223,7 +1860,7 @@ axs.color.YCC_CUBE_FACES_WHITE = [ { p0: axs.color.WHITE_YCC, p1: axs.color.CYAN
                                    { p0: axs.color.WHITE_YCC, p1: axs.color.MAGENTA_YCC, p2: axs.color.YELLOW_YCC },
                                    { p0: axs.color.WHITE_YCC, p1: axs.color.YELLOW_YCC, p2: axs.color.CYAN_YCC } ];
 
-},{}],6:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 // Copyright 2012 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -3907,7 +3544,7 @@ axs.constants.TAG_TO_IMPLICIT_SEMANTIC_INFO = {
     }]
 };
 
-},{}],7:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 // Copyright 2015 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -4121,7 +3758,7 @@ axs.dom.composedTreeSearch = function(node, end, callbacks, parentFlags, opt_sha
     return found;
 };
 
-},{}],8:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 // Copyright 2012 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -5050,7 +4687,7 @@ axs.properties.getNativelySupportedAttributes = function(element) {
     };
 })();
 
-},{}],9:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 var query = require('./lib/query.js');
 var name = require('./lib/name.js');
 
@@ -5066,7 +4703,7 @@ module.exports = {
 	closest: query.closest,
 };
 
-},{"./lib/name.js":11,"./lib/query.js":12}],10:[function(require,module,exports){
+},{"./lib/name.js":9,"./lib/query.js":10}],8:[function(require,module,exports){
 exports.attributes = {
 	// widget
 	'autocomplete': 'token',
@@ -5370,7 +5007,7 @@ exports.labelable = [
 	'textarea',
 ];
 
-},{}],11:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 var constants = require('./constants.js');
 var query = require('./query.js');
 
@@ -5514,7 +5151,7 @@ module.exports = {
 	getDescription: getDescription,
 };
 
-},{"./constants.js":10,"./query.js":12}],12:[function(require,module,exports){
+},{"./constants.js":8,"./query.js":10}],10:[function(require,module,exports){
 var constants = require('./constants.js');
 var util = require('./util.js');
 
@@ -5661,7 +5298,7 @@ module.exports = {
 	closest: closest,
 };
 
-},{"./constants.js":10,"./util.js":13}],13:[function(require,module,exports){
+},{"./constants.js":8,"./util.js":11}],11:[function(require,module,exports){
 var walkDOM = function(root, fn) {
 	if (fn(root) === false) {
 		return false;
@@ -5691,7 +5328,7 @@ module.exports = {
 	searchUp: searchUp,
 };
 
-},{}],14:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /*! aXe v2.6.1
  * Copyright (c) 2017 Deque Systems, Inc.
  *
@@ -14551,11 +14188,374 @@ module.exports = {
     }()
   });
 })(typeof window === 'object' ? window : this);
-},{}],15:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
+/*!
+calcNames 1.2, compute the Name and Description property values for a DOM node
+Returns an object with 'name' and 'desc' properties.
+Authored by Bryan Garaventa plus contrabutions by Tobias Bengfort
+Distributed under the terms of the Open Source Initiative OSI - MIT License
+*/
+
+var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
+	if (!node || node.nodeType !== 1) {
+		return;
+	}
+
+	var trim = function(str) {
+		if (typeof str !== 'string') {
+			return '';
+		}
+
+		return str.replace(/^\s+|\s+$/g, '');
+	};
+
+	var walkDOM = function(node, fn, refNode) {
+		if (!node) {
+			return;
+		}
+		fn(node);
+
+		if (!isException(node, refNode)) {
+			node = node.firstChild;
+
+			while (node) {
+				walkDOM(node, fn, refNode);
+				node = node.nextSibling;
+			}
+		}
+	};
+
+	var isFocusable = function(node) {
+		var nodeName = node.nodeName.toLowerCase();
+
+		if (node.getAttribute('tabindex')) {
+			return true;
+		}
+		if (nodeName === 'a' && node.getAttribute('href')) {
+			return true;
+		}
+		if (['input', 'select', 'button'].indexOf(nodeName) !== -1 && node.getAttribute('type') !== 'hidden') {
+			return true;
+		}
+		return false;
+	};
+
+	var isException = function(node, refNode) {
+		if (!refNode || !node || refNode.nodeType !== 1 || node.nodeType !== 1) {
+			return false;
+		}
+
+		var list1 = {
+			roles: ['link', 'button', 'checkbox', 'option', 'radio', 'switch', 'tab', 'treeitem', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'cell', 'columnheader', 'rowheader', 'tooltip', 'heading'],
+			tags: ['a', 'button', 'summary', 'input', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'menuitem', 'option', 'td', 'th']
+		};
+
+		var list2 = {
+			roles: ['application', 'alert', 'log', 'marquee', 'timer', 'alertdialog', 'dialog', 'banner', 'complementary', 'form', 'main', 'navigation', 'region', 'search', 'article', 'document', 'feed', 'figure', 'img', 'math', 'toolbar', 'menu', 'menubar', 'grid', 'listbox', 'radiogroup', 'textbox', 'searchbox', 'spinbutton', 'scrollbar', 'slider', 'tablist', 'tabpanel', 'tree', 'treegrid', 'separator'],
+			tags: ['article', 'aside', 'body', 'select', 'datalist', 'optgroup', 'dialog', 'figure', 'footer', 'form', 'header', 'hr', 'img', 'textarea', 'input', 'main', 'math', 'menu', 'nav', 'section']
+		};
+
+		var list3 = {
+			roles: ['combobox', 'term', 'definition', 'directory', 'list', 'group', 'note', 'status', 'table', 'rowgroup', 'row', 'contentinfo'],
+			tags: ['dl', 'ul', 'ol', 'dd', 'details', 'output', 'table', 'thead', 'tbody', 'tfoot', 'tr']
+		};
+
+		var inList = function(node, list) {
+			var role = node.getAttribute('role');
+			var tag = node.nodeName.toLowerCase();
+			return (
+				list.roles.indexOf(role) >= 0 ||
+				(!role && list2.tags.indexOf(tag) >= 0)
+			);
+		};
+
+		if (inList(node, list2)) {
+			return true;
+		} else if (inList(node, list3)) {
+			if (node === refNode) {
+				return !isFocusable(node);
+			} else {
+				return !inList(refNode, list1);
+			}
+		} else {
+			return false;
+		}
+	};
+
+	var isHidden = function(node, refNode) {
+		if (node.nodeType !== 1 || node == refNode) {
+			return false;
+		}
+
+		if (node.getAttribute('aria-hidden') === 'true') {
+			return true;
+		}
+
+		var style = {};
+		if (document.defaultView && document.defaultView.getComputedStyle) {
+			style = document.defaultView.getComputedStyle(node, '');
+		} else if (node.currentStyle) {
+			style = node.currentStyle;
+		}
+		if (style['display'] === 'none' || style['visibility'] === 'hidden') {
+			return true;
+		}
+
+		return false;
+	};
+
+	var getCSSText = function(node, refNode) {
+		if (node.nodeType !== 1 || node == refNode || ['input', 'select', 'textarea', 'img', 'iframe'].indexOf(node.nodeName.toLowerCase()) !== -1) {
+						return {before: '', after: ''};
+		}
+
+		var getText = function(node, position) {
+			var text = document.defaultView.getComputedStyle(node, position).getPropertyValue('content').replace(/^\"|\"$/g, '');
+			if (!text || text === 'none') {
+								return '';
+			} else {
+				return text;
+			}
+		};
+
+		if (document.defaultView && document.defaultView.getComputedStyle) {
+			return {
+				before: getText(node, ':before'),
+				after: getText(node, ':after')
+			};
+		} else {
+			return {before: '', after: ''};
+		}
+	};
+
+	var hasParentLabel = function(node, noLabel, refNode) {
+		while (node && node !== refNode) {
+			node = node.parentNode;
+
+			if (node.getAttribute) {
+				if (['presentation', 'none'].indexOf(node.getAttribute('role')) === -1) {
+					if (!noLabel && node.getAttribute('aria-label')) {
+						return true;
+					}
+					if (isHidden(node, refNode)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	};
+
+	var walk = function(refNode, stop, skip) {
+		var fullName = '';
+		var nodes = [];
+		var cssOP = {
+			before: '',
+			after: ''
+		};
+
+		if (nodes.indexOf(refNode) === -1) {
+			nodes.push(refNode);
+			cssOP = getCSSText(refNode, null);
+
+			// Enabled in Visual ARIA to prevent self referencing by Visual ARIA tooltips
+			if (preventVisualARIASelfCSSRef) {
+				if (cssOP.before.indexOf(' [ARIA] ') !== -1 || cssOP.before.indexOf(' aria-') !== -1) 
+					cssOP.before = '';
+				if (cssOP.after.indexOf(' [ARIA] ') !== -1 || cssOP.after.indexOf(' aria-') !== -1)  
+					cssOP.after = '';
+			}
+		}
+
+		walkDOM(refNode, function(node) {
+			if (skip || !node || (isHidden(node, refNode))) {
+				return;
+			}
+
+			var name = '';
+			var cssO = {
+				before: '',
+				after: ''
+			};
+
+			var parent = refNode === node ? node : node.parentNode;
+			if (nodes.indexOf(parent) === -1) {
+				nodes.push(parent);
+				cssO = getCSSText(parent, refNode);
+
+				// Enabled in Visual ARIA to prevent self referencing by Visual ARIA tooltips
+				if (preventVisualARIASelfCSSRef) {
+					if (cssO.before.indexOf(' [ARIA] ') !== -1 || cssO.before.indexOf(' aria-') !== -1) 
+						cssO.before = '';
+					if (cssO.after.indexOf(' [ARIA] ') !== -1 || cssO.after.indexOf(' aria-') !== -1)  
+						cssO.after = '';
+				}
+
+			}
+
+			if (node.nodeType === 1) {
+				var aLabelledby = node.getAttribute('aria-labelledby') || '';
+				var aLabel = node.getAttribute('aria-label') || '';
+				var nTitle = node.getAttribute('title') || '';
+				var rolePresentation = ['presentation', 'none'].indexOf(node.getAttribute('role')) !== -1;
+
+				if (!node.firstChild || (node == refNode && (aLabelledby || aLabel)) || (node.firstChild && node != refNode && aLabel)) {
+					if (!stop && node === refNode && aLabelledby) {
+						if (!rolePresentation) {
+							var ids = aLabelledby.split(/\s+/);
+							var parts = [];
+
+							for (var i = 0; i < ids.length; i++) {
+								var element = document.getElementById(ids[i]);
+								parts.push(walk(element, true, skip));
+							}
+							name = parts.join(' ');
+						}
+
+						if (name || rolePresentation) {
+							skip = true;
+						}
+					}
+
+/*!@ Add values of custom controls here if recursive controls with values */
+
+					if (!name && !rolePresentation && aLabel) {
+						name = aLabel;
+
+						if (name && node === refNode) {
+							skip = true;
+						}
+					}
+
+					if (!name && !rolePresentation && ['input', 'select', 'textarea'].indexOf(node.nodeName.toLowerCase()) !== -1 && node.id && document.querySelectorAll('label[for="' + node.id + '"]').length) {
+						var label = document.querySelector('label[for="' + node.id + '"]');
+						name = walk(label, true, skip);
+					}
+
+					if (!name && !rolePresentation && node.nodeName.toLowerCase() == 'img' && node.getAttribute('alt')) {
+						name = node.getAttribute('alt');
+					}
+
+					if (!name && !rolePresentation && nTitle) {
+						name = nTitle;
+					}
+				}
+			} else if (node.nodeType === 3) {
+				name = node.data;
+			}
+
+			name = cssO.before + name + cssO.after;
+
+			if (name && !hasParentLabel(node, false, refNode)) {
+				fullName += name;
+			}
+		}, refNode);
+
+		fullName = cssOP.before + fullName + cssOP.after;
+		return fullName;
+	};
+
+	if (isHidden(node, document.body) || hasParentLabel(node, true, document.body)) {
+		return;
+	}
+
+	var accName = walk(node, false);
+	var accDesc = '';
+
+	if (['presentation', 'none'].indexOf(node.getAttribute('role')) === -1) {
+		var desc = '';
+
+		var title = node.getAttribute('title') || '';
+		if (title) {
+			if (!accName) {
+				accName = title;
+			} else {
+				accDesc = title;
+			}
+		}
+
+		var describedby = node.getAttribute('aria-describedby') || '';
+		if (describedby) {
+			var ids = describedby.split(/\s+/);
+			var parts = [];
+
+			for (var j = 0; j < ids.length; j++) {
+				var element = document.getElementById(ids[j]);
+				parts.push(walk(element, true));
+			}
+
+			if (parts.length) {
+				accDesc = parts.join(' ');
+			}
+		}
+	}
+
+	accName = trim(accName.replace(/\s+/g, ' '));
+	accDesc = trim(accDesc.replace(/\s+/g, ' '));
+
+	if (accName === accDesc) {
+		accDesc = '';
+	}
+
+	var props = {
+		name: accName,
+		desc: accDesc
+	};
+
+	if (fnc && typeof fnc == 'function') {
+		return fnc.apply(node, [
+			node,
+			props
+		]);
+	} else {
+		return props;
+	}
+};
+
+// Customize returned string
+
+var getNames = function(node) {
+	var props = calcNames(node);
+	return 'accName: "' + props.name + '"\n\naccDesc: "' + props.desc + '"';
+};
+
+if (typeof module === 'object' && module.exports) {
+	module.exports = {
+		getNames: getNames,
+		calcNames: calcNames,
+	};
+}
+},{}],14:[function(require,module,exports){
+(function (global){
+global.goog = {
+	provide: function() {},
+	require: function() {},
+};
+global.axs = {
+	browserUtils: {},
+	color: {},
+	constants: {},
+	dom: {},
+	utils: {},
+	properties: {},
+};
+
+require('accessibility-developer-tools/src/js/Constants');
+require('accessibility-developer-tools/src/js/AccessibilityUtils');
+require('accessibility-developer-tools/src/js/BrowserUtils');
+require('accessibility-developer-tools/src/js/Color');
+require('accessibility-developer-tools/src/js/DOMUtils');
+require('accessibility-developer-tools/src/js/Properties');
+
+module.exports = global.axs;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"accessibility-developer-tools/src/js/AccessibilityUtils":1,"accessibility-developer-tools/src/js/BrowserUtils":2,"accessibility-developer-tools/src/js/Color":3,"accessibility-developer-tools/src/js/Constants":4,"accessibility-developer-tools/src/js/DOMUtils":5,"accessibility-developer-tools/src/js/Properties":6}],15:[function(require,module,exports){
 var ariaApi = require('aria-api');
-var accdc = require('../lib/accdc');
+var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
-var axs = require('../lib/axs');
+var axs = require('./axs');
 
 var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
@@ -14610,7 +14610,7 @@ var run = function(html) {
 	results.innerHTML = '';
 
 	return Promise.all(Object.keys(implementations).map(function(key) {
-		var p = implementations[key](preview.children[0] || preview);
+		var p = implementations[key](preview.querySelector('#test') || preview.children[0] || preview);
 
 		return Promise.resolve(p).then(function(result) {
 			var tr = document.createElement('tr');
@@ -14649,4 +14649,4 @@ try {
 	});
 }
 
-},{"../lib/accdc":1,"../lib/axs":2,"aria-api":9,"axe-core":14}]},{},[15]);
+},{"./axs":14,"aria-api":7,"axe-core":12,"w3c-alternative-text-computation":13}]},{},[15]);
