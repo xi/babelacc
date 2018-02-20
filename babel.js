@@ -14207,12 +14207,12 @@ module.exports = {
 })(typeof window === 'object' ? window : this);
 },{}],13:[function(require,module,exports){
 /*!
-CalcNames 1.4, compute the Name and Description property values for a DOM node
+CalcNames 1.8, compute the Name and Description property values for a DOM node
 Returns an object with 'name' and 'desc' properties.
 Functionality mirrors the steps within the W3C Accessible Name and Description computation algorithm.
 http://www.w3.org/TR/accname-aam-1.1/
 Authored by Bryan Garaventa plus refactoring contrabutions by Tobias Bengfort
-https://github.com/accdc/w3c-alternative-text-computation
+https://github.com/whatsock/w3c-alternative-text-computation
 Distributed under the terms of the Open Source Initiative OSI - MIT License
 */
 
@@ -14225,7 +14225,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	var nodes = [];
 
 	// Recursively process a DOM node to compute an accessible name in accordance with the spec
-	var walk = function(refNode, stop, skip, nodesToIgnoreValues) {
+	var walk = function(refNode, stop, skip, nodesToIgnoreValues, skipAbort) {
 		var fullName = '';
 
 		// Placeholder for storing CSS before and after pseudo element text values for the top level node
@@ -14264,8 +14264,8 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 		// Recursively apply the same naming computation to all nodes within the referenced structure
 		walkDOM(refNode, function(node) {
 
-			if (skip || !node || nodes.indexOf(node) !== -1 || (isHidden(node, refNode))) {
-				// Abort if algorithm step is already completed, or if node is a hidden child of refNode, or if this node has already been processed.
+			if ((skip || !node || nodes.indexOf(node) !== -1 || (isHidden(node, refNode))) && !skipAbort) {
+				// Abort if algorithm step is already completed, or if node is a hidden child of refNode, or if this node has already been processed, or skip abort if aria-labelledby self references same node.
 				return;
 			}
 
@@ -14326,7 +14326,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 						for (var i = 0; i < ids.length; i++) {
 							var element = document.getElementById(ids[i]);
 							// Also prevent the current form field from having its value included in the naming computation if nested as a child of label
-							parts.push(walk(element, true, skip, [node]));
+							parts.push(walk(element, true, skip, [node], element === refNode));
 						}
 						// Check for blank value, since whitespace chars alone are not valid as a name
 						name = addSpacing(trim(parts.join(' ')));
@@ -14396,8 +14396,18 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 					name = addSpacing(trim(walk(getParent(node, 'label'), true, skip, [node])));
 				}
 
-				// Otherwise, if name is still empty and current node is non-presentational and is a standard img with a non-empty alt attribute, set alt attribute value as the accessible name.
-				else if (!name && !rolePresentation && nTag == 'img' && node.getAttribute('alt')) {
+				// Otherwise, if name is still empty and the current node is non-presentational and is a standard form field with a non-empty value property, set name as the property value.
+				if (!name && !rolePresentation && node === refNode && isNativeFormField && node.value) {
+					// Check for blank value, since whitespace chars alone are not valid as a name
+					name = addSpacing(trim(node.value));
+				}
+				else if (!name && !rolePresentation && node === refNode && isSimulatedFormField && ['scrollbar', 'slider', 'spinbutton'].indexOf(nRole) !== -1) {
+					// For range widgets, append aria-valuetext if non-empty, or aria-valuenow if non-empty, or node.value if applicable.
+					name = getObjectValue(nRole, node, true);
+				}
+
+				// Otherwise, if name is still empty and current node is non-presentational and is a standard img or image button with a non-empty alt attribute, set alt attribute value as the accessible name.
+				else if (!name && !rolePresentation && (nTag == 'img' || (nTag == 'input' && node.getAttribute('type') == 'image')) && node.getAttribute('alt')) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
 					name = addSpacing(trim(node.getAttribute('alt')));
 				}
@@ -14452,41 +14462,11 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 		return fullName;
 	};
 
-	var walkDOM = function(node, fn, refNode) {
-		if (!node) {
-			return;
-		}
-		fn(node);
-		if (!isException(node, refNode)) {
-			node = node.firstChild;
-			while (node) {
-				walkDOM(node, fn, refNode);
-				node = node.nextSibling;
-			}
-		}
-	};
-
-	var trim = function(str) {
-		if (typeof str !== 'string') {
-			return '';
-		}
-		return str.replace(/^\s+|\s+$/g, '');
-	};
-
-	var isFocusable = function(node) {
-		var nodeName = node.nodeName.toLowerCase();
-		if (node.getAttribute('tabindex')) {
-			return true;
-		}
-		if (nodeName === 'a' && node.getAttribute('href')) {
-			return true;
-		}
-		if (['input', 'select', 'button'].indexOf(nodeName) !== -1 && node.getAttribute('type') !== 'hidden') {
-			return true;
-		}
-		return false;
-	};
-
+	/*
+	ARIA Role Exception Rule Set 1.0
+	The following Role Exception Rule Set is based on the following ARIA Working Group discussion involving all relevant browser venders.
+	https://lists.w3.org/Archives/Public/public-aria/2017Jun/0057.html
+	*/
 	var isException = function(node, refNode) {
 		if (!refNode || !node || refNode.nodeType !== 1 || node.nodeType !== 1) {
 			return false;
@@ -14529,6 +14509,51 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			}
 		} else {
 			return false;
+		}
+	};
+
+	var isFocusable = function(node) {
+		var nodeName = node.nodeName.toLowerCase();
+		if (node.getAttribute('tabindex')) {
+			return true;
+		}
+		if (nodeName === 'a' && node.getAttribute('href')) {
+			return true;
+		}
+		if (['input', 'select', 'button'].indexOf(nodeName) !== -1 && node.getAttribute('type') !== 'hidden') {
+			return true;
+		}
+		return false;
+	};
+
+	var isHidden = function(node, refNode) {
+		if (node.nodeType !== 1 || node == refNode) {
+			return false;
+		}
+
+		if (node.getAttribute('aria-hidden') === 'true') {
+			return true;
+		}
+
+		var style = getStyleObject(node);
+		if (style['display'] === 'none' || style['visibility'] === 'hidden') {
+			return true;
+		}
+
+		return false;
+	};
+
+	var walkDOM = function(node, fn, refNode) {
+		if (!node) {
+			return;
+		}
+		fn(node);
+		if (!isException(node, refNode)) {
+			node = node.firstChild;
+			while (node) {
+				walkDOM(node, fn, refNode);
+				node = node.nextSibling;
+			}
 		}
 	};
 
@@ -14581,23 +14606,6 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	Reference issue: https://github.com/w3c/accname/issues/4
 	*/
 	var blockElements = ['address', 'article', 'aside', 'blockquote', 'br', 'canvas', 'dd', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'li', 'main', 'nav', 'noscript', 'ol', 'output', 'p', 'pre', 'section', 'table', 'tfoot', 'ul', 'video'];
-
-	var isHidden = function(node, refNode) {
-		if (node.nodeType !== 1 || node == refNode) {
-			return false;
-		}
-
-		if (node.getAttribute('aria-hidden') === 'true') {
-			return true;
-		}
-
-		var style = getStyleObject(node);
-		if (style['display'] === 'none' || style['visibility'] === 'hidden') {
-			return true;
-		}
-
-		return false;
-	};
 
 	var getObjectValue = function(role, node, isRange, isEdit, isSelect, isNative) {
 		var val = '';
@@ -14715,7 +14723,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	var getParent = function(node, nTag) {
 		while (node) {
 			node = node.parentNode;
-			if (node.nodeName.toLowerCase() == nTag) {
+			if (node && node.nodeName && node.nodeName.toLowerCase() == nTag) {
 				return node;
 			}
 		}
@@ -14739,6 +14747,13 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 		}
 
 		return false;
+	};
+
+	var trim = function(str) {
+		if (typeof str !== 'string') {
+			return '';
+		}
+		return str.replace(/^\s+|\s+$/g, '');
 	};
 
 	if (isHidden(node, document.body) || hasParentLabel(node, true, document.body)) {
