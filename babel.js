@@ -4807,7 +4807,7 @@ exports.extraSelectors = {
 	option: ['option'],
 	progressbar: ['progress'],
 	radio: ['input[type="radio"]'],
-	region: ['section'],
+	region: ['section[aria-label]', 'section[aria-labelledby]'],
 	rowgroup: ['tbody', 'thead', 'tfoot'],
 	row: ['tr'],
 	searchbox: ['input[type="search"]:not([list])'],
@@ -5019,17 +5019,18 @@ var util = require('./util.js');
 var getPseudoContent = function(node, selector) {
 	var styles = window.getComputedStyle(node, selector);
 	var ret = styles.getPropertyValue('content');
-	if (ret === 'none' || ret.substr(0, 4) === '-moz') {
+	if (!ret) {
+		return ''
+	}
+	if (ret.substr(0, 1) !== '"') {
 		return '';
 	} else {
-		return ret
-			.replace(/^["']/, '')
-			.replace(/["']$/, '');
+		return ret.slice(1, -1);
 	}
 };
 
 var getContent = function(root, referenced) {
-	var ret = getPseudoContent(root, ':before');
+	var ret = '';
 	var node = root.firstChild;
 	while (node) {
 		if (node.nodeType === node.TEXT_NODE) {
@@ -5037,7 +5038,9 @@ var getContent = function(root, referenced) {
 		} else if (node.nodeType === node.ELEMENT_NODE) {
 			if (node.tagName.toLowerCase() === 'br') {
 				ret += '\n';
-			} else if (window.getComputedStyle(node).display.substr(0, 6) === 'inline') {
+			} else if (window.getComputedStyle(node).display.substr(0, 6) === 'inline' &&
+					node.tagName.toLowerCase() !== 'input' &&
+					node.tagName.toLowerCase() !== 'img') {  // https://github.com/w3c/accname/issues/3
 				ret += getName(node, true, referenced);
 			} else {
 				ret += ' ' + getName(node, true, referenced) + ' ';
@@ -5045,7 +5048,6 @@ var getContent = function(root, referenced) {
 		}
 		node = node.nextSibling;
 	}
-	ret += getPseudoContent(root, ':after');
 	return ret;
 };
 
@@ -5080,7 +5082,7 @@ var getLabelNodes = function(element) {
 // http://www.ssbbartgroup.com/blog/how-the-w3c-text-alternative-computation-works/
 // https://www.w3.org/TR/accname-aam-1.1/#h-mapping_additional_nd_te
 var getName = function(el, recursive, referenced) {
-	var ret;
+	var ret = '';
 
 	if (query.getAttribute(el, 'hidden', referenced)) {
 		return '';
@@ -5096,7 +5098,7 @@ var getName = function(el, recursive, referenced) {
 		});
 		ret = strings.join(' ');
 	}
-	if (!ret && el.matches('[aria-label]')) {
+	if (!ret.trim() && el.matches('[aria-label]')) {
 		ret = el.getAttribute('aria-label');
 	}
 	if (!query.matches(el, 'presentation')) {
@@ -5106,13 +5108,13 @@ var getName = function(el, recursive, referenced) {
 			});
 			ret = strings.join(' ');
 		}
-		if (!ret) {
-			ret = el.getAttribute('placeholder');
+		if (!ret.trim()) {
+			ret = el.getAttribute('placeholder') || '';
 		}
-		if (!ret) {
-			ret = el.getAttribute('alt');
+		if (!ret.trim()) {
+			ret = el.getAttribute('alt') || '';
 		}
-		if (!ret && el.matches('abbr,acronym') && el.title) {
+		if (!ret.trim() && el.matches('abbr,acronym') && el.title) {
 			ret = el.title;
 		}
 		// figcaption
@@ -5120,11 +5122,11 @@ var getName = function(el, recursive, referenced) {
 		// table
 	}
 	// FIXME only if this is embedded in a label
-	if (!ret && query.matches(el, 'textbox,button,combobox,range')) {
+	if (!ret.trim() && query.matches(el, 'textbox,button,combobox,range,menu')) {
 		if (query.matches(el, 'textbox,button')) {
 			ret = el.value || el.textContent;
-		} else if (query.matches(el, 'combobox')) {
-			var selected = query.querySelector(el, ':selected') || query.querySelector(el, 'option');
+		} else if (query.matches(el, 'combobox,menu')) {
+			var selected = query.querySelector(el, ':selected') || query.querySelector(el, 'option,menuitem');
 			if (selected) {
 				ret = getName(selected, recursive, referenced);
 			}
@@ -5132,14 +5134,16 @@ var getName = function(el, recursive, referenced) {
 			ret = '' + (query.getAttribute(el, 'valuetext') || query.getAttribute(el, 'valuenow') || el.value);
 		}
 	}
-	if (!ret && (recursive || allowNameFromContent(el))) {
+	if (!ret.trim() && (recursive || allowNameFromContent(el))) {
 		ret = getContent(el, referenced);
 	}
-	if (!ret) {
-		ret = el.getAttribute('title');
+	if (!ret.trim()) {
+		ret = el.title || '';
 	}
 
-	return ret || '';
+	var before = getPseudoContent(el, ':before');
+	var after = getPseudoContent(el, ':after');
+	return before + ret + after;
 };
 
 var getDescription = function(el) {
@@ -14206,27 +14210,106 @@ module.exports = {
   });
 })(typeof window === 'object' ? window : this);
 },{}],13:[function(require,module,exports){
+var currentVersion = '1.15';
+
 /*!
-CalcNames 1.8, compute the Name and Description property values for a DOM node
+CalcNames: The Naming Computation Prototype, compute the Name and Description property values for a DOM node
 Returns an object with 'name' and 'desc' properties.
 Functionality mirrors the steps within the W3C Accessible Name and Description computation algorithm.
 http://www.w3.org/TR/accname-aam-1.1/
-Authored by Bryan Garaventa plus refactoring contrabutions by Tobias Bengfort
+Authored by Bryan Garaventa, plus refactoring contrabutions by Tobias Bengfort
 https://github.com/whatsock/w3c-alternative-text-computation
 Distributed under the terms of the Open Source Initiative OSI - MIT License
 */
 
+// Naming Computation Prototype
 var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	if (!node || node.nodeType !== 1) {
 		return;
 	}
+	var topNode = node;
 
 	// Track nodes to prevent duplicate node reference parsing.
 	var nodes = [];
+	// Track aria-owns references to prevent duplicate parsing.
+	var owns = [];
 
 	// Recursively process a DOM node to compute an accessible name in accordance with the spec
-	var walk = function(refNode, stop, skip, nodesToIgnoreValues, skipAbort) {
+	var walk = function(refNode, stop, skip, nodesToIgnoreValues, skipAbort, ownedBy) {
 		var fullName = '';
+
+		/*
+		ARIA Role Exception Rule Set 1.1
+		The following Role Exception Rule Set is based on the following ARIA Working Group discussion involving all relevant browser venders.
+		https://lists.w3.org/Archives/Public/public-aria/2017Jun/0057.html
+		*/
+		var isException = function(node, refNode) {
+			if (!refNode || !node || refNode.nodeType !== 1 || node.nodeType !== 1) {
+				return false;
+			}
+
+			// Always include name from content when the referenced node matches list1, as well as when child nodes match those within list3
+			// Note: gridcell was added to list1 to account for focusable gridcells that match the ARIA 1.0 paradigm for interactive grids.
+			var list1 = {
+				roles: ['button', 'checkbox', 'link', 'option', 'radio', 'switch', 'tab', 'treeitem', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'cell', 'gridcell', 'columnheader', 'rowheader', 'tooltip', 'heading'],
+				tags: ['a', 'button', 'summary', 'input', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'menuitem', 'option', 'td', 'th']
+			};
+
+			// Never include name from content when current node matches list2
+			// Note: combobox was added to account for the ARIA 1.1 design pattern change from 1.0, but this is still overridden in list3 when combobox is applied to focusable elements so that the 1.0 design pattern will remain supported.
+			var list2 = {
+				roles: ['combobox', 'application', 'alert', 'log', 'marquee', 'timer', 'alertdialog', 'dialog', 'banner', 'complementary', 'form', 'main', 'navigation', 'region', 'search', 'article', 'document', 'feed', 'figure', 'img', 'math', 'toolbar', 'menu', 'menubar', 'grid', 'listbox', 'radiogroup', 'textbox', 'searchbox', 'spinbutton', 'scrollbar', 'slider', 'tablist', 'tabpanel', 'tree', 'treegrid', 'separator'],
+				tags: ['article', 'aside', 'body', 'select', 'datalist', 'optgroup', 'dialog', 'figure', 'footer', 'form', 'header', 'hr', 'img', 'textarea', 'input', 'main', 'math', 'menu', 'nav', 'section']
+			};
+
+			// As an override of list2, conditionally include name from content if current node is focusable, or if the current node matches list3 while the referenced parent node matches list1.
+			var list3 = {
+				roles: ['combobox', 'term', 'definition', 'directory', 'list', 'group', 'note', 'status', 'table', 'rowgroup', 'row', 'contentinfo'],
+				tags: ['dl', 'ul', 'ol', 'dd', 'details', 'output', 'table', 'thead', 'tbody', 'tfoot', 'tr']
+			};
+
+			var inList = function(node, list) {
+				var role = node.getAttribute('role');
+				var tag = node.nodeName.toLowerCase();
+				return (role && list.roles.indexOf(role) >= 0) || (!role && list.tags.indexOf(tag) >= 0);
+			};
+
+			// The list3 overrides must be checked first.
+			if (inList(node, list3)) {
+				if (node === refNode && !(node.id && ownedBy[node.id] && ownedBy[node.id].node)) {
+					return !isFocusable(node);
+				} else {
+					// Note: the inParent checker needs to be present to allow for embedded roles matching list3 when the referenced parent is referenced using aria-labelledby, aria-describedby, or aria-owns.
+					return !(inParent(node, ownedBy.top) || inList(refNode, list1));
+				}
+			}
+			// Otherwise process list2 to identify roles to ignore processing name from content.
+			else if (inList(node, list2) || (node === topNode && !inList(node, list1))) {
+				return true;
+			}
+			else {
+				return false;
+			}
+		};
+
+		var inParent = function(node, parent) {
+			var trackNodes = [];
+			while (node) {
+				if (node.id && ownedBy[node.id] && ownedBy[node.id].node && trackNodes.indexOf(node) === -1) {
+					trackNodes.push(node);
+					node = ownedBy[node.id].node;
+				} else {
+					node = node.parentNode;
+				}
+				if (node && node === parent) {
+					return true;
+				}
+				else if ((!node || node === ownedBy.top) || node === document.body) {
+					return false;
+				}
+			}
+			return false;
+		};
 
 		// Placeholder for storing CSS before and after pseudo element text values for the top level node
 		var cssOP = {
@@ -14246,25 +14329,33 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			}
 		}
 
-		var blockNodeStack = [];
-
-		var hasLeftBlockNodeStack = function(node) {
-			var blocks = blockNodeStack.length;
-			for (var i = blocks; i; i--) {
-				if (!inParent(node, blockNodeStack[i - 1], refNode)) {
-					blockNodeStack.splice(i - 1, 1);
+		// Recursively apply the same naming computation to all nodes within the referenced structure
+		var walkDOM = function(node, fn, refNode) {
+			if (!node) {
+				return '';
+			}
+			var nodeIsBlock = node && node.nodeType === 1 && isBlockLevelElement(node);
+			if (nodeIsBlock) {
+				fullName += ' ';
+			}
+			var ariaOwns = fn(node) || '';
+			if (!isException(node, ownedBy.top)) {
+				node = node.firstChild;
+				while (node) {
+					walkDOM(node, fn, refNode);
+					node = node.nextSibling;
 				}
 			}
-			if (blockNodeStack.length < blocks) {
-				return true;
+			if (nodeIsBlock) {
+				fullName += ' ';
 			}
-			return false;
+			fullName += ariaOwns;
 		};
 
-		// Recursively apply the same naming computation to all nodes within the referenced structure
 		walkDOM(refNode, function(node) {
+			var isEmbeddedNode = node && node.nodeType === 1 && nodesToIgnoreValues && nodesToIgnoreValues.length && nodesToIgnoreValues.indexOf(node) !== -1 && node === topNode && node !== refNode;
 
-			if ((skip || !node || nodes.indexOf(node) !== -1 || (isHidden(node, refNode))) && !skipAbort) {
+			if ((skip || !node || nodes.indexOf(node) !== -1 || (isHidden(node, ownedBy.top))) && !skipAbort && !isEmbeddedNode) {
 				// Abort if algorithm step is already completed, or if node is a hidden child of refNode, or if this node has already been processed, or skip abort if aria-labelledby self references same node.
 				return;
 			}
@@ -14275,6 +14366,8 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 
 			// Store name for the current node.
 			var name = '';
+			// Store name from aria-owns references if detected.
+			var ariaO = '';
 			// Placeholder for storing CSS before and after pseudo element text values for the current node container element
 			var cssO = {
 				before: '',
@@ -14299,15 +14392,6 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			// Process standard DOM element node
 			if (node.nodeType === 1) {
 
-				var nodeIsBlock = isBlockLevelElement(node);
-				if (nodeIsBlock && blockNodeStack.indexOf(node) === -1) {
-					blockNodeStack.push(node);
-				}
-				if (nodeIsBlock && node !== refNode) {
-					// Add space at beginning of block level element if detected.
-					name += ' ';
-				}
-
 				var aLabelledby = node.getAttribute('aria-labelledby') || '';
 				var aLabel = node.getAttribute('aria-label') || '';
 				var nTitle = node.getAttribute('title') || '';
@@ -14326,20 +14410,20 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 						for (var i = 0; i < ids.length; i++) {
 							var element = document.getElementById(ids[i]);
 							// Also prevent the current form field from having its value included in the naming computation if nested as a child of label
-							parts.push(walk(element, true, skip, [node], element === refNode));
+							parts.push(walk(element, true, skip, [node], element === refNode, {ref: ownedBy, top: element}));
 						}
 						// Check for blank value, since whitespace chars alone are not valid as a name
 						name = addSpacing(trim(parts.join(' ')));
 					}
 
-					if (name || rolePresentation) {
+					if (trim(name) || rolePresentation) {
 						// Abort further recursion if name is valid or if the referenced node is presentational.
 						skip = true;
 					}
 				}
 
 				// Otherwise, if the current node is non-presentational and is a nested widget control within the parent ref obj, then add only its value and process no deeper
-				if (!rolePresentation && node !== refNode && (isNativeFormField || isSimulatedFormField)) {
+				if ((!rolePresentation && node !== refNode && (isNativeFormField || isSimulatedFormField)) || (node.id && ownedBy[node.id] && ownedBy[node.id].target && ownedBy[node.id].target === node)) {
 
 					// Prevent the referencing node from having its value included in the case of form control labels that contain the element with focus.
 					if (!(nodesToIgnoreValues && nodesToIgnoreValues.length && nodesToIgnoreValues.indexOf(node) !== -1)) {
@@ -14348,7 +14432,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 							// For range widgets, append aria-valuetext if non-empty, or aria-valuenow if non-empty, or node.value if applicable.
 							name = getObjectValue(nRole, node, true);
 						}
-						else if (isSimulatedFormField && ['searchbox', 'textbox', 'combobox'].indexOf(nRole) !== -1) {
+						else if (isSimulatedFormField && ['searchbox', 'textbox'].indexOf(nRole) !== -1) {
 							// For simulated edit widgets, append text from content if applicable, or node.value if applicable.
 							name = getObjectValue(nRole, node, false, true);
 						}
@@ -14362,7 +14446,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 							name = getObjectValue(nRole, node, false, false, false, true);
 						}
 						else if (isNativeFormField && nTag === 'select') {
-							// For native select fields, append node.value for single select, or text from content for all options with selected attribute separated by a space when multiple.
+							// For native select fields, get text from content for all options with selected attribute separated by a space when multiple.
 							name = getObjectValue(nRole, node, false, false, true, true);
 						}
 
@@ -14373,49 +14457,50 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 				}
 
 				// Otherwise, if current node is non-presentational and has a non-empty aria-label then set as name and process no deeper.
-				else if (!name && !rolePresentation && aLabel) {
+				else if (!trim(name) && !rolePresentation && aLabel) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
 					name = addSpacing(trim(aLabel));
 
-					if (name && node === refNode) {
+					if (trim(name) && node === refNode) {
 						// If name is non-empty and both the current and refObject nodes match, then don't process any deeper.
 						skip = true;
 					}
 				}
 
 				// Otherwise, if name is still empty and the current node is non-presentational and matches the ref node and is a standard form field with a non-empty associated label element, process label with same naming computation algorithm.
-				if (!name && !rolePresentation && node === refNode && isNativeFormField && node.id && document.querySelectorAll('label[for="' + node.id + '"]').length) {
+				if (!trim(name) && !rolePresentation && node === refNode && isNativeFormField && node.id && document.querySelectorAll('label[for="' + node.id + '"]').length) {
 					var label = document.querySelector('label[for="' + node.id + '"]');
 					// Check for blank value, since whitespace chars alone are not valid as a name
-					name = addSpacing(trim(walk(label, true, skip, [node])));
+					name = addSpacing(trim(walk(label, true, skip, [node], false, {ref: ownedBy, top: label})));
 				}
 
 				// Otherwise, if name is still empty and the current node is non-presentational and matches the ref node and is a standard form field with an implicit label element surrounding it, process label with same naming computation algorithm.
-				if (!name && !rolePresentation && node === refNode && isNativeFormField && getParent(node, 'label').nodeType === 1) {
+				if (!trim(name) && !rolePresentation && node === refNode && isNativeFormField && getParent(node, 'label').nodeType === 1) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
-					name = addSpacing(trim(walk(getParent(node, 'label'), true, skip, [node])));
-				}
-
-				// Otherwise, if name is still empty and the current node is non-presentational and is a standard form field with a non-empty value property, set name as the property value.
-				if (!name && !rolePresentation && node === refNode && isNativeFormField && node.value) {
-					// Check for blank value, since whitespace chars alone are not valid as a name
-					name = addSpacing(trim(node.value));
-				}
-				else if (!name && !rolePresentation && node === refNode && isSimulatedFormField && ['scrollbar', 'slider', 'spinbutton'].indexOf(nRole) !== -1) {
-					// For range widgets, append aria-valuetext if non-empty, or aria-valuenow if non-empty, or node.value if applicable.
-					name = getObjectValue(nRole, node, true);
+					var label = getParent(node, 'label');
+					name = addSpacing(trim(walk(label, true, skip, [node], false, {ref: ownedBy, top: label})));
 				}
 
 				// Otherwise, if name is still empty and current node is non-presentational and is a standard img or image button with a non-empty alt attribute, set alt attribute value as the accessible name.
-				else if (!name && !rolePresentation && (nTag == 'img' || (nTag == 'input' && node.getAttribute('type') == 'image')) && node.getAttribute('alt')) {
+				else if (!trim(name) && !rolePresentation && (nTag == 'img' || (nTag == 'input' && node.getAttribute('type') == 'image')) && node.getAttribute('alt')) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
 					name = addSpacing(trim(node.getAttribute('alt')));
 				}
 
 				// Otherwise, if name is still empty and current node is non-presentational and includes a non-empty title attribute, set title attribute value as the accessible name.
-				if (!name && !rolePresentation && nTitle) {
+				if (!trim(name) && !rolePresentation && nTitle) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
 					name = addSpacing(trim(nTitle));
+				}
+
+				// Otherwise, if name is still empty and the current node is non-presentational and is a standard form field with a non-empty value property, set name as the property value.
+				if (!trim(name) && !rolePresentation && node === refNode && isNativeFormField && node.value) {
+					// Check for blank value, since whitespace chars alone are not valid as a name
+					name = addSpacing(trim(node.value));
+				}
+				else if (!trim(name) && !rolePresentation && node === refNode && isSimulatedFormField && ['scrollbar', 'slider', 'spinbutton'].indexOf(nRole) !== -1) {
+					// For range widgets, append aria-valuetext if non-empty, or aria-valuenow if non-empty, or node.value if applicable.
+					name = getObjectValue(nRole, node, true);
 				}
 
 				// Check for non-empty value of aria-owns, follow each ID ref, then process with same naming computation.
@@ -14425,13 +14510,20 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 					var parts = [];
 					for (var i = 0; i < ids.length; i++) {
 						var element = document.getElementById(ids[i]);
-						// Abort processing if the referenced node is already a child DOM node
-						if (!inParent(element, node)) {
-							parts.push(trim(walk(element, true, skip)));
+						// Abort processing if the referenced node has already been traversed
+						if (element && owns.indexOf(ids[i]) === -1) {
+							owns.push(ids[i]);
+							var oBy = {ref: ownedBy, top: ownedBy.top};
+							oBy[ids[i]] = {
+								refNode: refNode,
+								node: node,
+target: element
+							};
+							parts.push(trim(walk(element, true, skip, [], false, oBy)));
 						}
 					}
 					// Surround returned aria-owns naming computation with spaces since these will be separated visually if not already included as nested DOM nodes.
-					name += addSpacing(parts.join(' '));
+					ariaO = addSpacing(parts.join(' '));
 				}
 
 			}
@@ -14439,77 +14531,24 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			// Otherwise, process text node
 			else if (node.nodeType === 3) {
 
-				// Add space at end of block level element if detected.
-				name = (hasLeftBlockNodeStack(node) ? ' ' : '') + node.data;
+				name = node.data;
 
 			}
 
 			// Prepend and append the current CSS pseudo element text, plus normalize all whitespace such as newline characters and others into flat spaces.
 			name = cssO.before + name.replace(/\s+/g, ' ') + cssO.after;
 
-			if (name && !hasParentLabel(node, false, refNode)) {
+			if (name.length && !hasParentLabel(node, false, ownedBy.top, ownedBy)) {
 				fullName += name;
 			}
 
+			return ariaO;
 		}, refNode);
 
 		// Prepend and append the refObj CSS pseudo element text, plus normalize whitespace chars into flat spaces.
 		fullName = cssOP.before + fullName.replace(/\s+/g, ' ') + cssOP.after;
 
-		// Clear the tracked nodes array for garbage collection.
-		nodes = [];
-
 		return fullName;
-	};
-
-	/*
-	ARIA Role Exception Rule Set 1.0
-	The following Role Exception Rule Set is based on the following ARIA Working Group discussion involving all relevant browser venders.
-	https://lists.w3.org/Archives/Public/public-aria/2017Jun/0057.html
-	*/
-	var isException = function(node, refNode) {
-		if (!refNode || !node || refNode.nodeType !== 1 || node.nodeType !== 1) {
-			return false;
-		}
-
-		// Always include name from content when the referenced node matches list1, as well as when child nodes match those within list3
-		var list1 = {
-			roles: ['link', 'button', 'checkbox', 'option', 'radio', 'switch', 'tab', 'treeitem', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'cell', 'columnheader', 'rowheader', 'tooltip', 'heading'],
-			tags: ['a', 'button', 'summary', 'input', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'menuitem', 'option', 'td', 'th']
-		};
-
-		// Never include name from content when current node matches list2
-		var list2 = {
-			roles: ['application', 'alert', 'log', 'marquee', 'timer', 'alertdialog', 'dialog', 'banner', 'complementary', 'form', 'main', 'navigation', 'region', 'search', 'article', 'document', 'feed', 'figure', 'img', 'math', 'toolbar', 'menu', 'menubar', 'grid', 'listbox', 'radiogroup', 'textbox', 'searchbox', 'spinbutton', 'scrollbar', 'slider', 'tablist', 'tabpanel', 'tree', 'treegrid', 'separator'],
-			tags: ['article', 'aside', 'body', 'select', 'datalist', 'optgroup', 'dialog', 'figure', 'footer', 'form', 'header', 'hr', 'img', 'textarea', 'input', 'main', 'math', 'menu', 'nav', 'section']
-		};
-
-		// As an override of list2, conditionally include name from content if current node is focusable, or if the current node matches list3 while the referenced parent node matches list1.
-		var list3 = {
-			roles: ['combobox', 'term', 'definition', 'directory', 'list', 'group', 'note', 'status', 'table', 'rowgroup', 'row', 'contentinfo'],
-			tags: ['dl', 'ul', 'ol', 'dd', 'details', 'output', 'table', 'thead', 'tbody', 'tfoot', 'tr']
-		};
-
-		var inList = function(node, list) {
-			var role = node.getAttribute('role');
-			var tag = node.nodeName.toLowerCase();
-			return (
-				list.roles.indexOf(role) >= 0 ||
-				(!role && list2.tags.indexOf(tag) >= 0)
-			);
-		};
-
-		if (inList(node, list2)) {
-			return true;
-		} else if (inList(node, list3)) {
-			if (node === refNode) {
-				return !isFocusable(node);
-			} else {
-				return !inList(refNode, list1);
-			}
-		} else {
-			return false;
-		}
 	};
 
 	var isFocusable = function(node) {
@@ -14535,26 +14574,16 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			return true;
 		}
 
+		if (node.getAttribute('hidden')) {
+			return true;
+		}
+
 		var style = getStyleObject(node);
 		if (style['display'] === 'none' || style['visibility'] === 'hidden') {
 			return true;
 		}
 
 		return false;
-	};
-
-	var walkDOM = function(node, fn, refNode) {
-		if (!node) {
-			return;
-		}
-		fn(node);
-		if (!isException(node, refNode)) {
-			node = node.firstChild;
-			while (node) {
-				walkDOM(node, fn, refNode);
-				node = node.nextSibling;
-			}
-		}
 	};
 
 	var getStyleObject = function(node) {
@@ -14565,6 +14594,19 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			style = node.currentStyle;
 		}
 		return style;
+	};
+
+	var cleanCSSText = function(node, text) {
+		var s = text;
+		if (s.indexOf('attr(') !== -1) {
+			var m = s.match(/attr\((.|\n|\r\n)*?\)/g);
+			for (var i = 0; i < m.length; i++) {
+				var b = m[i].slice(5, -1);
+				b = node.getAttribute(b) || '';
+				s = s.replace(m[i], b);
+			}
+		}
+		return s || text;
 	};
 
 	var isBlockLevelElement = function(node, cssObj) {
@@ -14604,8 +14646,9 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	https://github.com/webmodules/block-elements
 	Note: 'br' was added to this array because it impacts visual display and should thus add a space .
 	Reference issue: https://github.com/w3c/accname/issues/4
+Note: Added in 1.13, td, th, tr, and legend
 	*/
-	var blockElements = ['address', 'article', 'aside', 'blockquote', 'br', 'canvas', 'dd', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'li', 'main', 'nav', 'noscript', 'ol', 'output', 'p', 'pre', 'section', 'table', 'tfoot', 'ul', 'video'];
+	var blockElements = ['address', 'article', 'aside', 'blockquote', 'br', 'canvas', 'dd', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'legend', 'li', 'main', 'nav', 'noscript', 'ol', 'output', 'p', 'pre', 'section', 'table', 'td', 'tfoot', 'th', 'tr', 'ul', 'video'];
 
 	var getObjectValue = function(role, node, isRange, isEdit, isSelect, isNative) {
 		var val = '';
@@ -14639,7 +14682,11 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			val = node.value;
 		}
 		if (!bypass && !val && isNative) {
-			val = (isSelect && node.multiple) ? joinSelectedParts(node, node.querySelectorAll('option[selected]'), true) : node.value;
+			if (isSelect) {
+				val = joinSelectedParts(node, node.querySelectorAll('option[selected]'), true);
+			} else {
+				val = node.value;
+			}
 		}
 
 		return val;
@@ -14658,7 +14705,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			var role = nOA[i].getAttribute('role');
 			var isValidChildRole = !childRoles || childRoles.indexOf(role) !== -1;
 			if (isValidChildRole) {
-				parts.push(isNative ? getText(nOA[i]) : walk(nOA[i], true));
+				parts.push(isNative ? getText(nOA[i]) : walk(nOA[i], true, false, [], false, {top: nOA[i]}));
 			}
 		}
 		return parts.join(' ');
@@ -14694,30 +14741,17 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	};
 
 	var getCSSText = function(node, refNode) {
-		if (node.nodeType !== 1 || node == refNode || ['input', 'select', 'textarea', 'img', 'iframe'].indexOf(node.nodeName.toLowerCase()) !== -1) {
+		if (node && node.nodeType !== 1 || node == refNode || ['input', 'select', 'textarea', 'img', 'iframe'].indexOf(node.nodeName.toLowerCase()) !== -1) {
 			return {before: '', after: ''};
 		}
 		if (document.defaultView && document.defaultView.getComputedStyle) {
 			return {
-				before: getText(node, ':before'),
-				after: getText(node, ':after')
+				before: cleanCSSText(node, getText(node, ':before')),
+				after: cleanCSSText(node, getText(node, ':after'))
 			};
 		} else {
 			return {before: '', after: ''};
 		}
-	};
-
-	var inParent = function(node, parent, refNode) {
-		while (node) {
-			node = node.parentNode;
-			if (node == parent) {
-				return true;
-			}
-			else if (node == refNode) {
-				return false;
-			}
-		}
-		return false;
 	};
 
 	var getParent = function(node, nTag) {
@@ -14730,11 +14764,16 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 		return {};
 	};
 
-	var hasParentLabel = function(node, noLabel, refNode) {
+	var hasParentLabel = function(node, noLabel, refNode, ownedBy) {
+		var trackNodes = [];
 		while (node && node !== refNode) {
-			node = node.parentNode;
-
-			if (node.getAttribute) {
+				if (node.id && ownedBy && ownedBy[node.id] && ownedBy[node.id].node && trackNodes.indexOf(node) === -1) {
+				trackNodes.push(node);
+				node = ownedBy[node.id].node;
+			} else {
+				node = node.parentNode;
+			}
+			if (node && node.getAttribute) {
 				if (['presentation', 'none'].indexOf(node.getAttribute('role')) === -1) {
 					if (!noLabel && node.getAttribute('aria-label')) {
 						return true;
@@ -14745,7 +14784,6 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 				}
 			}
 		}
-
 		return false;
 	};
 
@@ -14761,18 +14799,19 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	}
 
 	// Compute accessible Name property value for node
-	var accName = walk(node, false);
+	var accName = walk(node, false, false, [], false, {top: node});
 
 	var accDesc = '';
 	if (['presentation', 'none'].indexOf(node.getAttribute('role')) === -1) {
 		// Check for blank value, since whitespace chars alone are not valid as a name
 		var title = trim(node.getAttribute('title'));
 		if (title) {
-			if (!accName) {
+			if (!trim(accName)) {
 				// Set accessible Name to title value as a fallback if no other labelling mechanism is available.
 				accName = title;
-			} else {
-				// Otherwise, set Description using title attribute if available and including more than whitespace characters.
+			}
+			else if (accName.indexOf(title) === -1) {
+				// Otherwise, set Description using title attribute if available and including more than whitespace characters, but only if title is not already present within accName.
 				accDesc = title;
 			}
 		}
@@ -14784,7 +14823,11 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			var parts = [];
 			for (var j = 0; j < ids.length; j++) {
 				var element = document.getElementById(ids[j]);
-				parts.push(walk(element, true));
+				var eD = walk(element, true, false, [], false, {top: element});
+				if (accName.indexOf(eD) === -1) {
+					// Add aria-describedby reference to Description, but only if the returned value is not already included within accName.
+					parts.push(eD);
+				}
 			}
 			// Check for blank value, since whitespace chars alone are not valid as a name
 			var desc = trim(parts.join(' '));
@@ -14809,6 +14852,9 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 		desc: accDesc
 	};
 
+	nodes = [];
+	owns = [];
+
 	if (fnc && typeof fnc == 'function') {
 		return fnc.apply(node, [
 			node,
@@ -14819,11 +14865,12 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 	}
 };
 
-// Customize returned string
+
+// Customize returned string for testable statements
 
 var getNames = function(node) {
 	var props = calcNames(node);
-	return 'accName: "' + props.name + '"\n\naccDesc: "' + props.desc + '"';
+	return 'accName: "' + props.name + '"\n\naccDesc: "' + props.desc + '"\n\n(Running Name Computation Prototype version: ' + currentVersion + ')';
 };
 
 if (typeof module === 'object' && module.exports) {
