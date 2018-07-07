@@ -26,7 +26,10 @@ var implementations = {
 	'accdc': accdc.calcNames,
 	'axe': function(el) {
 		return {
-			name: ex(axe.commons.text.accessibleText, [el]),
+			name: ex(function(el) {
+				axe._tree = axe.utils.getFlattenedTree(document.body);
+				return axe.commons.text.accessibleText(el);
+			}, [el]),
 			desc: '-',
 			role: el.getAttribute('role') || ex(axe.commons.aria.implicitRole, [el]),
 		};
