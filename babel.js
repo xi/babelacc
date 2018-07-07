@@ -4762,15 +4762,19 @@ exports.attributes = {
 	'sort': 'token',
 };
 
-exports.attributeMapping = {
-	'checked': 'checked',
-	'colspan': 'colSpan',
+exports.attributeStrongMapping = {
 	'disabled': 'disabled',
-	'expanded': 'open',
-	'multiselectable': 'multiple',
+	'hidden': 'hidden',
 	'placeholder': 'placeholder',
 	'readonly': 'readOnly',
 	'required': 'required',
+};
+
+exports.attributeWeakMapping = {
+	'checked': 'checked',
+	'colspan': 'colSpan',
+	'expanded': 'open',
+	'multiselectable': 'multiple',
 	'rowspan': 'rowSpan',
 	'selected': 'selected',
 };
@@ -4834,6 +4838,7 @@ exports.extraSelectors = {
 	spinbutton: ['input[type="number"]'],
 	status: ['output'],
 	table: ['table'],
+	term: ['dfn', 'dt'],
 	textbox: [
 		'input:not([type]):not([list])',
 		'input[type="email"]:not([list])',
@@ -5051,7 +5056,7 @@ var getPseudoContent = function(node, selector) {
 	var ret = styles.getPropertyValue('content');
 	var inline = styles.display.substr(0, 6) === 'inline';
 	if (!ret) {
-		return ''
+		return '';
 	}
 	if (ret.substr(0, 1) !== '"') {
 		return '';
@@ -5208,6 +5213,10 @@ var getName = function(el, recursive, referenced) {
 	return before + ret + after;
 };
 
+var getNameTrimmed = function(el) {
+	return getName(el).replace(/\s+/g, ' ').trim();
+};
+
 var getDescription = function(el) {
 	var ret = '';
 
@@ -5224,13 +5233,17 @@ var getDescription = function(el) {
 		ret = el.placeholder;
 	}
 
-	return (ret || '').trim().replace(/\s+/g, ' ');
+	ret = (ret || '').trim().replace(/\s+/g, ' ');
+
+	if (ret === getNameTrimmed(el)) {
+		ret = '';
+	}
+
+	return ret;
 };
 
 module.exports = {
-	getName: function(el) {
-		return getName(el).replace(/\s+/g, ' ').trim();
-	},
+	getName: getNameTrimmed,
 	getDescription: getDescription,
 };
 
@@ -5275,6 +5288,23 @@ var getAttribute = function(el, key, _hiddenRoot) {
 		return false;
 	}
 
+	if (constants.attributeStrongMapping.hasOwnProperty(key)) {
+		var value = el[constants.attributeStrongMapping[key]];
+		if (value) {
+			return value;
+		}
+	}
+	if (key === 'readonly' && el.contentEditable) {
+		return false;
+	} else if (key === 'invalid' && el.checkValidity) {
+		return !el.checkValidity();
+	} else if (key === 'hidden') {
+		var style = window.getComputedStyle(el);
+		if (style.display === 'none' || style.visibility === 'hidden') {
+			return true;
+		}
+	}
+
 	var type = constants.attributes[key];
 	var raw = el.getAttribute('aria-' + key);
 
@@ -5311,16 +5341,11 @@ var getAttribute = function(el, key, _hiddenRoot) {
 			}
 		}
 	} else if (key === 'hidden') {
-		var style = window.getComputedStyle(el);
-		if (el.hidden || style.display === 'none' || style.visibility === 'hidden') {
-			return true;
-		} else if (el.clientHeight === 0) {  // rough check for performance
+		if (el.clientHeight === 0) {  // rough check for performance
 			return el.parentNode && getAttribute(el.parentNode, 'hidden', _hiddenRoot);
 		}
-	} else if (key === 'invalid' && el.checkValidity) {
-		return el.checkValidity();
-	} else if (constants.attributeMapping.hasOwnProperty(key)) {
-		return el[constants.attributeMapping[key]];
+	} else if (constants.attributeWeakMapping.hasOwnProperty(key)) {
+		return el[constants.attributeWeakMapping[key]];
 	}
 
 	if (type === 'bool' || type === 'tristate') {
@@ -5412,17 +5437,6 @@ module.exports = {
 };
 
 },{}],12:[function(require,module,exports){
-/*! aXe v2.6.1
- * Copyright (c) 2017 Deque Systems, Inc.
- *
- * Your use of this Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- *
- * This entire copyright notice must appear in every copy of this file you
- * distribute or in any file that contains substantial portions of this source
- * code.
- */
 (function axeFunction(window) {
   var global = window;
   var document = window.document;
@@ -5433,9 +5447,9 @@ module.exports = {
     return obj && typeof Symbol === 'function' && obj.constructor === Symbol && obj !== Symbol.prototype ? 'symbol' : typeof obj;
   };
   var axe = axe || {};
-  axe.version = '2.6.1';
+  axe.version = '3.0.3';
   if (typeof define === 'function' && define.amd) {
-    define([], function() {
+    define('axe-core', [], function() {
       'use strict';
       return axe;
     });
@@ -5557,7 +5571,8 @@ module.exports = {
   };
   Audit.prototype.run = function(context, options, resolve, reject) {
     'use strict';
-    this.validateOptions(options);
+    this.normalizeOptions(options);
+    axe._selectCache = [];
     var q = axe.utils.queue();
     this.rules.forEach(function(rule) {
       if (axe.utils.ruleShouldRun(rule, context, options)) {
@@ -5591,6 +5606,7 @@ module.exports = {
       }
     });
     q.then(function(results) {
+      axe._selectCache = undefined;
       resolve(results.filter(function(result) {
         return !!result;
       }));
@@ -5601,6 +5617,9 @@ module.exports = {
     var rules = this.rules;
     return results.map(function(ruleResult) {
       var rule = axe.utils.findBy(rules, 'id', ruleResult.id);
+      if (!rule) {
+        throw new Error('Result for unknown rule. You may be running mismatch aXe-core versions');
+      }
       return rule.after(ruleResult, options);
     });
   };
@@ -5609,34 +5628,43 @@ module.exports = {
       return rule.id === ruleId;
     });
   };
-  Audit.prototype.validateOptions = function(options) {
+  Audit.prototype.normalizeOptions = function(options) {
     'use strict';
     var audit = this;
     if (_typeof(options.runOnly) === 'object') {
+      if (Array.isArray(options.runOnly)) {
+        options.runOnly = {
+          type: 'tag',
+          values: options.runOnly
+        };
+      }
       var only = options.runOnly;
-      if (only.type === 'rule' && Array.isArray(only.value)) {
-        only.value.forEach(function(ruleId) {
+      if (only.value && !only.values) {
+        only.values = only.value;
+        delete only.value;
+      }
+      if (!Array.isArray(only.values) || only.values.length === 0) {
+        throw new Error('runOnly.values must be a non-empty array');
+      }
+      if ([ 'rule', 'rules' ].includes(only.type)) {
+        only.type = 'rule';
+        only.values.forEach(function(ruleId) {
           if (!audit.getRule(ruleId)) {
             throw new Error('unknown rule `' + ruleId + '` in options.runOnly');
           }
         });
-      } else if (Array.isArray(only.value) && only.value.length > 0) {
-        var tags = [].concat(only.value);
-        audit.rules.forEach(function(rule) {
-          var tagPos, i, l;
-          if (!tags) {
-            return;
-          }
-          for (i = 0, l = rule.tags.length; i < l; i++) {
-            tagPos = tags.indexOf(rule.tags[i]);
-            if (tagPos !== -1) {
-              tags.splice(tagPos, 1);
-            }
-          }
-        });
-        if (tags.length !== 0) {
-          throw new Error('could not find tags `' + tags.join('`, `') + '`');
+      } else if ([ 'tag', 'tags', undefined ].includes(only.type)) {
+        only.type = 'tag';
+        var unmatchedTags = audit.rules.reduce(function(unmatchedTags, rule) {
+          return unmatchedTags.length ? unmatchedTags.filter(function(tag) {
+            return !rule.tags.includes(tag);
+          }) : unmatchedTags;
+        }, only.values);
+        if (unmatchedTags.length !== 0) {
+          throw new Error('Could not find tags `' + unmatchedTags.join('`, `') + '`');
         }
+      } else {
+        throw new Error('Unknown runOnly type \'' + only.type + '\'');
       }
     }
     if (_typeof(options.rules) === 'object') {
@@ -5716,7 +5744,7 @@ module.exports = {
       var checkHelper = axe.utils.checkHelper(checkResult, options, resolve, reject);
       var result;
       try {
-        result = this.evaluate.call(checkHelper, node, checkOptions);
+        result = this.evaluate.call(checkHelper, node.actualNode, checkOptions, node);
       } catch (e) {
         reject(e);
         return;
@@ -5823,20 +5851,30 @@ module.exports = {
   }
   function parseSelectorArray(context, type) {
     'use strict';
-    var item, result = [];
+    var item, result = [], nodeList;
     for (var i = 0, l = context[type].length; i < l; i++) {
       item = context[type][i];
       if (typeof item === 'string') {
-        result = result.concat(axe.utils.toArray(document.querySelectorAll(item)));
+        nodeList = Array.from(document.querySelectorAll(item));
+        result = result.concat(nodeList.map(function(node) {
+          return axe.utils.getNodeFromTree(context.flatTree[0], node);
+        }));
         break;
       } else if (item && item.length && !(item instanceof Node)) {
         if (item.length > 1) {
           pushUniqueFrameSelector(context, type, item);
         } else {
-          result = result.concat(axe.utils.toArray(document.querySelectorAll(item[0])));
+          nodeList = Array.from(document.querySelectorAll(item[0]));
+          result = result.concat(nodeList.map(function(node) {
+            return axe.utils.getNodeFromTree(context.flatTree[0], node);
+          }));
         }
-      } else {
-        result.push(item);
+      } else if (item instanceof Node) {
+        if (item.documentElement instanceof Node) {
+          result.push(context.flatTree[0]);
+        } else {
+          result.push(axe.utils.getNodeFromTree(context.flatTree[0], item));
+        }
       }
     }
     return result.filter(function(r) {
@@ -5857,29 +5895,48 @@ module.exports = {
       });
     }
   }
+  function getRootNode(_ref) {
+    var include = _ref.include, exclude = _ref.exclude;
+    var selectors = Array.from(include).concat(Array.from(exclude));
+    var localDocument = selectors.reduce(function(result, item) {
+      if (result) {
+        return result;
+      } else if (item instanceof Element) {
+        return item.ownerDocument;
+      } else if (item instanceof Document) {
+        return item;
+      }
+    }, null);
+    return (localDocument || document).documentElement;
+  }
   function Context(spec) {
     'use strict';
-    var self = this;
+    var _this = this;
     this.frames = [];
     this.initiator = spec && typeof spec.initiator === 'boolean' ? spec.initiator : true;
     this.page = false;
     spec = normalizeContext(spec);
+    this.flatTree = axe.utils.getFlattenedTree(getRootNode(spec));
     this.exclude = spec.exclude;
     this.include = spec.include;
     this.include = parseSelectorArray(this, 'include');
     this.exclude = parseSelectorArray(this, 'exclude');
     axe.utils.select('frame, iframe', this).forEach(function(frame) {
-      if (isNodeInContext(frame, self)) {
-        pushUniqueFrame(self.frames, frame);
+      if (isNodeInContext(frame, _this)) {
+        pushUniqueFrame(_this.frames, frame.actualNode);
       }
     });
-    if (this.include.length === 1 && this.include[0] === document) {
+    if (this.include.length === 1 && this.include[0].actualNode === document.documentElement) {
       this.page = true;
     }
     var err = validateContext(this);
     if (err instanceof Error) {
       throw err;
     }
+    if (!Array.isArray(this.include)) {
+      this.include = Array.from(this.include);
+    }
+    this.include.sort(axe.utils.nodeSorter);
   }
   'use strict';
   function RuleResult(rule) {
@@ -5916,7 +5973,7 @@ module.exports = {
     var elements = axe.utils.select(this.selector, context);
     if (this.excludeHidden) {
       return elements.filter(function(element) {
-        return !axe.utils.isHidden(element);
+        return !axe.utils.isHidden(element.actualNode);
       });
     }
     return elements;
@@ -5946,10 +6003,12 @@ module.exports = {
     var _this = this;
     var q = axe.utils.queue();
     var ruleResult = new RuleResult(this);
+    var markStart = 'mark_runchecks_start_' + this.id;
+    var markEnd = 'mark_runchecks_end_' + this.id;
     var nodes = void 0;
     try {
       nodes = this.gather(context).filter(function(node) {
-        return _this.matches(node);
+        return _this.matches(node.actualNode, node);
       });
     } catch (error) {
       reject(new SupportError({
@@ -5960,6 +6019,7 @@ module.exports = {
     }
     if (options.performanceTimer) {
       axe.log('gather (', nodes.length, '):', axe.utils.performanceTimer.timeElapsed() + 'ms');
+      axe.utils.performanceTimer.mark(markStart);
     }
     nodes.forEach(function(node) {
       q.defer(function(resolveNode, rejectNode) {
@@ -5986,7 +6046,7 @@ module.exports = {
               }
             });
             if (hasResults) {
-              result.node = new axe.utils.DqElement(node, options);
+              result.node = new axe.utils.DqElement(node.actualNode, options);
               ruleResult.nodes.push(result);
             }
           }
@@ -5996,6 +6056,10 @@ module.exports = {
         });
       });
     });
+    if (options.performanceTimer) {
+      axe.utils.performanceTimer.mark(markEnd);
+      axe.utils.performanceTimer.measure('runchecks_' + this.id, markStart, markEnd);
+    }
     q.then(function() {
       return resolve(ruleResult);
     }).catch(function(error) {
@@ -6168,42 +6232,10 @@ module.exports = {
     }
   };
   'use strict';
-  var _typeof = typeof Symbol === 'function' && typeof Symbol.iterator === 'symbol' ? function(obj) {
-    return typeof obj;
-  } : function(obj) {
-    return obj && typeof Symbol === 'function' && obj.constructor === Symbol && obj !== Symbol.prototype ? 'symbol' : typeof obj;
-  };
-  axe.a11yCheck = function(context, options, callback) {
-    'use strict';
-    if (typeof options === 'function') {
-      callback = options;
-      options = {};
-    }
-    if (!options || (typeof options === 'undefined' ? 'undefined' : _typeof(options)) !== 'object') {
-      options = {};
-    }
-    var audit = axe._audit;
-    if (!audit) {
-      throw new Error('No audit configured');
-    }
-    options.reporter = options.reporter || audit.reporter || 'v2';
-    if (options.performanceTimer) {
-      axe.utils.performanceTimer.start();
-    }
-    var reporter = axe.getReporter(options.reporter);
-    axe._runRules(context, options, function(results) {
-      var res = reporter(results, options, callback);
-      if (res !== undefined) {
-        if (options.performanceTimer) {
-          axe.utils.performanceTimer.end();
-        }
-        callback(res);
-      }
-    }, axe.log);
-  };
-  'use strict';
   function cleanupPlugins(resolve, reject) {
     'use strict';
+    resolve = resolve || function() {};
+    reject = reject || axe.log;
     if (!axe._audit) {
       throw new Error('No audit configured');
     }
@@ -6222,9 +6254,10 @@ module.exports = {
         }
       });
     });
-    axe.utils.toArray(document.querySelectorAll('frame, iframe')).forEach(function(frame) {
+    var flattenedTree = axe.utils.getFlattenedTree(document.body);
+    axe.utils.querySelectorAll(flattenedTree, 'iframe, frame').forEach(function(node) {
       q.defer(function(res, rej) {
-        return axe.utils.sendCommandToFrame(frame, {
+        return axe.utils.sendCommandToFrame(node.actualNode, {
           command: 'cleanup-plugin'
         }, res, rej);
       });
@@ -6254,9 +6287,18 @@ module.exports = {
         audit.addCheck(check);
       });
     }
+    var modifiedRules = [];
     if (spec.rules) {
       spec.rules.forEach(function(rule) {
+        modifiedRules.push(rule.id);
         audit.addRule(rule);
+      });
+    }
+    if (spec.disableOtherRules) {
+      audit.rules.forEach(function(rule) {
+        if (modifiedRules.includes(rule.id) === false) {
+          rule.enabled = false;
+        }
       });
     }
     if (typeof spec.branding !== 'undefined') {
@@ -6307,7 +6349,10 @@ module.exports = {
     var options = data && data.options || {};
     switch (data.command) {
      case 'rules':
-      return runRules(context, options, resolve, reject);
+      return runRules(context, options, function(results, cleanup) {
+        resolve(results);
+        cleanup();
+      }, reject);
 
      case 'cleanup-plugin':
       return cleanupPlugins(resolve, reject);
@@ -6400,11 +6445,18 @@ module.exports = {
   }
   axe.reset = resetConfiguration;
   'use strict';
+  function cleanup() {
+    axe._tree = undefined;
+    axe._selectorData = undefined;
+  }
   function runRules(context, options, resolve, reject) {
     'use strict';
     try {
       context = new Context(context);
+      axe._tree = context.flatTree;
+      axe._selectorData = axe.utils.getSelectorData(context.flatTree);
     } catch (e) {
+      cleanup();
       return reject(e);
     }
     var q = axe.utils.queue();
@@ -6432,9 +6484,9 @@ module.exports = {
         if (options.performanceTimer) {
           axe.utils.performanceTimer.auditEnd();
         }
-        var results = axe.utils.mergeResults(data.map(function(d) {
+        var results = axe.utils.mergeResults(data.map(function(results) {
           return {
-            results: d
+            results: results
           };
         }));
         if (context.initiator) {
@@ -6443,14 +6495,19 @@ module.exports = {
           results = results.map(axe.utils.finalizeRuleResult);
         }
         try {
-          resolve(results);
+          resolve(results, cleanup);
         } catch (e) {
+          cleanup();
           axe.log(e);
         }
       } catch (e) {
+        cleanup();
         reject(e);
       }
-    }).catch(reject);
+    }).catch(function(e) {
+      cleanup();
+      reject(e);
+    });
   }
   axe._runRules = runRules;
   'use strict';
@@ -6530,8 +6587,9 @@ module.exports = {
         resolve = _resolve;
       });
     }
-    axe._runRules(context, options, function(rawResults) {
+    axe._runRules(context, options, function(rawResults, cleanup) {
       var respond = function respond(results) {
+        cleanup();
         try {
           callback(null, results);
         } catch (e) {
@@ -6549,6 +6607,7 @@ module.exports = {
           respond(results);
         }
       } catch (err) {
+        cleanup();
         callback(err);
         reject(err);
       }
@@ -6958,7 +7017,11 @@ module.exports = {
   'use strict';
   function err(message, node) {
     'use strict';
-    return new Error(message + ': ' + axe.utils.getSelector(node));
+    var selector;
+    if (axe._tree) {
+      selector = axe.utils.getSelector(node);
+    }
+    return new Error(message + ': ' + (selector || node));
   }
   axe.utils.sendCommandToFrame = function(node, parameters, resolve, reject) {
     'use strict';
@@ -6970,20 +7033,19 @@ module.exports = {
     }
     var timeout = setTimeout(function() {
       timeout = setTimeout(function() {
-        var errMsg = err('No response from frame', node);
         if (!parameters.debug) {
-          axe.log(errMsg);
           resolve(null);
         } else {
-          reject(errMsg);
+          reject(err('No response from frame', node));
         }
       }, 0);
     }, 500);
     axe.utils.respondable(win, 'axe.ping', null, undefined, function() {
       clearTimeout(timeout);
+      var frameWaitTime = parameters.options && parameters.options.frameWaitTime || 6e4;
       timeout = setTimeout(function() {
         reject(err('Axe in frame timed out', node));
-      }, 3e4);
+      }, frameWaitTime);
       axe.utils.respondable(win, 'axe.start', parameters, undefined, function(data) {
         clearTimeout(timeout);
         if (data instanceof Error === false) {
@@ -7032,11 +7094,584 @@ module.exports = {
   'use strict';
   axe.utils.contains = function(node, otherNode) {
     'use strict';
-    if (typeof node.contains === 'function') {
-      return node.contains(otherNode);
+    function containsShadowChild(node, otherNode) {
+      if (node.shadowId === otherNode.shadowId) {
+        return true;
+      }
+      return !!node.children.find(function(child) {
+        return containsShadowChild(child, otherNode);
+      });
     }
-    return !!(node.compareDocumentPosition(otherNode) & 16);
+    if (node.shadowId || otherNode.shadowId) {
+      return containsShadowChild(node, otherNode);
+    }
+    if (typeof node.actualNode.contains === 'function') {
+      return node.actualNode.contains(otherNode.actualNode);
+    }
+    return !!(node.actualNode.compareDocumentPosition(otherNode.actualNode) & 16);
   };
+  'use strict';
+  (function(axe) {
+    function CssSelectorParser() {
+      this.pseudos = {};
+      this.attrEqualityMods = {};
+      this.ruleNestingOperators = {};
+      this.substitutesEnabled = false;
+    }
+    CssSelectorParser.prototype.registerSelectorPseudos = function(name) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        name = arguments[j];
+        this.pseudos[name] = 'selector';
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.unregisterSelectorPseudos = function(name) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        name = arguments[j];
+        delete this.pseudos[name];
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.registerNumericPseudos = function(name) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        name = arguments[j];
+        this.pseudos[name] = 'numeric';
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.unregisterNumericPseudos = function(name) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        name = arguments[j];
+        delete this.pseudos[name];
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.registerNestingOperators = function(operator) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        operator = arguments[j];
+        this.ruleNestingOperators[operator] = true;
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.unregisterNestingOperators = function(operator) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        operator = arguments[j];
+        delete this.ruleNestingOperators[operator];
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.registerAttrEqualityMods = function(mod) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        mod = arguments[j];
+        this.attrEqualityMods[mod] = true;
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.unregisterAttrEqualityMods = function(mod) {
+      for (var j = 0, len = arguments.length; j < len; j++) {
+        mod = arguments[j];
+        delete this.attrEqualityMods[mod];
+      }
+      return this;
+    };
+    CssSelectorParser.prototype.enableSubstitutes = function() {
+      this.substitutesEnabled = true;
+      return this;
+    };
+    CssSelectorParser.prototype.disableSubstitutes = function() {
+      this.substitutesEnabled = false;
+      return this;
+    };
+    function isIdentStart(c) {
+      return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c === '-' || c === '_';
+    }
+    function isIdent(c) {
+      return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c === '-' || c === '_';
+    }
+    function isHex(c) {
+      return c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F' || c >= '0' && c <= '9';
+    }
+    function isDecimal(c) {
+      return c >= '0' && c <= '9';
+    }
+    function isAttrMatchOperator(chr) {
+      return chr === '=' || chr === '^' || chr === '$' || chr === '*' || chr === '~';
+    }
+    var identSpecialChars = {
+      '!': true,
+      '"': true,
+      '#': true,
+      $: true,
+      '%': true,
+      '&': true,
+      '\'': true,
+      '(': true,
+      ')': true,
+      '*': true,
+      '+': true,
+      ',': true,
+      '.': true,
+      '/': true,
+      ';': true,
+      '<': true,
+      '=': true,
+      '>': true,
+      '?': true,
+      '@': true,
+      '[': true,
+      '\\': true,
+      ']': true,
+      '^': true,
+      '`': true,
+      '{': true,
+      '|': true,
+      '}': true,
+      '~': true
+    };
+    var strReplacementsRev = {
+      '\n': '\\n',
+      '\r': '\\r',
+      '\t': '\\t',
+      '\f': '\\f',
+      '\v': '\\v'
+    };
+    var singleQuoteEscapeChars = {
+      n: '\n',
+      r: '\r',
+      t: '\t',
+      f: '\f',
+      '\\': '\\',
+      '\'': '\''
+    };
+    var doubleQuotesEscapeChars = {
+      n: '\n',
+      r: '\r',
+      t: '\t',
+      f: '\f',
+      '\\': '\\',
+      '"': '"'
+    };
+    function ParseContext(str, pos, pseudos, attrEqualityMods, ruleNestingOperators, substitutesEnabled) {
+      var chr, getIdent, getStr, l, skipWhitespace;
+      l = str.length;
+      chr = null;
+      getStr = function getStr(quote, escapeTable) {
+        var esc, hex, result;
+        result = '';
+        pos++;
+        chr = str.charAt(pos);
+        while (pos < l) {
+          if (chr === quote) {
+            pos++;
+            return result;
+          } else if (chr === '\\') {
+            pos++;
+            chr = str.charAt(pos);
+            if (chr === quote) {
+              result += quote;
+            } else if (esc = escapeTable[chr]) {
+              result += esc;
+            } else if (isHex(chr)) {
+              hex = chr;
+              pos++;
+              chr = str.charAt(pos);
+              while (isHex(chr)) {
+                hex += chr;
+                pos++;
+                chr = str.charAt(pos);
+              }
+              if (chr === ' ') {
+                pos++;
+                chr = str.charAt(pos);
+              }
+              result += String.fromCharCode(parseInt(hex, 16));
+              continue;
+            } else {
+              result += chr;
+            }
+          } else {
+            result += chr;
+          }
+          pos++;
+          chr = str.charAt(pos);
+        }
+        return result;
+      };
+      getIdent = function getIdent() {
+        var result = '';
+        chr = str.charAt(pos);
+        while (pos < l) {
+          if (isIdent(chr)) {
+            result += chr;
+          } else if (chr === '\\') {
+            pos++;
+            if (pos >= l) {
+              throw Error('Expected symbol but end of file reached.');
+            }
+            chr = str.charAt(pos);
+            if (identSpecialChars[chr]) {
+              result += chr;
+            } else if (isHex(chr)) {
+              var hex = chr;
+              pos++;
+              chr = str.charAt(pos);
+              while (isHex(chr)) {
+                hex += chr;
+                pos++;
+                chr = str.charAt(pos);
+              }
+              if (chr === ' ') {
+                pos++;
+                chr = str.charAt(pos);
+              }
+              result += String.fromCharCode(parseInt(hex, 16));
+              continue;
+            } else {
+              result += chr;
+            }
+          } else {
+            return result;
+          }
+          pos++;
+          chr = str.charAt(pos);
+        }
+        return result;
+      };
+      skipWhitespace = function skipWhitespace() {
+        chr = str.charAt(pos);
+        var result = false;
+        while (chr === ' ' || chr === '\t' || chr === '\n' || chr === '\r' || chr === '\f') {
+          result = true;
+          pos++;
+          chr = str.charAt(pos);
+        }
+        return result;
+      };
+      this.parse = function() {
+        var res = this.parseSelector();
+        if (pos < l) {
+          throw Error('Rule expected but "' + str.charAt(pos) + '" found.');
+        }
+        return res;
+      };
+      this.parseSelector = function() {
+        var res;
+        var selector = res = this.parseSingleSelector();
+        chr = str.charAt(pos);
+        while (chr === ',') {
+          pos++;
+          skipWhitespace();
+          if (res.type !== 'selectors') {
+            res = {
+              type: 'selectors',
+              selectors: [ selector ]
+            };
+          }
+          selector = this.parseSingleSelector();
+          if (!selector) {
+            throw Error('Rule expected after ",".');
+          }
+          res.selectors.push(selector);
+        }
+        return res;
+      };
+      this.parseSingleSelector = function() {
+        skipWhitespace();
+        var selector = {
+          type: 'ruleSet'
+        };
+        var rule = this.parseRule();
+        if (!rule) {
+          return null;
+        }
+        var currentRule = selector;
+        while (rule) {
+          rule.type = 'rule';
+          currentRule.rule = rule;
+          currentRule = rule;
+          skipWhitespace();
+          chr = str.charAt(pos);
+          if (pos >= l || chr === ',' || chr === ')') {
+            break;
+          }
+          if (ruleNestingOperators[chr]) {
+            var op = chr;
+            pos++;
+            skipWhitespace();
+            rule = this.parseRule();
+            if (!rule) {
+              throw Error('Rule expected after "' + op + '".');
+            }
+            rule.nestingOperator = op;
+          } else {
+            rule = this.parseRule();
+            if (rule) {
+              rule.nestingOperator = null;
+            }
+          }
+        }
+        return selector;
+      };
+      this.parseRule = function() {
+        var rule = null;
+        while (pos < l) {
+          chr = str.charAt(pos);
+          if (chr === '*') {
+            pos++;
+            (rule = rule || {}).tagName = '*';
+          } else if (isIdentStart(chr) || chr === '\\') {
+            (rule = rule || {}).tagName = getIdent();
+          } else if (chr === '.') {
+            pos++;
+            rule = rule || {};
+            (rule.classNames = rule.classNames || []).push(getIdent());
+          } else if (chr === '#') {
+            pos++;
+            (rule = rule || {}).id = getIdent();
+          } else if (chr === '[') {
+            pos++;
+            skipWhitespace();
+            var attr = {
+              name: getIdent()
+            };
+            skipWhitespace();
+            if (chr === ']') {
+              pos++;
+            } else {
+              var operator = '';
+              if (attrEqualityMods[chr]) {
+                operator = chr;
+                pos++;
+                chr = str.charAt(pos);
+              }
+              if (pos >= l) {
+                throw Error('Expected "=" but end of file reached.');
+              }
+              if (chr !== '=') {
+                throw Error('Expected "=" but "' + chr + '" found.');
+              }
+              attr.operator = operator + '=';
+              pos++;
+              skipWhitespace();
+              var attrValue = '';
+              attr.valueType = 'string';
+              if (chr === '"') {
+                attrValue = getStr('"', doubleQuotesEscapeChars);
+              } else if (chr === '\'') {
+                attrValue = getStr('\'', singleQuoteEscapeChars);
+              } else if (substitutesEnabled && chr === '$') {
+                pos++;
+                attrValue = getIdent();
+                attr.valueType = 'substitute';
+              } else {
+                while (pos < l) {
+                  if (chr === ']') {
+                    break;
+                  }
+                  attrValue += chr;
+                  pos++;
+                  chr = str.charAt(pos);
+                }
+                attrValue = attrValue.trim();
+              }
+              skipWhitespace();
+              if (pos >= l) {
+                throw Error('Expected "]" but end of file reached.');
+              }
+              if (chr !== ']') {
+                throw Error('Expected "]" but "' + chr + '" found.');
+              }
+              pos++;
+              attr.value = attrValue;
+            }
+            rule = rule || {};
+            (rule.attrs = rule.attrs || []).push(attr);
+          } else if (chr === ':') {
+            pos++;
+            var pseudoName = getIdent();
+            var pseudo = {
+              name: pseudoName
+            };
+            if (chr === '(') {
+              pos++;
+              var value = '';
+              skipWhitespace();
+              if (pseudos[pseudoName] === 'selector') {
+                pseudo.valueType = 'selector';
+                value = this.parseSelector();
+              } else {
+                pseudo.valueType = pseudos[pseudoName] || 'string';
+                if (chr === '"') {
+                  value = getStr('"', doubleQuotesEscapeChars);
+                } else if (chr === '\'') {
+                  value = getStr('\'', singleQuoteEscapeChars);
+                } else if (substitutesEnabled && chr === '$') {
+                  pos++;
+                  value = getIdent();
+                  pseudo.valueType = 'substitute';
+                } else {
+                  while (pos < l) {
+                    if (chr === ')') {
+                      break;
+                    }
+                    value += chr;
+                    pos++;
+                    chr = str.charAt(pos);
+                  }
+                  value = value.trim();
+                }
+                skipWhitespace();
+              }
+              if (pos >= l) {
+                throw Error('Expected ")" but end of file reached.');
+              }
+              if (chr !== ')') {
+                throw Error('Expected ")" but "' + chr + '" found.');
+              }
+              pos++;
+              pseudo.value = value;
+            }
+            rule = rule || {};
+            (rule.pseudos = rule.pseudos || []).push(pseudo);
+          } else {
+            break;
+          }
+        }
+        return rule;
+      };
+      return this;
+    }
+    CssSelectorParser.prototype.parse = function(str) {
+      var context = new ParseContext(str, 0, this.pseudos, this.attrEqualityMods, this.ruleNestingOperators, this.substitutesEnabled);
+      return context.parse();
+    };
+    CssSelectorParser.prototype.escapeIdentifier = function(s) {
+      var result = '';
+      var i = 0;
+      var len = s.length;
+      while (i < len) {
+        var chr = s.charAt(i);
+        if (identSpecialChars[chr]) {
+          result += '\\' + chr;
+        } else {
+          if (!(chr === '_' || chr === '-' || chr >= 'A' && chr <= 'Z' || chr >= 'a' && chr <= 'z' || i !== 0 && chr >= '0' && chr <= '9')) {
+            var charCode = chr.charCodeAt(0);
+            if ((charCode & 63488) === 55296) {
+              var extraCharCode = s.charCodeAt(i++);
+              if ((charCode & 64512) !== 55296 || (extraCharCode & 64512) !== 56320) {
+                throw Error('UCS-2(decode): illegal sequence');
+              }
+              charCode = ((charCode & 1023) << 10) + (extraCharCode & 1023) + 65536;
+            }
+            result += '\\' + charCode.toString(16) + ' ';
+          } else {
+            result += chr;
+          }
+        }
+        i++;
+      }
+      return result;
+    };
+    CssSelectorParser.prototype.escapeStr = function(s) {
+      var result = '';
+      var i = 0;
+      var len = s.length;
+      var chr, replacement;
+      while (i < len) {
+        chr = s.charAt(i);
+        if (chr === '"') {
+          chr = '\\"';
+        } else if (chr === '\\') {
+          chr = '\\\\';
+        } else if (replacement = strReplacementsRev[chr]) {
+          chr = replacement;
+        }
+        result += chr;
+        i++;
+      }
+      return '"' + result + '"';
+    };
+    CssSelectorParser.prototype.render = function(path) {
+      return this._renderEntity(path).trim();
+    };
+    CssSelectorParser.prototype._renderEntity = function(entity) {
+      var currentEntity, parts, res;
+      res = '';
+      switch (entity.type) {
+       case 'ruleSet':
+        currentEntity = entity.rule;
+        parts = [];
+        while (currentEntity) {
+          if (currentEntity.nestingOperator) {
+            parts.push(currentEntity.nestingOperator);
+          }
+          parts.push(this._renderEntity(currentEntity));
+          currentEntity = currentEntity.rule;
+        }
+        res = parts.join(' ');
+        break;
+
+       case 'selectors':
+        res = entity.selectors.map(this._renderEntity, this).join(', ');
+        break;
+
+       case 'rule':
+        if (entity.tagName) {
+          if (entity.tagName === '*') {
+            res = '*';
+          } else {
+            res = this.escapeIdentifier(entity.tagName);
+          }
+        }
+        if (entity.id) {
+          res += '#' + this.escapeIdentifier(entity.id);
+        }
+        if (entity.classNames) {
+          res += entity.classNames.map(function(cn) {
+            return '.' + this.escapeIdentifier(cn);
+          }, this).join('');
+        }
+        if (entity.attrs) {
+          res += entity.attrs.map(function(attr) {
+            if (attr.operator) {
+              if (attr.valueType === 'substitute') {
+                return '[' + this.escapeIdentifier(attr.name) + attr.operator + '$' + attr.value + ']';
+              } else {
+                return '[' + this.escapeIdentifier(attr.name) + attr.operator + this.escapeStr(attr.value) + ']';
+              }
+            } else {
+              return '[' + this.escapeIdentifier(attr.name) + ']';
+            }
+          }, this).join('');
+        }
+        if (entity.pseudos) {
+          res += entity.pseudos.map(function(pseudo) {
+            if (pseudo.valueType) {
+              if (pseudo.valueType === 'selector') {
+                return ':' + this.escapeIdentifier(pseudo.name) + '(' + this._renderEntity(pseudo.value) + ')';
+              } else if (pseudo.valueType === 'substitute') {
+                return ':' + this.escapeIdentifier(pseudo.name) + '($' + pseudo.value + ')';
+              } else if (pseudo.valueType === 'numeric') {
+                return ':' + this.escapeIdentifier(pseudo.name) + '(' + pseudo.value + ')';
+              } else {
+                return ':' + this.escapeIdentifier(pseudo.name) + '(' + this.escapeIdentifier(pseudo.value) + ')';
+              }
+            } else {
+              return ':' + this.escapeIdentifier(pseudo.name);
+            }
+          }, this).join('');
+        }
+        break;
+
+       default:
+        throw Error('Unknown entity type: "' + entity.type(+'".'));
+      }
+      return res;
+    };
+    var parser = new CssSelectorParser();
+    parser.registerNestingOperators('>');
+    axe.utils.cssParser = parser;
+  })(axe);
   'use strict';
   function truncate(str, maxLength) {
     maxLength = maxLength || 300;
@@ -7124,13 +7759,14 @@ module.exports = {
     while (++index < length) {
       codeUnit = string.charCodeAt(index);
       if (codeUnit == 0) {
-        throw new Error('INVALID_CHARACTER_ERR');
+        result += '�';
+        continue;
       }
-      if (codeUnit >= 1 && codeUnit <= 31 || codeUnit >= 127 && codeUnit <= 159 || index == 0 && codeUnit >= 48 && codeUnit <= 57 || index == 1 && codeUnit >= 48 && codeUnit <= 57 && firstCodeUnit == 45) {
+      if (codeUnit >= 1 && codeUnit <= 31 || codeUnit == 127 || index == 0 && codeUnit >= 48 && codeUnit <= 57 || index == 1 && codeUnit >= 48 && codeUnit <= 57 && firstCodeUnit == 45) {
         result += '\\' + codeUnit.toString(16) + ' ';
         continue;
       }
-      if (index == 1 && codeUnit == 45 && firstCodeUnit == 45) {
+      if (index == 0 && length == 1 && codeUnit == 45) {
         result += '\\' + string.charAt(index);
         continue;
       }
@@ -7172,6 +7808,93 @@ module.exports = {
         return (typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' && obj[key] === value;
       });
     }
+  };
+  'use strict';
+  var axe = axe || {
+    utils: {}
+  };
+  function virtualDOMfromNode(node, shadowId) {
+    return {
+      shadowId: shadowId,
+      children: [],
+      actualNode: node
+    };
+  }
+  function getSlotChildren(node) {
+    var retVal = [];
+    node = node.firstChild;
+    while (node) {
+      retVal.push(node);
+      node = node.nextSibling;
+    }
+    return retVal;
+  }
+  axe.utils.getFlattenedTree = function(node, shadowId) {
+    var retVal, realArray, nodeName;
+    function reduceShadowDOM(res, child) {
+      var replacements = axe.utils.getFlattenedTree(child, shadowId);
+      if (replacements) {
+        res = res.concat(replacements);
+      }
+      return res;
+    }
+    if (node.documentElement) {
+      node = node.documentElement;
+    }
+    nodeName = node.nodeName.toLowerCase();
+    if (axe.utils.isShadowRoot(node)) {
+      retVal = virtualDOMfromNode(node, shadowId);
+      shadowId = 'a' + Math.random().toString().substring(2);
+      realArray = Array.from(node.shadowRoot.childNodes);
+      retVal.children = realArray.reduce(reduceShadowDOM, []);
+      return [ retVal ];
+    } else {
+      if (nodeName === 'content') {
+        realArray = Array.from(node.getDistributedNodes());
+        return realArray.reduce(reduceShadowDOM, []);
+      } else if (nodeName === 'slot') {
+        realArray = Array.from(node.assignedNodes());
+        if (!realArray.length) {
+          realArray = getSlotChildren(node);
+        }
+        var styl = window.getComputedStyle(node);
+        if (false && styl.display !== 'contents') {
+          retVal = virtualDOMfromNode(node, shadowId);
+          retVal.children = realArray.reduce(reduceShadowDOM, []);
+          return [ retVal ];
+        } else {
+          return realArray.reduce(reduceShadowDOM, []);
+        }
+      } else {
+        if (node.nodeType === 1) {
+          retVal = virtualDOMfromNode(node, shadowId);
+          realArray = Array.from(node.childNodes);
+          retVal.children = realArray.reduce(reduceShadowDOM, []);
+          return [ retVal ];
+        } else if (node.nodeType === 3) {
+          return [ virtualDOMfromNode(node) ];
+        }
+        return undefined;
+      }
+    }
+  };
+  axe.utils.getNodeFromTree = function(vNode, node) {
+    var found;
+    if (vNode.actualNode === node) {
+      return vNode;
+    }
+    vNode.children.forEach(function(candidate) {
+      var retVal;
+      if (candidate.actualNode === node) {
+        found = candidate;
+      } else {
+        retVal = axe.utils.getNodeFromTree(candidate, node);
+        if (retVal) {
+          found = retVal;
+        }
+      }
+    });
+    return found;
   };
   'use strict';
   axe.utils.getAllChecks = function getAllChecks(object) {
@@ -7254,6 +7977,9 @@ module.exports = {
   function splitString(str, splitIndex) {
     return [ str.substring(0, splitIndex), str.substring(splitIndex) ];
   }
+  function trimRight(str) {
+    return str.replace(/\s+$/, '');
+  }
   function uriParser(url) {
     var original = url;
     var protocol = '', domain = '', port = '', path = '', query = '', hash = '';
@@ -7316,57 +8042,127 @@ module.exports = {
     var pathEnd = path.substr(path.substr(0, path.length - 2).lastIndexOf('/') + 1);
     if (hash) {
       if (pathEnd && (pathEnd + hash).length <= maxLength) {
-        return pathEnd + hash;
+        return trimRight(pathEnd + hash);
       } else if (pathEnd.length < 2 && hash.length > 2 && hash.length <= maxLength) {
-        return hash;
+        return trimRight(hash);
       } else {
         return;
       }
     } else if (domain && domain.length < maxLength && path.length <= 1) {
-      return domain + path;
+      return trimRight(domain + path);
     }
     if (path === '/' + pathEnd && domain && currentDomain && domain !== currentDomain && (domain + path).length <= maxLength) {
-      return domain + path;
+      return trimRight(domain + path);
     }
     var lastDotIndex = pathEnd.lastIndexOf('.');
     if ((lastDotIndex === -1 || lastDotIndex > 1) && (lastDotIndex !== -1 || pathEnd.length > 2) && pathEnd.length <= maxLength && !pathEnd.match(/index(\.[a-zA-Z]{2-4})?/) && !isMostlyNumbers(pathEnd)) {
-      return pathEnd;
+      return trimRight(pathEnd);
     }
   };
   'use strict';
-  function _toConsumableArray(arr) {
-    if (Array.isArray(arr)) {
-      for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) {
-        arr2[i] = arr[i];
-      }
-      return arr2;
-    } else {
-      return Array.from(arr);
-    }
-  }
   var escapeSelector = axe.utils.escapeSelector;
   var isXHTML = void 0;
-  function isUncommonClassName(className) {
-    return ![ 'focus', 'hover', 'hidden', 'visible', 'dirty', 'touched', 'valid', 'disable', 'enable', 'active', 'col-' ].find(function(str) {
-      return className.includes(str);
-    });
-  }
-  function getDistinctClassList(elm) {
-    if (!elm.classList || elm.classList.length === 0) {
-      return [];
-    }
-    var siblings = elm.parentNode && Array.from(elm.parentNode.children || '') || [];
-    return siblings.reduce(function(classList, childElm) {
-      if (elm === childElm) {
-        return classList;
+  var ignoredAttributes = [ 'class', 'style', 'id', 'selected', 'checked', 'disabled', 'tabindex', 'aria-checked', 'aria-selected', 'aria-invalid', 'aria-activedescendant', 'aria-busy', 'aria-disabled', 'aria-expanded', 'aria-grabbed', 'aria-pressed', 'aria-valuenow' ];
+  var MAXATTRIBUTELENGTH = 31;
+  function getAttributeNameValue(node, at) {
+    var name = at.name;
+    var atnv = void 0;
+    if (name.indexOf('href') !== -1 || name.indexOf('src') !== -1) {
+      var friendly = axe.utils.getFriendlyUriEnd(node.getAttribute(name));
+      if (friendly) {
+        var value = encodeURI(friendly);
+        if (value) {
+          atnv = escapeSelector(at.name) + '$="' + value + '"';
+        } else {
+          return;
+        }
       } else {
-        return classList.filter(function(classItem) {
-          return !childElm.classList.contains(classItem);
-        });
+        atnv = escapeSelector(at.name) + '="' + node.getAttribute(name) + '"';
       }
-    }, Array.from(elm.classList).filter(isUncommonClassName));
+    } else {
+      atnv = escapeSelector(name) + '="' + escapeSelector(at.value) + '"';
+    }
+    return atnv;
   }
-  var commonNodes = [ 'div', 'span', 'p', 'b', 'i', 'u', 'strong', 'em', 'h2', 'h3' ];
+  function countSort(a, b) {
+    return a.count < b.count ? -1 : a.count === b.count ? 0 : 1;
+  }
+  function filterAttributes(at) {
+    return !ignoredAttributes.includes(at.name) && at.name.indexOf(':') === -1 && (!at.value || at.value.length < MAXATTRIBUTELENGTH);
+  }
+  axe.utils.getSelectorData = function(domTree) {
+    var data = {
+      classes: {},
+      tags: {},
+      attributes: {}
+    };
+    domTree = Array.isArray(domTree) ? domTree : [ domTree ];
+    var currentLevel = domTree.slice();
+    var stack = [];
+    var _loop = function _loop() {
+      var current = currentLevel.pop();
+      var node = current.actualNode;
+      if (!!node.querySelectorAll) {
+        var tag = node.nodeName;
+        if (data.tags[tag]) {
+          data.tags[tag]++;
+        } else {
+          data.tags[tag] = 1;
+        }
+        if (node.classList) {
+          Array.from(node.classList).forEach(function(cl) {
+            var ind = escapeSelector(cl);
+            if (data.classes[ind]) {
+              data.classes[ind]++;
+            } else {
+              data.classes[ind] = 1;
+            }
+          });
+        }
+        if (node.attributes) {
+          Array.from(node.attributes).filter(filterAttributes).forEach(function(at) {
+            var atnv = getAttributeNameValue(node, at);
+            if (atnv) {
+              if (data.attributes[atnv]) {
+                data.attributes[atnv]++;
+              } else {
+                data.attributes[atnv] = 1;
+              }
+            }
+          });
+        }
+      }
+      if (current.children.length) {
+        stack.push(currentLevel);
+        currentLevel = current.children.slice();
+      }
+      while (!currentLevel.length && stack.length) {
+        currentLevel = stack.pop();
+      }
+    };
+    while (currentLevel.length) {
+      _loop();
+    }
+    return data;
+  };
+  function uncommonClasses(node, selectorData) {
+    var retVal = [];
+    var classData = selectorData.classes;
+    var tagData = selectorData.tags;
+    if (node.classList) {
+      Array.from(node.classList).forEach(function(cl) {
+        var ind = escapeSelector(cl);
+        if (classData[ind] < tagData[node.nodeName]) {
+          retVal.push({
+            name: ind,
+            count: classData[ind],
+            species: 'class'
+          });
+        }
+      });
+    }
+    return retVal.sort(countSort);
+  }
   function getNthChildString(elm, selector) {
     var siblings = elm.parentNode && Array.from(elm.parentNode.children || '') || [];
     var hasMatchingSiblings = siblings.find(function(sibling) {
@@ -7379,128 +8175,134 @@ module.exports = {
       return '';
     }
   }
-  var createSelector = {
-    getElmId: function getElmId(elm) {
-      if (!elm.getAttribute('id')) {
-        return;
-      }
-      var id = '#' + escapeSelector(elm.getAttribute('id') || '');
-      if (!id.match(/player_uid_/) && document.querySelectorAll(id).length === 1) {
-        return id;
-      }
-    },
-    getCustomElm: function getCustomElm(elm, _ref) {
-      var isCustomElm = _ref.isCustomElm, nodeName = _ref.nodeName;
-      if (isCustomElm) {
-        return nodeName;
-      }
-    },
-    getElmRoleProp: function getElmRoleProp(elm) {
-      if (elm.hasAttribute('role')) {
-        return '[role="' + escapeSelector(elm.getAttribute('role')) + '"]';
-      }
-    },
-    getUncommonElm: function getUncommonElm(elm, _ref2) {
-      var isCommonElm = _ref2.isCommonElm, isCustomElm = _ref2.isCustomElm, nodeName = _ref2.nodeName;
-      if (!isCommonElm && !isCustomElm) {
-        if (nodeName === 'input' && elm.hasAttribute('type')) {
-          nodeName += '[type="' + elm.type + '"]';
-        }
-        return nodeName;
-      }
-    },
-    getElmNameProp: function getElmNameProp(elm) {
-      if (!elm.hasAttribute('id') && elm.name) {
-        return '[name="' + escapeSelector(elm.name) + '"]';
-      }
-    },
-    getDistinctClass: function getDistinctClass(elm, _ref3) {
-      var distinctClassList = _ref3.distinctClassList;
-      if (distinctClassList.length > 0 && distinctClassList.length < 3) {
-        return '.' + distinctClassList.map(escapeSelector).join('.');
-      }
-    },
-    getFileRefProp: function getFileRefProp(elm) {
-      var attr = void 0;
-      if (elm.hasAttribute('href')) {
-        attr = 'href';
-      } else if (elm.hasAttribute('src')) {
-        attr = 'src';
-      } else {
-        return;
-      }
-      var friendlyUriEnd = axe.utils.getFriendlyUriEnd(elm.getAttribute(attr));
-      if (friendlyUriEnd) {
-        return '[' + attr + '$="' + encodeURI(friendlyUriEnd) + '"]';
-      }
-    },
-    getCommonName: function getCommonName(elm, _ref4) {
-      var nodeName = _ref4.nodeName, isCommonElm = _ref4.isCommonElm;
-      if (isCommonElm) {
-        return nodeName;
-      }
+  function getElmId(elm) {
+    if (!elm.getAttribute('id')) {
+      return;
     }
-  };
-  function getElmFeatures(elm, featureCount) {
+    var doc = elm.getRootNode && elm.getRootNode() || document;
+    var id = '#' + escapeSelector(elm.getAttribute('id') || '');
+    if (!id.match(/player_uid_/) && doc.querySelectorAll(id).length === 1) {
+      return id;
+    }
+  }
+  function getBaseSelector(elm) {
     if (typeof isXHTML === 'undefined') {
       isXHTML = axe.utils.isXHTML(document);
     }
-    var nodeName = escapeSelector(isXHTML ? elm.localName : elm.nodeName.toLowerCase());
-    var classList = Array.from(elm.classList) || [];
-    var props = {
-      nodeName: nodeName,
-      classList: classList,
-      isCustomElm: nodeName.includes('-'),
-      isCommonElm: commonNodes.includes(nodeName),
-      distinctClassList: getDistinctClassList(elm)
-    };
-    return [ createSelector.getCustomElm, createSelector.getElmRoleProp, createSelector.getUncommonElm, createSelector.getElmNameProp, createSelector.getDistinctClass, createSelector.getFileRefProp, createSelector.getCommonName ].reduce(function(features, func) {
-      if (features.length === featureCount) {
-        return features;
-      }
-      var feature = func(elm, props);
-      if (feature) {
-        if (!feature[0].match(/[a-z]/)) {
-          features.push(feature);
-        } else {
-          features.unshift(feature);
+    return escapeSelector(isXHTML ? elm.localName : elm.nodeName.toLowerCase());
+  }
+  function uncommonAttributes(node, selectorData) {
+    var retVal = [];
+    var attData = selectorData.attributes;
+    var tagData = selectorData.tags;
+    if (node.attributes) {
+      Array.from(node.attributes).filter(filterAttributes).forEach(function(at) {
+        var atnv = getAttributeNameValue(node, at);
+        if (atnv && attData[atnv] < tagData[node.nodeName]) {
+          retVal.push({
+            name: atnv,
+            count: attData[atnv],
+            species: 'attribute'
+          });
         }
+      });
+    }
+    return retVal.sort(countSort);
+  }
+  function getThreeLeastCommonFeatures(elm, selectorData) {
+    var selector = '';
+    var features = void 0;
+    var clss = uncommonClasses(elm, selectorData);
+    var atts = uncommonAttributes(elm, selectorData);
+    if (clss.length && clss[0].count === 1) {
+      features = [ clss[0] ];
+    } else if (atts.length && atts[0].count === 1) {
+      features = [ atts[0] ];
+      selector = getBaseSelector(elm);
+    } else {
+      features = clss.concat(atts);
+      features.sort(countSort);
+      features = features.slice(0, 3);
+      if (!features.some(function(feat) {
+        return feat.species === 'class';
+      })) {
+        selector = getBaseSelector(elm);
+      } else {
+        features.sort(function(a, b) {
+          return a.species !== b.species && a.species === 'class' ? -1 : a.species === b.species ? 0 : 1;
+        });
       }
-      return features;
-    }, []);
+    }
+    return selector += features.reduce(function(val, feat) {
+      switch (feat.species) {
+       case 'class':
+        return val + '.' + feat.name;
+
+       case 'attribute':
+        return val + '[' + feat.name + ']';
+      }
+      return val;
+    }, '');
+  }
+  function generateSelector(elm, options, doc) {
+    if (!axe._selectorData) {
+      throw new Error('Expect axe._selectorData to be set up');
+    }
+    var _options$toRoot = options.toRoot, toRoot = _options$toRoot === undefined ? false : _options$toRoot;
+    var selector = void 0;
+    var similar = void 0;
+    do {
+      var features = getElmId(elm);
+      if (!features) {
+        features = getThreeLeastCommonFeatures(elm, axe._selectorData);
+        features += getNthChildString(elm, features);
+      }
+      if (selector) {
+        selector = features + ' > ' + selector;
+      } else {
+        selector = features;
+      }
+      if (!similar) {
+        similar = Array.from(doc.querySelectorAll(selector));
+      } else {
+        similar = similar.filter(function(item) {
+          return axe.utils.matchesSelector(item, selector);
+        });
+      }
+      elm = elm.parentElement;
+    } while ((similar.length > 1 || toRoot) && elm && elm.nodeType !== 11);
+    if (similar.length === 1) {
+      return selector;
+    } else if (selector.indexOf(' > ') !== -1) {
+      return ':root' + selector.substring(selector.indexOf(' > '));
+    }
+    return ':root';
   }
   axe.utils.getSelector = function createUniqueSelector(elm) {
     var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
     if (!elm) {
       return '';
     }
-    var selector = void 0, addParent = void 0;
-    var _options$isUnique = options.isUnique, isUnique = _options$isUnique === undefined ? false : _options$isUnique;
-    var idSelector = createSelector.getElmId(elm);
-    var _options$featureCount = options.featureCount, featureCount = _options$featureCount === undefined ? 2 : _options$featureCount, _options$minDepth = options.minDepth, minDepth = _options$minDepth === undefined ? 1 : _options$minDepth, _options$toRoot = options.toRoot, toRoot = _options$toRoot === undefined ? false : _options$toRoot, _options$childSelecto = options.childSelectors, childSelectors = _options$childSelecto === undefined ? [] : _options$childSelecto;
-    if (idSelector) {
-      selector = idSelector;
-      isUnique = true;
-    } else {
-      selector = getElmFeatures(elm, featureCount).join('');
-      selector += getNthChildString(elm, selector);
-      isUnique = options.isUnique || document.querySelectorAll(selector).length === 1;
-      if (!isUnique && elm === document.documentElement) {
-        selector += ':root';
+    var doc = elm.getRootNode && elm.getRootNode() || document;
+    if (doc.nodeType === 11) {
+      var stack = [];
+      while (doc.nodeType === 11) {
+        stack.push({
+          elm: elm,
+          doc: doc
+        });
+        elm = doc.host;
+        doc = elm.getRootNode();
       }
-      addParent = minDepth !== 0 || !isUnique;
-    }
-    var selectorParts = [ selector ].concat(_toConsumableArray(childSelectors));
-    if (elm.parentElement && (toRoot || addParent)) {
-      return createUniqueSelector(elm.parentNode, {
-        toRoot: toRoot,
-        isUnique: isUnique,
-        childSelectors: selectorParts,
-        featureCount: 1,
-        minDepth: minDepth - 1
+      stack.push({
+        elm: elm,
+        doc: doc
+      });
+      return stack.reverse().map(function(comp) {
+        return generateSelector(comp.elm, options, comp.doc);
       });
     } else {
-      return selectorParts.join(' > ');
+      return generateSelector(elm, options, doc);
     }
   };
   'use strict';
@@ -7600,14 +8402,30 @@ module.exports = {
   'use strict';
   axe.utils.isHidden = function isHidden(el, recursed) {
     'use strict';
+    var parent;
     if (el.nodeType === 9) {
       return false;
+    }
+    if (el.nodeType === 11) {
+      el = el.host;
     }
     var style = window.getComputedStyle(el, null);
     if (!style || !el.parentNode || style.getPropertyValue('display') === 'none' || !recursed && style.getPropertyValue('visibility') === 'hidden' || el.getAttribute('aria-hidden') === 'true') {
       return true;
     }
-    return axe.utils.isHidden(el.parentNode, true);
+    parent = el.assignedSlot ? el.assignedSlot : el.parentNode;
+    return axe.utils.isHidden(parent, true);
+  };
+  'use strict';
+  var possibleShadowRoots = [ 'article', 'aside', 'blockquote', 'body', 'div', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'main', 'nav', 'p', 'section', 'span' ];
+  axe.utils.isShadowRoot = function isShadowRoot(node) {
+    var nodeName = node.nodeName.toLowerCase();
+    if (node.shadowRoot) {
+      if (/^[a-z][a-z0-9_.-]*-[a-z0-9_.-]*$/.test(nodeName) || possibleShadowRoots.includes(nodeName)) {
+        return true;
+      }
+    }
+    return false;
   };
   'use strict';
   axe.utils.isXHTML = function(doc) {
@@ -7643,7 +8461,11 @@ module.exports = {
     var firstFromFrame = to[0].node, sorterResult, t;
     for (var i = 0, l = target.length; i < l; i++) {
       t = target[i].node;
-      sorterResult = axe.utils.nodeSorter(t.element, firstFromFrame.element);
+      sorterResult = axe.utils.nodeSorter({
+        actualNode: t.element
+      }, {
+        actualNode: firstFromFrame.element
+      });
       if (sorterResult > 0 || sorterResult === 0 && firstFromFrame.selector.length < t.selector.length) {
         target.splice.apply(target, [ i, 0 ].concat(to));
         return;
@@ -7691,10 +8513,10 @@ module.exports = {
   'use strict';
   axe.utils.nodeSorter = function nodeSorter(a, b) {
     'use strict';
-    if (a === b) {
+    if (a.actualNode === b.actualNode) {
       return 0;
     }
-    if (a.compareDocumentPosition(b) & 4) {
+    if (a.actualNode.compareDocumentPosition(b.actualNode) & 4) {
       return -1;
     }
     return 1;
@@ -7837,6 +8659,10 @@ module.exports = {
           priority: current.style.getPropertyPriority(cssProp)
         });
         current.style.setProperty(cssProp, cssDisableVal, 'important');
+      }
+      if (elements.indexOf(document.documentElement) < elements.length - 1) {
+        elements.splice(elements.indexOf(document.documentElement), 1);
+        elements.push(document.documentElement);
       }
       for (i = previousPointerEvents.length; !!(d = previousPointerEvents[--i]); ) {
         elements[i].style.setProperty(cssProp, d.value ? d.value : '', d.priority);
@@ -8039,6 +8865,226 @@ module.exports = {
     axe.utils.extendMetaData(ruleResult, axe.utils.clone(rulesData[ruleResult.id] || {}));
   };
   'use strict';
+  var convertExpressions = function convertExpressions() {};
+  var matchExpressions = function matchExpressions() {};
+  function matchesTag(node, exp) {
+    return node.nodeType === 1 && (exp.tag === '*' || node.nodeName.toLowerCase() === exp.tag);
+  }
+  function matchesClasses(node, exp) {
+    return !exp.classes || exp.classes.reduce(function(result, cl) {
+      return result && node.className && node.className.match(cl.regexp);
+    }, true);
+  }
+  function matchesAttributes(node, exp) {
+    return !exp.attributes || exp.attributes.reduce(function(result, att) {
+      var nodeAtt = node.getAttribute(att.key);
+      return result && nodeAtt !== null && (!att.value || att.test(nodeAtt));
+    }, true);
+  }
+  function matchesId(node, exp) {
+    return !exp.id || node.id === exp.id;
+  }
+  function matchesPseudos(target, exp) {
+    if (!exp.pseudos || exp.pseudos.reduce(function(result, pseudo) {
+      if (pseudo.name === 'not') {
+        return result && !matchExpressions([ target ], pseudo.expressions, false).length;
+      }
+      throw new Error('the pseudo selector ' + pseudo.name + ' has not yet been implemented');
+    }, true)) {
+      return true;
+    }
+    return false;
+  }
+  var escapeRegExp = function() {
+    var from = /(?=[\-\[\]{}()*+?.\\\^$|,#\s])/g;
+    var to = '\\';
+    return function(string) {
+      return string.replace(from, to);
+    };
+  }();
+  var reUnescape = /\\/g;
+  function convertAttributes(atts) {
+    if (!atts) {
+      return;
+    }
+    return atts.map(function(att) {
+      var attributeKey = att.name.replace(reUnescape, '');
+      var attributeValue = (att.value || '').replace(reUnescape, '');
+      var test, regexp;
+      switch (att.operator) {
+       case '^=':
+        regexp = new RegExp('^' + escapeRegExp(attributeValue));
+        break;
+
+       case '$=':
+        regexp = new RegExp(escapeRegExp(attributeValue) + '$');
+        break;
+
+       case '~=':
+        regexp = new RegExp('(^|\\s)' + escapeRegExp(attributeValue) + '(\\s|$)');
+        break;
+
+       case '|=':
+        regexp = new RegExp('^' + escapeRegExp(attributeValue) + '(-|$)');
+        break;
+
+       case '=':
+        test = function test(value) {
+          return attributeValue === value;
+        };
+        break;
+
+       case '*=':
+        test = function test(value) {
+          return value && value.includes(attributeValue);
+        };
+        break;
+
+       case '!=':
+        test = function test(value) {
+          return attributeValue !== value;
+        };
+        break;
+
+       default:
+        test = function test(value) {
+          return !!value;
+        };
+      }
+      if (attributeValue === '' && /^[*$^]=$/.test(att.operator)) {
+        test = function test() {
+          return false;
+        };
+      }
+      if (!test) {
+        test = function test(value) {
+          return value && regexp.test(value);
+        };
+      }
+      return {
+        key: attributeKey,
+        value: attributeValue,
+        test: test
+      };
+    });
+  }
+  function convertClasses(classes) {
+    if (!classes) {
+      return;
+    }
+    return classes.map(function(className) {
+      className = className.replace(reUnescape, '');
+      return {
+        value: className,
+        regexp: new RegExp('(^|\\s)' + escapeRegExp(className) + '(\\s|$)')
+      };
+    });
+  }
+  function convertPseudos(pseudos) {
+    if (!pseudos) {
+      return;
+    }
+    return pseudos.map(function(p) {
+      var expressions;
+      if (p.name === 'not') {
+        expressions = axe.utils.cssParser.parse(p.value);
+        expressions = expressions.selectors ? expressions.selectors : [ expressions ];
+        expressions = convertExpressions(expressions);
+      }
+      return {
+        name: p.name,
+        expressions: expressions,
+        value: p.value
+      };
+    });
+  }
+  convertExpressions = function convertExpressions(expressions) {
+    return expressions.map(function(exp) {
+      var newExp = [];
+      var rule = exp.rule;
+      while (rule) {
+        newExp.push({
+          tag: rule.tagName ? rule.tagName.toLowerCase() : '*',
+          combinator: rule.nestingOperator ? rule.nestingOperator : ' ',
+          id: rule.id,
+          attributes: convertAttributes(rule.attrs),
+          classes: convertClasses(rule.classNames),
+          pseudos: convertPseudos(rule.pseudos)
+        });
+        rule = rule.rule;
+      }
+      return newExp;
+    });
+  };
+  function createLocalVariables(nodes, anyLevel, thisLevel, parentShadowId) {
+    var retVal = {
+      nodes: nodes.slice(),
+      anyLevel: anyLevel,
+      thisLevel: thisLevel,
+      parentShadowId: parentShadowId
+    };
+    retVal.nodes.reverse();
+    return retVal;
+  }
+  function matchesSelector(node, exp) {
+    return matchesTag(node.actualNode, exp[0]) && matchesClasses(node.actualNode, exp[0]) && matchesAttributes(node.actualNode, exp[0]) && matchesId(node.actualNode, exp[0]) && matchesPseudos(node, exp[0]);
+  }
+  matchExpressions = function matchExpressions(domTree, expressions, recurse, filter) {
+    var stack = [];
+    var nodes = Array.isArray(domTree) ? domTree : [ domTree ];
+    var currentLevel = createLocalVariables(nodes, expressions, [], domTree[0].shadowId);
+    var result = [];
+    while (currentLevel.nodes.length) {
+      var node = currentLevel.nodes.pop();
+      var childOnly = [];
+      var childAny = [];
+      var combined = currentLevel.anyLevel.slice().concat(currentLevel.thisLevel);
+      var added = false;
+      for (var i = 0; i < combined.length; i++) {
+        var exp = combined[i];
+        if (matchesSelector(node, exp) && (!exp[0].id || node.shadowId === currentLevel.parentShadowId)) {
+          if (exp.length === 1) {
+            if (!added && (!filter || filter(node))) {
+              result.push(node);
+              added = true;
+            }
+          } else {
+            var rest = exp.slice(1);
+            if ([ ' ', '>' ].includes(rest[0].combinator) === false) {
+              throw new Error('axe.utils.querySelectorAll does not support the combinator: ' + exp[1].combinator);
+            }
+            if (rest[0].combinator === '>') {
+              childOnly.push(rest);
+            } else {
+              childAny.push(rest);
+            }
+          }
+        }
+        if (currentLevel.anyLevel.includes(exp) && (!exp[0].id || node.shadowId === currentLevel.parentShadowId)) {
+          childAny.push(exp);
+        }
+      }
+      if (node.children && node.children.length && recurse) {
+        stack.push(currentLevel);
+        currentLevel = createLocalVariables(node.children, childAny, childOnly, node.shadowId);
+      }
+      while (!currentLevel.nodes.length && stack.length) {
+        currentLevel = stack.pop();
+      }
+    }
+    return result;
+  };
+  axe.utils.querySelectorAll = function(domTree, selector) {
+    return axe.utils.querySelectorAllFilter(domTree, selector);
+  };
+  axe.utils.querySelectorAllFilter = function(domTree, selector, filter) {
+    domTree = Array.isArray(domTree) ? domTree : [ domTree ];
+    var expressions = axe.utils.cssParser.parse(selector);
+    expressions = expressions.selectors ? expressions.selectors : [ expressions ];
+    expressions = convertExpressions(expressions);
+    return matchExpressions(domTree, expressions, true, filter);
+  };
+  'use strict';
   var _typeof = typeof Symbol === 'function' && typeof Symbol.iterator === 'symbol' ? function(obj) {
     return typeof obj;
   } : function(obj) {
@@ -8156,8 +9202,8 @@ module.exports = {
     'use strict';
     var messages = {}, subscribers = {}, errorTypes = Object.freeze([ 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError' ]);
     function _getSource() {
-      var application = 'axe', version = '', src;
-      if (typeof axe !== 'undefined' && axe._audit && !axe._audit.application) {
+      var application = 'axeAPI', version = '', src;
+      if (typeof axe !== 'undefined' && axe._audit && axe._audit.application) {
         application = axe._audit.application;
       }
       if (typeof axe !== 'undefined') {
@@ -8169,7 +9215,7 @@ module.exports = {
     function verify(postedMessage) {
       if ((typeof postedMessage === 'undefined' ? 'undefined' : _typeof(postedMessage)) === 'object' && typeof postedMessage.uuid === 'string' && postedMessage._respondable === true) {
         var messageSource = _getSource();
-        return postedMessage._source === messageSource || postedMessage._source === 'axe.x.y.z' || messageSource === 'axe.x.y.z';
+        return postedMessage._source === messageSource || postedMessage._source === 'axeAPI.x.y.z' || messageSource === 'axeAPI.x.y.z';
       }
       return false;
     }
@@ -8213,11 +9259,11 @@ module.exports = {
         post(source, topic, message, uuid, keepalive, callback);
       };
     }
-    function publish(target, data, keepalive) {
+    function publish(source, data, keepalive) {
       var topic = data.topic;
       var subscriber = subscribers[topic];
       if (subscriber) {
-        var responder = createResponder(target, null, data.uuid);
+        var responder = createResponder(source, null, data.uuid);
         subscriber(data.message, keepalive, responder);
       }
     }
@@ -8395,30 +9441,73 @@ module.exports = {
     }
     return false;
   }
-  function pushNode(result, nodes, context) {
+  function pushNode(result, nodes) {
     'use strict';
+    var temp;
+    if (result.length === 0) {
+      return nodes;
+    }
+    if (result.length < nodes.length) {
+      temp = result;
+      result = nodes;
+      nodes = temp;
+    }
     for (var i = 0, l = nodes.length; i < l; i++) {
-      if (result.indexOf(nodes[i]) === -1 && isNodeInContext(nodes[i], context)) {
+      if (!result.includes(nodes[i])) {
         result.push(nodes[i]);
       }
     }
+    return result;
+  }
+  function reduceIncludes(includes) {
+    return includes.reduce(function(res, el) {
+      if (!res.length || !res[res.length - 1].actualNode.contains(el.actualNode)) {
+        res.push(el);
+      }
+      return res;
+    }, []);
   }
   axe.utils.select = function select(selector, context) {
     'use strict';
     var result = [], candidate;
-    for (var i = 0, l = context.include.length; i < l; i++) {
-      candidate = context.include[i];
-      if (candidate.nodeType === candidate.ELEMENT_NODE && axe.utils.matchesSelector(candidate, selector)) {
-        pushNode(result, [ candidate ], context);
+    if (axe._selectCache) {
+      for (var j = 0, l = axe._selectCache.length; j < l; j++) {
+        var item = axe._selectCache[j];
+        if (item.selector === selector) {
+          return item.result;
+        }
       }
-      pushNode(result, candidate.querySelectorAll(selector), context);
     }
-    return result.sort(axe.utils.nodeSorter);
+    var curried = function(context) {
+      return function(node) {
+        return isNodeInContext(node, context);
+      };
+    }(context);
+    var reducedIncludes = reduceIncludes(context.include);
+    for (var i = 0; i < reducedIncludes.length; i++) {
+      candidate = reducedIncludes[i];
+      if (candidate.actualNode.nodeType === candidate.actualNode.ELEMENT_NODE && axe.utils.matchesSelector(candidate.actualNode, selector) && curried(candidate)) {
+        result = pushNode(result, [ candidate ]);
+      }
+      result = pushNode(result, axe.utils.querySelectorAllFilter(candidate, selector, curried));
+    }
+    if (axe._selectCache) {
+      axe._selectCache.push({
+        selector: selector,
+        result: result
+      });
+    }
+    return result;
   };
   'use strict';
   axe.utils.toArray = function(thing) {
     'use strict';
     return Array.prototype.slice.call(thing);
+  };
+  axe.utils.uniqueArray = function(arr1, arr2) {
+    return arr1.concat(arr2).filter(function(elem, pos, arr) {
+      return arr.indexOf(elem) === pos;
+    });
   };
   'use strict';
   var uuid;
@@ -8551,6 +9640,10 @@ module.exports = {
           description: 'Ensures ARIA attributes are allowed for an element\'s role',
           help: 'Elements must only use allowed ARIA attributes'
         },
+        'aria-dpub-role-fallback': {
+          description: 'Ensures unsupported DPUB roles are only used on elements with implicit fallback roles',
+          help: 'Unsupported DPUB ARIA roles should be used on elements with implicit fallback roles'
+        },
         'aria-hidden-body': {
           description: 'Ensures aria-hidden=\'true\' is not present on the document body.',
           help: 'aria-hidden=\'true\' must not be present on the document body'
@@ -8596,7 +9689,7 @@ module.exports = {
           help: 'Page must have means to bypass repeated blocks'
         },
         checkboxgroup: {
-          description: 'Ensures related <input type="checkbox"> elements have a group and that that group designation is consistent',
+          description: 'Ensures related <input type="checkbox"> elements have a group and that the group designation is consistent',
           help: 'Checkbox inputs with the same name attribute value must be part of a group'
         },
         'color-contrast': {
@@ -8623,6 +9716,14 @@ module.exports = {
           description: 'Ensures headings have discernible text',
           help: 'Headings must not be empty'
         },
+        'focus-order-semantics': {
+          description: 'Ensures elements in the focus order have an appropriate role',
+          help: 'Elements in the focus order need a role appropriate for interactive content'
+        },
+        'frame-tested': {
+          description: 'Ensures <iframe> and <frame> elements contain the axe-core script',
+          help: 'Frames must be tested with axe-core'
+        },
         'frame-title-unique': {
           description: 'Ensures <iframe> and <frame> elements contain a unique title attribute',
           help: 'Frames must have a unique title attribute'
@@ -8638,10 +9739,6 @@ module.exports = {
         'hidden-content': {
           description: 'Informs users about hidden content.',
           help: 'Hidden content on the page cannot be analyzed'
-        },
-        'href-no-hash': {
-          description: 'Ensures that href values are valid link references to promote only using anchors as links',
-          help: 'Anchors must only be used as links with valid URLs or URL fragments'
         },
         'html-has-lang': {
           description: 'Ensures every HTML document has a lang attribute',
@@ -8671,13 +9768,29 @@ module.exports = {
           description: 'Ensures every form element has a label',
           help: 'Form elements must have labels'
         },
+        'landmark-banner-is-top-level': {
+          description: 'The banner landmark should not be contained in another landmark',
+          help: 'Banner landmark must be at top level'
+        },
+        'landmark-contentinfo-is-top-level': {
+          description: 'The contentinfo landmark should not be contained in another landmark',
+          help: 'Contentinfo landmark must be at top level'
+        },
         'landmark-main-is-top-level': {
           description: 'The main landmark should not be contained in another landmark',
           help: 'Main landmark is not at top level'
         },
+        'landmark-no-duplicate-banner': {
+          description: 'Ensures the document has no more than one banner landmark',
+          help: 'Document contain at most one banner landmark'
+        },
+        'landmark-no-duplicate-contentinfo': {
+          description: 'Ensures the document has no more than one contentinfo landmark',
+          help: 'Document contain at most one contentinfo landmark'
+        },
         'landmark-one-main': {
-          description: 'Ensures a navigation point to the primary content of the page. If the page contains iframes, each iframe should contain either no main landmarks or just one.',
-          help: 'Page must contain one main landmark.'
+          description: 'Ensures a navigation point to the primary content of the page. If the page contains iframes, each iframe should contain either no main landmarks or just one',
+          help: 'Page must contain one main landmark'
         },
         'layout-table': {
           description: 'Ensures presentational <table> elements do not use <th>, <caption> elements or the summary attribute',
@@ -8723,6 +9836,10 @@ module.exports = {
           description: 'Ensure p elements are not used to style headings',
           help: 'Bold, italic text and font-size are not used to style p elements as a heading'
         },
+        'page-has-heading-one': {
+          description: 'Ensure that the page, or at least one of its frames contains a level-one heading',
+          help: 'Page must contain a level-one heading'
+        },
         radiogroup: {
           description: 'Ensures related <input type="radio"> elements have a group and that the group designation is consistent',
           help: 'Radio inputs with the same name attribute value must be part of a group'
@@ -8740,8 +9857,8 @@ module.exports = {
           help: 'Server-side image maps must not be used'
         },
         'skip-link': {
-          description: 'Ensures the first link on the page is a skip link',
-          help: 'The page should have a skip link as its first link'
+          description: 'Ensure all skip links have a focusable target',
+          help: 'The skip-link target should exist and be focusable'
         },
         tabindex: {
           description: 'Ensures tabindex attribute values are not greater than 0',
@@ -8867,6 +9984,19 @@ module.exports = {
             }
           }
         },
+        'implicit-role-fallback': {
+          impact: 'moderate',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'Element’s implicit ARIA role is an appropriate fallback';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'Element’s implicit ARIA role is not a good fallback for the (unsupported) role';
+              return out;
+            }
+          }
+        },
         'aria-hidden-body': {
           impact: 'critical',
           messages: {
@@ -8910,6 +10040,18 @@ module.exports = {
             },
             fail: function anonymous(it) {
               var out = 'Required ARIA ' + (it.data && it.data.length > 1 ? 'children' : 'child') + ' role not present:';
+              var arr1 = it.data;
+              if (arr1) {
+                var value, i1 = -1, l1 = arr1.length - 1;
+                while (i1 < l1) {
+                  value = arr1[i1 += 1];
+                  out += ' ' + value;
+                }
+              }
+              return out;
+            },
+            incomplete: function anonymous(it) {
+              var out = 'Expecting ARIA ' + (it.data && it.data.length > 1 ? 'children' : 'child') + ' role to be added:';
               var arr1 = it.data;
               if (arr1) {
                 var value, i1 = -1, l1 = arr1.length - 1;
@@ -9328,6 +10470,49 @@ module.exports = {
             }
           }
         },
+        'has-widget-role': {
+          impact: 'minor',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'Element has a widget role.';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'Element does not have a widget role.';
+              return out;
+            }
+          }
+        },
+        'valid-scrollable-semantics': {
+          impact: 'minor',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'Element has valid semantics for an element in the focus order.';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'Element has invalid semantics for an element in the focus order.';
+              return out;
+            }
+          }
+        },
+        'frame-tested': {
+          impact: 'critical',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'The iframe was tested with axe-core';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'The iframe could not be tested with axe-core';
+              return out;
+            },
+            incomplete: function anonymous(it) {
+              var out = 'The iframe still has to be tested with axe-core';
+              return out;
+            }
+          }
+        },
         'unique-frame-title': {
           impact: 'serious',
           messages: {
@@ -9367,19 +10552,6 @@ module.exports = {
             },
             incomplete: function anonymous(it) {
               var out = 'There is hidden content on the page that was not analyzed. You will need to trigger the display of this content in order to analyze it.';
-              return out;
-            }
-          }
-        },
-        'href-no-hash': {
-          impact: 'moderate',
-          messages: {
-            pass: function anonymous(it) {
-              var out = 'Anchor does not have an href value of #';
-              return out;
-            },
-            fail: function anonymous(it) {
-              var out = 'Anchor has an href value of #';
               return out;
             }
           }
@@ -9501,33 +10673,59 @@ module.exports = {
             }
           }
         },
-        'main-is-top-level': {
+        'landmark-is-top-level': {
           impact: 'moderate',
           messages: {
             pass: function anonymous(it) {
-              var out = 'The main landmark is at the top level.';
+              var out = 'The ' + it.data.role + ' landmark is at the top level.';
               return out;
             },
             fail: function anonymous(it) {
-              var out = 'The main landmark is contained in another landmark.';
+              var out = 'The ' + it.data.role + ' landmark is contained in another landmark.';
               return out;
             }
           }
         },
-        'has-at-least-one-main': {
+        'page-no-duplicate-banner': {
           impact: 'moderate',
           messages: {
             pass: function anonymous(it) {
-              var out = 'Document has at least one main landmark';
+              var out = 'Document has no more than one banner landmark';
               return out;
             },
             fail: function anonymous(it) {
-              var out = 'Document has no main landmarks';
+              var out = 'Document has more than one banner landmark';
               return out;
             }
           }
         },
-        'has-no-more-than-one-main': {
+        'page-no-duplicate-contentinfo': {
+          impact: 'moderate',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'Document has no more than one contentinfo landmark';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'Document has more than one contentinfo landmark';
+              return out;
+            }
+          }
+        },
+        'page-has-main': {
+          impact: 'moderate',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'Page has at least one main landmark';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'Page must have a main landmark';
+              return out;
+            }
+          }
+        },
+        'page-no-duplicate-main': {
           impact: 'moderate',
           messages: {
             pass: function anonymous(it) {
@@ -9583,11 +10781,11 @@ module.exports = {
           impact: 'serious',
           messages: {
             pass: function anonymous(it) {
-              var out = 'Links can be distinguished from surrounding text in a way that does not rely on color';
+              var out = 'Links can be distinguished from surrounding text in some way other than by color';
               return out;
             },
             fail: function anonymous(it) {
-              var out = 'Links can not be distinguished from surrounding text in a way that does not rely on color';
+              var out = 'Links need to be distinguished from surrounding text in some way other than by color';
               return out;
             },
             incomplete: {
@@ -9678,6 +10876,19 @@ module.exports = {
             }
           }
         },
+        'page-has-heading-one': {
+          impact: 'moderate',
+          messages: {
+            pass: function anonymous(it) {
+              var out = 'Page has at least one level-one heading';
+              return out;
+            },
+            fail: function anonymous(it) {
+              var out = 'Page must have a level-one heading';
+              return out;
+            }
+          }
+        },
         region: {
           impact: 'moderate',
           messages: {
@@ -9734,11 +10945,15 @@ module.exports = {
           impact: 'moderate',
           messages: {
             pass: function anonymous(it) {
-              var out = 'Valid skip link found';
+              var out = 'Skip link target exists';
+              return out;
+            },
+            incomplete: function anonymous(it) {
+              var out = 'Skip link target should become visible on activation';
               return out;
             },
             fail: function anonymous(it) {
-              var out = 'No valid skip link found';
+              var out = 'No skip link target';
               return out;
             }
           }
@@ -9882,7 +11097,7 @@ module.exports = {
       id: 'accesskeys',
       selector: '[accesskey]',
       excludeHidden: false,
-      tags: [ 'wcag2a', 'wcag211', 'cat.keyboard' ],
+      tags: [ 'best-practice', 'cat.keyboard' ],
       all: [],
       any: [],
       none: [ 'accesskeys' ]
@@ -9896,7 +11111,7 @@ module.exports = {
       none: []
     }, {
       id: 'aria-allowed-attr',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         var role = node.getAttribute('role');
         if (!role) {
           role = axe.commons.aria.implicitRole(node);
@@ -9920,6 +11135,17 @@ module.exports = {
       any: [ 'aria-allowed-attr' ],
       none: []
     }, {
+      id: 'aria-dpub-role-fallback',
+      selector: '[role]',
+      matches: function matches(node, virtualNode) {
+        var role = node.getAttribute('role');
+        return [ 'doc-backlink', 'doc-biblioentry', 'doc-biblioref', 'doc-cover', 'doc-endnote', 'doc-glossref', 'doc-noteref' ].includes(role);
+      },
+      tags: [ 'cat.aria', 'wcag2a', 'wcag131' ],
+      all: [ 'implicit-role-fallback' ],
+      any: [],
+      none: []
+    }, {
       id: 'aria-hidden-body',
       selector: 'body',
       excludeHidden: false,
@@ -9939,7 +11165,12 @@ module.exports = {
       selector: '[role]',
       tags: [ 'cat.aria', 'wcag2a', 'wcag131' ],
       all: [],
-      any: [ 'aria-required-children' ],
+      any: [ {
+        options: {
+          reviewEmpty: [ 'listbox' ]
+        },
+        id: 'aria-required-children'
+      } ],
       none: []
     }, {
       id: 'aria-required-parent',
@@ -9957,7 +11188,7 @@ module.exports = {
       none: [ 'invalidrole', 'abstractrole' ]
     }, {
       id: 'aria-valid-attr-value',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         var aria = /^aria-/;
         if (node.hasAttributes()) {
           var attrs = node.attributes;
@@ -9978,7 +11209,7 @@ module.exports = {
       none: []
     }, {
       id: 'aria-valid-attr',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         var aria = /^aria-/;
         if (node.hasAttributes()) {
           var attrs = node.attributes;
@@ -10001,7 +11232,7 @@ module.exports = {
       id: 'audio-caption',
       selector: 'audio',
       excludeHidden: false,
-      tags: [ 'cat.time-and-media', 'wcag2a', 'wcag122', 'section508', 'section508.22.a' ],
+      tags: [ 'cat.time-and-media', 'wcag2a', 'wcag121', 'section508', 'section508.22.a' ],
       all: [],
       any: [],
       none: [ 'caption' ]
@@ -10018,13 +11249,13 @@ module.exports = {
       selector: 'button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]',
       tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412', 'section508', 'section508.22.a' ],
       all: [],
-      any: [ 'non-empty-if-present', 'non-empty-value', 'button-has-visible-text', 'aria-label', 'aria-labelledby', 'role-presentation', 'role-none' ],
+      any: [ 'non-empty-if-present', 'non-empty-value', 'button-has-visible-text', 'aria-label', 'aria-labelledby', 'role-presentation', 'role-none', 'non-empty-title' ],
       none: [ 'focusable-no-name' ]
     }, {
       id: 'bypass',
       selector: 'html',
       pageLevel: true,
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         return !!node.querySelector('a[href]');
       },
       tags: [ 'cat.keyboard', 'wcag2a', 'wcag241', 'section508', 'section508.22.o' ],
@@ -10040,9 +11271,9 @@ module.exports = {
       none: []
     }, {
       id: 'color-contrast',
-      matches: function matches(node) {
-        var nodeName = node.nodeName.toUpperCase(), nodeType = node.type, doc = document;
-        if (node.getAttribute('aria-disabled') === 'true' || axe.commons.dom.findUp(node, '[aria-disabled="true"]')) {
+      matches: function matches(node, virtualNode) {
+        var nodeName = node.nodeName.toUpperCase(), nodeType = node.type;
+        if (node.getAttribute('aria-disabled') === 'true' || axe.commons.dom.findUpVirtual(virtualNode, '[aria-disabled="true"]')) {
           return false;
         }
         if (nodeName === 'INPUT') {
@@ -10057,42 +11288,46 @@ module.exports = {
         if (nodeName === 'OPTION') {
           return false;
         }
-        if (nodeName === 'BUTTON' && node.disabled || axe.commons.dom.findUp(node, 'button[disabled]')) {
+        if (nodeName === 'BUTTON' && node.disabled || axe.commons.dom.findUpVirtual(virtualNode, 'button[disabled]')) {
           return false;
         }
-        if (nodeName === 'FIELDSET' && node.disabled || axe.commons.dom.findUp(node, 'fieldset[disabled]')) {
+        if (nodeName === 'FIELDSET' && node.disabled || axe.commons.dom.findUpVirtual(virtualNode, 'fieldset[disabled]')) {
           return false;
         }
-        var nodeParentLabel = axe.commons.dom.findUp(node, 'label');
+        var nodeParentLabel = axe.commons.dom.findUpVirtual(virtualNode, 'label');
         if (nodeName === 'LABEL' || nodeParentLabel) {
           var relevantNode = node;
+          var relevantVirtualNode = virtualNode;
           if (nodeParentLabel) {
             relevantNode = nodeParentLabel;
+            relevantVirtualNode = axe.utils.getNodeFromTree(axe._tree[0], nodeParentLabel);
           }
+          var doc = axe.commons.dom.getRootNode(relevantNode);
           var candidate = relevantNode.htmlFor && doc.getElementById(relevantNode.htmlFor);
           if (candidate && candidate.disabled) {
             return false;
           }
-          var candidate = relevantNode.querySelector('input:not([type="hidden"]):not([type="image"])' + ':not([type="button"]):not([type="submit"]):not([type="reset"]), select, textarea');
-          if (candidate && candidate.disabled) {
+          var candidate = axe.utils.querySelectorAll(relevantVirtualNode, 'input:not([type="hidden"]):not([type="image"])' + ':not([type="button"]):not([type="submit"]):not([type="reset"]), select, textarea');
+          if (candidate.length && candidate[0].actualNode.disabled) {
             return false;
           }
         }
         if (node.getAttribute('id')) {
           var id = axe.commons.utils.escapeSelector(node.getAttribute('id'));
-          var _candidate = doc.querySelector('[aria-labelledby~="' + id + '"]');
-          if (_candidate && _candidate.hasAttribute('disabled')) {
+          var _doc = axe.commons.dom.getRootNode(node);
+          var candidate = _doc.querySelector('[aria-labelledby~=' + id + ']');
+          if (candidate && candidate.disabled) {
             return false;
           }
         }
-        if (axe.commons.text.visible(node, false, true) === '') {
+        if (axe.commons.text.visibleVirtual(virtualNode, false, true) === '') {
           return false;
         }
-        var range = document.createRange(), childNodes = node.childNodes, length = childNodes.length, child, index;
+        var range = document.createRange(), childNodes = virtualNode.children, length = childNodes.length, child, index;
         for (index = 0; index < length; index++) {
           child = childNodes[index];
-          if (child.nodeType === 3 && axe.commons.text.sanitize(child.nodeValue) !== '') {
-            range.selectNodeContents(child);
+          if (child.actualNode.nodeType === 3 && axe.commons.text.sanitize(child.actualNode.nodeValue) !== '') {
+            range.selectNodeContents(child.actualNode);
           }
         }
         var rects = range.getClientRects();
@@ -10114,14 +11349,20 @@ module.exports = {
       none: []
     }, {
       id: 'definition-list',
-      selector: 'dl:not([role])',
+      selector: 'dl',
+      matches: function matches(node, virtualNode) {
+        return !node.getAttribute('role');
+      },
       tags: [ 'cat.structure', 'wcag2a', 'wcag131' ],
       all: [],
       any: [],
       none: [ 'structured-dlitems', 'only-dlitems' ]
     }, {
       id: 'dlitem',
-      selector: 'dd:not([role]), dt:not([role])',
+      selector: 'dd, dt',
+      matches: function matches(node, virtualNode) {
+        return !node.getAttribute('role');
+      },
       tags: [ 'cat.structure', 'wcag2a', 'wcag131' ],
       all: [],
       any: [ 'dlitem' ],
@@ -10129,7 +11370,7 @@ module.exports = {
     }, {
       id: 'document-title',
       selector: 'html',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         return node.ownerDocument.defaultView.self === node.ownerDocument.defaultView.top;
       },
       tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag242' ],
@@ -10147,15 +11388,53 @@ module.exports = {
     }, {
       id: 'empty-heading',
       selector: 'h1, h2, h3, h4, h5, h6, [role="heading"]',
-      enabled: true,
+      matches: function matches(node, virtualNode) {
+        var explicitRoles = void 0;
+        if (node.hasAttribute('role')) {
+          explicitRoles = node.getAttribute('role').split(/\s+/i).filter(axe.commons.aria.isValidRole);
+        }
+        if (explicitRoles && explicitRoles.length > 0) {
+          return explicitRoles.includes('heading');
+        } else {
+          return axe.commons.aria.implicitRole(node) === 'heading';
+        }
+      },
       tags: [ 'cat.name-role-value', 'best-practice' ],
       all: [],
-      any: [ 'has-visible-text', 'role-presentation', 'role-none' ],
+      any: [ 'has-visible-text' ],
+      none: []
+    }, {
+      id: 'focus-order-semantics',
+      selector: 'div, h1, h2, h3, h4, h5, h6, [role=heading], p, span',
+      matches: function matches(node, virtualNode) {
+        return axe.commons.dom.insertedIntoFocusOrder(node);
+      },
+      tags: [ 'cat.keyboard', 'best-practice', 'experimental' ],
+      all: [],
+      any: [ {
+        options: [],
+        id: 'has-widget-role'
+      }, {
+        options: [],
+        id: 'valid-scrollable-semantics'
+      } ],
+      none: []
+    }, {
+      id: 'frame-tested',
+      selector: 'frame, iframe',
+      tags: [ 'cat.structure', 'review-item' ],
+      all: [ {
+        options: {
+          isViolation: false
+        },
+        id: 'frame-tested'
+      } ],
+      any: [],
       none: []
     }, {
       id: 'frame-title-unique',
-      selector: 'frame[title]:not([title=\'\']), iframe[title]:not([title=\'\'])',
-      matches: function matches(node) {
+      selector: 'frame[title], iframe[title]',
+      matches: function matches(node, virtualNode) {
         var title = node.getAttribute('title');
         return !!(title ? axe.commons.text.sanitize(title).trim() : '');
       },
@@ -10166,14 +11445,24 @@ module.exports = {
     }, {
       id: 'frame-title',
       selector: 'frame, iframe',
-      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag241', 'section508', 'section508.22.i' ],
+      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag241', 'wcag412', 'section508', 'section508.22.i' ],
       all: [],
       any: [ 'aria-label', 'aria-labelledby', 'non-empty-title', 'role-presentation', 'role-none' ],
       none: []
     }, {
       id: 'heading-order',
-      selector: 'h1,h2,h3,h4,h5,h6,[role=heading]',
-      enabled: false,
+      selector: 'h1, h2, h3, h4, h5, h6, [role=heading]',
+      matches: function matches(node, virtualNode) {
+        var explicitRoles = void 0;
+        if (node.hasAttribute('role')) {
+          explicitRoles = node.getAttribute('role').split(/\s+/i).filter(axe.commons.aria.isValidRole);
+        }
+        if (explicitRoles && explicitRoles.length > 0) {
+          return explicitRoles.includes('heading');
+        } else {
+          return axe.commons.aria.implicitRole(node) === 'heading';
+        }
+      },
       tags: [ 'cat.semantics', 'best-practice' ],
       all: [],
       any: [ 'heading-order' ],
@@ -10182,18 +11471,9 @@ module.exports = {
       id: 'hidden-content',
       selector: '*',
       excludeHidden: false,
-      tags: [ 'experimental', 'review-item' ],
+      tags: [ 'cat.structure', 'experimental', 'review-item' ],
       all: [],
       any: [ 'hidden-content' ],
-      none: [],
-      enabled: false
-    }, {
-      id: 'href-no-hash',
-      selector: 'a[href]',
-      enabled: false,
-      tags: [ 'cat.semantics', 'best-practice' ],
-      all: [],
-      any: [ 'href-no-hash' ],
       none: []
     }, {
       id: 'html-has-lang',
@@ -10211,7 +11491,7 @@ module.exports = {
       none: [ 'valid-lang' ]
     }, {
       id: 'image-alt',
-      selector: 'img, [role=\'img\']',
+      selector: 'img, [role=\'img\']:not(svg)',
       tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag111', 'section508', 'section508.22.a' ],
       all: [],
       any: [ 'has-alt', 'aria-label', 'aria-labelledby', 'non-empty-title', 'role-presentation', 'role-none' ],
@@ -10232,38 +11512,110 @@ module.exports = {
       none: []
     }, {
       id: 'label-title-only',
-      selector: 'input:not([type=\'hidden\']):not([type=\'image\']):not([type=\'button\']):not([type=\'submit\']):not([type=\'reset\']), select, textarea',
-      enabled: false,
+      selector: 'input, select, textarea',
+      matches: function matches(node, virtualNode) {
+        if (node.nodeName.toLowerCase() !== 'input' || node.hasAttribute('type') === false) {
+          return true;
+        }
+        var type = node.getAttribute('type').toLowerCase();
+        return [ 'hidden', 'image', 'button', 'submit', 'reset' ].includes(type) === false;
+      },
       tags: [ 'cat.forms', 'best-practice' ],
       all: [],
       any: [],
       none: [ 'title-only' ]
     }, {
       id: 'label',
-      selector: 'input:not([type=\'hidden\']):not([type=\'image\']):not([type=\'button\']):not([type=\'submit\']):not([type=\'reset\']), select, textarea',
+      selector: 'input, select, textarea',
+      matches: function matches(node, virtualNode) {
+        if (node.nodeName.toLowerCase() !== 'input' || node.hasAttribute('type') === false) {
+          return true;
+        }
+        var type = node.getAttribute('type').toLowerCase();
+        return [ 'hidden', 'image', 'button', 'submit', 'reset' ].includes(type) === false;
+      },
       tags: [ 'cat.forms', 'wcag2a', 'wcag332', 'wcag131', 'section508', 'section508.22.n' ],
       all: [],
       any: [ 'aria-label', 'aria-labelledby', 'implicit-label', 'explicit-label', 'non-empty-title' ],
       none: [ 'help-same-as-label', 'multiple-label' ]
     }, {
-      id: 'landmark-main-is-top-level',
-      selector: 'main,[role=main]',
-      tags: [ 'best-practice' ],
+      id: 'landmark-banner-is-top-level',
+      selector: 'header:not([role]), [role=banner]',
+      matches: function matches(node, virtualNode) {
+        var nativeScopeFilter = 'article, aside, main, nav, section';
+        return node.hasAttribute('role') || !axe.commons.dom.findUpVirtual(virtualNode, nativeScopeFilter);
+      },
+      tags: [ 'cat.semantics', 'best-practice' ],
       all: [],
-      any: [ 'main-is-top-level' ],
+      any: [ 'landmark-is-top-level' ],
+      none: []
+    }, {
+      id: 'landmark-contentinfo-is-top-level',
+      selector: 'footer:not([role]), [role=contentinfo]',
+      matches: function matches(node, virtualNode) {
+        var nativeScopeFilter = 'article, aside, main, nav, section';
+        return node.hasAttribute('role') || !axe.commons.dom.findUpVirtual(virtualNode, nativeScopeFilter);
+      },
+      tags: [ 'cat.semantics', 'best-practice' ],
+      all: [],
+      any: [ 'landmark-is-top-level' ],
+      none: []
+    }, {
+      id: 'landmark-main-is-top-level',
+      selector: 'main:not([role]), [role=main]',
+      tags: [ 'cat.semantics', 'best-practice' ],
+      all: [],
+      any: [ 'landmark-is-top-level' ],
+      none: []
+    }, {
+      id: 'landmark-no-duplicate-banner',
+      selector: 'html',
+      tags: [ 'cat.semantics', 'best-practice' ],
+      all: [],
+      any: [ {
+        options: {
+          selector: 'header:not([role]), [role=banner]',
+          nativeScopeFilter: 'article, aside, main, nav, section'
+        },
+        id: 'page-no-duplicate-banner'
+      } ],
+      none: []
+    }, {
+      id: 'landmark-no-duplicate-contentinfo',
+      selector: 'html',
+      tags: [ 'cat.semantics', 'best-practice' ],
+      all: [],
+      any: [ {
+        options: {
+          selector: 'footer:not([role]), [role=contentinfo]',
+          nativeScopeFilter: 'article, aside, main, nav, section'
+        },
+        id: 'page-no-duplicate-contentinfo'
+      } ],
       none: []
     }, {
       id: 'landmark-one-main',
       selector: 'html',
-      tags: [ 'best-practice' ],
-      all: [ 'has-at-least-one-main', 'has-no-more-than-one-main' ],
+      tags: [ 'cat.semantics', 'best-practice' ],
+      all: [ {
+        options: {
+          selector: 'main:not([role]), [role=\'main\']'
+        },
+        id: 'page-has-main'
+      }, {
+        options: {
+          selector: 'main:not([role]), [role=\'main\']'
+        },
+        id: 'page-no-duplicate-main'
+      } ],
       any: [],
       none: []
     }, {
       id: 'layout-table',
       selector: 'table',
-      matches: function matches(node) {
-        return !axe.commons.table.isDataTable(node);
+      matches: function matches(node, virtualNode) {
+        var role = (node.getAttribute('role') || '').toLowerCase();
+        return !((role === 'presentation' || role === 'none') && !axe.commons.dom.isFocusable(node)) && !axe.commons.table.isDataTable(node);
       },
       tags: [ 'cat.semantics', 'wcag2a', 'wcag131' ],
       all: [],
@@ -10271,9 +11623,13 @@ module.exports = {
       none: [ 'has-th', 'has-caption', 'has-summary' ]
     }, {
       id: 'link-in-text-block',
-      selector: 'a[href]:not([role]), *[role=link]',
-      matches: function matches(node) {
+      selector: 'a[href], [role=link]',
+      matches: function matches(node, virtualNode) {
         var text = axe.commons.text.sanitize(node.textContent);
+        var role = node.getAttribute('role');
+        if (role && role !== 'link') {
+          return false;
+        }
         if (!text) {
           return false;
         }
@@ -10289,21 +11645,30 @@ module.exports = {
       none: []
     }, {
       id: 'link-name',
-      selector: 'a[href]:not([role="button"]), [role=link][href]',
-      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag111', 'wcag412', 'wcag244', 'section508', 'section508.22.a' ],
+      selector: 'a[href], [role=link][href]',
+      matches: function matches(node, virtualNode) {
+        return node.getAttribute('role') !== 'button';
+      },
+      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412', 'wcag244', 'section508', 'section508.22.a' ],
       all: [],
       any: [ 'has-visible-text', 'aria-label', 'aria-labelledby', 'role-presentation', 'role-none' ],
       none: [ 'focusable-no-name' ]
     }, {
       id: 'list',
-      selector: 'ul:not([role]), ol:not([role])',
+      selector: 'ul, ol',
+      matches: function matches(node, virtualNode) {
+        return !node.getAttribute('role');
+      },
       tags: [ 'cat.structure', 'wcag2a', 'wcag131' ],
       all: [],
       any: [],
       none: [ 'only-listitems' ]
     }, {
       id: 'listitem',
-      selector: 'li:not([role])',
+      selector: 'li',
+      matches: function matches(node, virtualNode) {
+        return !node.getAttribute('role');
+      },
       tags: [ 'cat.structure', 'wcag2a', 'wcag131' ],
       all: [],
       any: [ 'listitem' ],
@@ -10361,7 +11726,7 @@ module.exports = {
     }, {
       id: 'p-as-heading',
       selector: 'p',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         var children = Array.from(node.parentNode.childNodes);
         var nodeText = node.textContent.trim();
         var isSentence = /[.!?:;](?![.!?:;])/g;
@@ -10394,6 +11759,18 @@ module.exports = {
       any: [],
       none: []
     }, {
+      id: 'page-has-heading-one',
+      selector: 'html',
+      tags: [ 'cat.semantics', 'best-practice' ],
+      all: [ {
+        options: {
+          selector: 'h1:not([role]), [role="heading"][aria-level="1"]'
+        },
+        id: 'page-has-heading-one'
+      } ],
+      any: [],
+      none: []
+    }, {
       id: 'radiogroup',
       selector: 'input[type=radio][name]',
       tags: [ 'cat.forms', 'best-practice' ],
@@ -10404,7 +11781,6 @@ module.exports = {
       id: 'region',
       selector: 'html',
       pageLevel: true,
-      enabled: false,
       tags: [ 'cat.keyboard', 'best-practice' ],
       all: [],
       any: [ 'region' ],
@@ -10412,7 +11788,6 @@ module.exports = {
     }, {
       id: 'scope-attr-valid',
       selector: 'td[scope], th[scope]',
-      enabled: true,
       tags: [ 'cat.tables', 'best-practice' ],
       all: [ 'html5-scope', 'scope-value' ],
       any: [],
@@ -10427,8 +11802,9 @@ module.exports = {
     }, {
       id: 'skip-link',
       selector: 'a[href]',
-      pageLevel: true,
-      enabled: false,
+      matches: function matches(node, virtualNode) {
+        return /^#[^/!]/.test(node.getAttribute('href'));
+      },
       tags: [ 'cat.keyboard', 'best-practice' ],
       all: [],
       any: [ 'skip-link' ],
@@ -10450,7 +11826,7 @@ module.exports = {
     }, {
       id: 'table-fake-caption',
       selector: 'table',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         return axe.commons.table.isDataTable(node);
       },
       tags: [ 'cat.tables', 'experimental', 'wcag2a', 'wcag131', 'section508', 'section508.22.g' ],
@@ -10460,7 +11836,7 @@ module.exports = {
     }, {
       id: 'td-has-header',
       selector: 'table',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         if (axe.commons.table.isDataTable(node)) {
           var tableArray = axe.commons.table.toArray(node);
           return tableArray.length >= 3 && tableArray[0].length >= 3 && tableArray[1].length >= 3 && tableArray[2].length >= 3;
@@ -10481,7 +11857,7 @@ module.exports = {
     }, {
       id: 'th-has-data-cells',
       selector: 'table',
-      matches: function matches(node) {
+      matches: function matches(node, virtualNode) {
         return axe.commons.table.isDataTable(node);
       },
       tags: [ 'cat.tables', 'wcag2a', 'wcag131', 'section508', 'section508.22.g' ],
@@ -10490,7 +11866,10 @@ module.exports = {
       none: []
     }, {
       id: 'valid-lang',
-      selector: '[lang]:not(html), [xml\\:lang]:not(html)',
+      selector: '[lang], [xml\\:lang]',
+      matches: function matches(node, virtualNode) {
+        return node.nodeName.toLowerCase() !== 'html';
+      },
       tags: [ 'cat.language', 'wcag2aa', 'wcag312' ],
       all: [],
       any: [],
@@ -10499,7 +11878,7 @@ module.exports = {
       id: 'video-caption',
       selector: 'video',
       excludeHidden: false,
-      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag122', 'wcag123', 'section508', 'section508.22.a' ],
+      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag122', 'section508', 'section508.22.a' ],
       all: [],
       any: [],
       none: [ 'caption' ]
@@ -10514,23 +11893,27 @@ module.exports = {
     } ],
     checks: [ {
       id: 'abstractrole',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return axe.commons.aria.getRoleType(node.getAttribute('role')) === 'abstract';
       }
     }, {
       id: 'aria-allowed-attr',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
+        options = options || {};
         var invalid = [];
         var attr, attrName, allowed, role = node.getAttribute('role'), attrs = node.attributes;
         if (!role) {
           role = axe.commons.aria.implicitRole(node);
         }
         allowed = axe.commons.aria.allowedAttr(role);
+        if (Array.isArray(options[role])) {
+          allowed = axe.utils.uniqueArray(options[role].concat(allowed));
+        }
         if (role && allowed) {
           for (var i = 0, l = attrs.length; i < l; i++) {
             attr = attrs[i];
             attrName = attr.name;
-            if (axe.commons.aria.validateAttr(attrName) && allowed.indexOf(attrName) === -1) {
+            if (axe.commons.aria.validateAttr(attrName) && !allowed.includes(attrName)) {
               invalid.push(attrName + '="' + attr.nodeValue + '"');
             }
           }
@@ -10543,15 +11926,15 @@ module.exports = {
       }
     }, {
       id: 'aria-hidden-body',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return node.getAttribute('aria-hidden') !== 'true';
       }
     }, {
       id: 'aria-errormessage',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         options = Array.isArray(options) ? options : [];
         var attr = node.getAttribute('aria-errormessage'), hasAttr = node.hasAttribute('aria-errormessage');
-        var doc = document;
+        var doc = axe.commons.dom.getRootNode(node);
         function validateAttrValue() {
           var idref = attr && doc.getElementById(attr);
           if (idref) {
@@ -10567,16 +11950,41 @@ module.exports = {
         return true;
       }
     }, {
+      id: 'has-widget-role',
+      evaluate: function evaluate(node, options, virtualNode) {
+        var role = node.getAttribute('role');
+        if (role === null) {
+          return false;
+        }
+        var roleType = axe.commons.aria.getRoleType(role);
+        return roleType === 'widget' || roleType === 'composite';
+      },
+      options: []
+    }, {
+      id: 'implicit-role-fallback',
+      evaluate: function evaluate(node, options, virtualNode) {
+        var role = node.getAttribute('role');
+        if (role === null || !axe.commons.aria.isValidRole(role)) {
+          return true;
+        }
+        var roleType = axe.commons.aria.getRoleType(role);
+        return axe.commons.aria.implicitRole(node) === roleType;
+      }
+    }, {
       id: 'invalidrole',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return !axe.commons.aria.isValidRole(node.getAttribute('role'));
       }
     }, {
       id: 'aria-required-attr',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
+        options = options || {};
         var missing = [];
         if (node.hasAttributes()) {
           var attr, role = node.getAttribute('role'), required = axe.commons.aria.requiredAttr(role);
+          if (Array.isArray(options[role])) {
+            required = axe.utils.uniqueArray(options[role], required);
+          }
           if (role && required) {
             for (var i = 0, l = required.length; i < l; i++) {
               attr = required[i];
@@ -10594,9 +12002,13 @@ module.exports = {
       }
     }, {
       id: 'aria-required-children',
-      evaluate: function evaluate(node, options) {
-        var requiredOwned = axe.commons.aria.requiredOwned, implicitNodes = axe.commons.aria.implicitNodes, matchesSelector = axe.commons.utils.matchesSelector, idrefs = axe.commons.dom.idrefs;
-        function owns(node, role, ariaOwned) {
+      evaluate: function evaluate(node, options, virtualNode) {
+        var requiredOwned = axe.commons.aria.requiredOwned;
+        var implicitNodes = axe.commons.aria.implicitNodes;
+        var matchesSelector = axe.commons.utils.matchesSelector;
+        var idrefs = axe.commons.dom.idrefs;
+        var reviewEmpty = options && Array.isArray(options.reviewEmpty) ? options.reviewEmpty : [];
+        function owns(node, virtualTree, role, ariaOwned) {
           if (node === null) {
             return false;
           }
@@ -10605,7 +12017,7 @@ module.exports = {
             selector = selector.concat(implicit);
           }
           selector = selector.join(',');
-          return ariaOwned ? matchesSelector(node, selector) || !!node.querySelector(selector) : !!node.querySelector(selector);
+          return ariaOwned ? matchesSelector(node, selector) || !!axe.utils.querySelectorAll(virtualTree, selector)[0] : !!axe.utils.querySelectorAll(virtualTree, selector)[0];
         }
         function ariaOwns(nodes, role) {
           var index, length;
@@ -10613,7 +12025,8 @@ module.exports = {
             if (nodes[index] === null) {
               continue;
             }
-            if (owns(nodes[index], role, true)) {
+            var virtualTree = axe.utils.getNodeFromTree(axe._tree[0], nodes[index]);
+            if (owns(nodes[index], virtualTree, role, true)) {
               return true;
             }
           }
@@ -10623,7 +12036,7 @@ module.exports = {
           var i, l = childRoles.length, missing = [], ownedElements = idrefs(node, 'aria-owns');
           for (i = 0; i < l; i++) {
             var r = childRoles[i];
-            if (owns(node, r) || ariaOwns(ownedElements, r)) {
+            if (owns(node, virtualNode, r) || ariaOwns(ownedElements, r)) {
               if (!all) {
                 return null;
               }
@@ -10669,17 +12082,24 @@ module.exports = {
           return true;
         }
         this.data(missing);
-        return false;
+        if (reviewEmpty.includes(role)) {
+          return undefined;
+        } else {
+          return false;
+        }
+      },
+      options: {
+        reviewEmpty: [ 'listbox' ]
       }
     }, {
       id: 'aria-required-parent',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         function getSelector(role) {
           var impliedNative = axe.commons.aria.implicitNodes(role) || [];
           return impliedNative.concat('[role="' + role + '"]').join(',');
         }
-        function getMissingContext(element, requiredContext, includeElement) {
-          var index, length, role = element.getAttribute('role'), missing = [];
+        function getMissingContext(virtualNode, requiredContext, includeElement) {
+          var index, length, role = virtualNode.actualNode.getAttribute('role'), missing = [];
           if (!requiredContext) {
             requiredContext = axe.commons.aria.requiredContext(role);
           }
@@ -10687,10 +12107,10 @@ module.exports = {
             return null;
           }
           for (index = 0, length = requiredContext.length; index < length; index++) {
-            if (includeElement && axe.utils.matchesSelector(element, getSelector(requiredContext[index]))) {
+            if (includeElement && axe.utils.matchesSelector(virtualNode.actualNode, getSelector(requiredContext[index]))) {
               return null;
             }
-            if (axe.commons.dom.findUp(element, getSelector(requiredContext[index]))) {
+            if (axe.commons.dom.findUpVirtual(virtualNode, getSelector(requiredContext[index]))) {
               return null;
             } else {
               missing.push(requiredContext[index]);
@@ -10703,7 +12123,8 @@ module.exports = {
           while (element) {
             if (element.getAttribute('id')) {
               var id = axe.commons.utils.escapeSelector(element.getAttribute('id'));
-              o = document.querySelector('[aria-owns~=' + id + ']');
+              var doc = axe.commons.dom.getRootNode(element);
+              o = doc.querySelector('[aria-owns~=' + id + ']');
               if (o) {
                 owners.push(o);
               }
@@ -10712,14 +12133,14 @@ module.exports = {
           }
           return owners.length ? owners : null;
         }
-        var missingParents = getMissingContext(node);
+        var missingParents = getMissingContext(virtualNode);
         if (!missingParents) {
           return true;
         }
         var owners = getAriaOwners(node);
         if (owners) {
           for (var i = 0, l = owners.length; i < l; i++) {
-            missingParents = getMissingContext(owners[i], missingParents, true);
+            missingParents = getMissingContext(axe.utils.getNodeFromTree(axe._tree[0], owners[i]), missingParents, true);
             if (!missingParents) {
               return true;
             }
@@ -10730,7 +12151,7 @@ module.exports = {
       }
     }, {
       id: 'aria-valid-attr-value',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         options = Array.isArray(options) ? options : [];
         var invalid = [], aria = /^aria-/;
         var attr, attrName, attrs = node.attributes;
@@ -10753,7 +12174,7 @@ module.exports = {
       options: []
     }, {
       id: 'aria-valid-attr',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         options = Array.isArray(options) ? options : [];
         var invalid = [], aria = /^aria-/;
         var attr, attrs = node.attributes;
@@ -10771,8 +12192,45 @@ module.exports = {
       },
       options: []
     }, {
+      id: 'valid-scrollable-semantics',
+      evaluate: function evaluate(node, options, virtualNode) {
+        var VALID_TAG_NAMES_FOR_SCROLLABLE_REGIONS = {
+          ARTICLE: true,
+          ASIDE: true,
+          NAV: true,
+          SECTION: true
+        };
+        var VALID_ROLES_FOR_SCROLLABLE_REGIONS = {
+          application: true,
+          banner: false,
+          complementary: true,
+          contentinfo: true,
+          form: true,
+          main: true,
+          navigation: true,
+          region: true,
+          search: false
+        };
+        function validScrollableTagName(node) {
+          var tagName = node.tagName.toUpperCase();
+          return VALID_TAG_NAMES_FOR_SCROLLABLE_REGIONS[tagName] || false;
+        }
+        function validScrollableRole(node) {
+          var role = node.getAttribute('role');
+          if (!role) {
+            return false;
+          }
+          return VALID_ROLES_FOR_SCROLLABLE_REGIONS[role.toLowerCase()] || false;
+        }
+        function validScrollableSemantics(node) {
+          return validScrollableRole(node) || validScrollableTagName(node);
+        }
+        return validScrollableSemantics(node);
+      },
+      options: []
+    }, {
       id: 'color-contrast',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         if (!axe.commons.dom.isVisible(node, false)) {
           return true;
         }
@@ -10815,8 +12273,8 @@ module.exports = {
       }
     }, {
       id: 'link-in-text-block',
-      evaluate: function evaluate(node, options) {
-        var color = axe.commons.color;
+      evaluate: function evaluate(node, options, virtualNode) {
+        var _axe$commons = axe.commons, color = _axe$commons.color, dom = _axe$commons.dom;
         function getContrast(color1, color2) {
           var c1lum = color1.getRelativeLuminance();
           var c2lum = color2.getRelativeLuminance();
@@ -10830,9 +12288,9 @@ module.exports = {
         if (isBlock(node)) {
           return false;
         }
-        var parentBlock = node.parentNode;
+        var parentBlock = dom.getComposedParent(node);
         while (parentBlock.nodeType === 1 && !isBlock(parentBlock)) {
-          parentBlock = parentBlock.parentNode;
+          parentBlock = dom.getComposedParent(parentBlock);
         }
         this.relatedNodes([ parentBlock ]);
         if (color.elementIsDistinct(node, parentBlock)) {
@@ -10876,7 +12334,7 @@ module.exports = {
       }
     }, {
       id: 'fieldset',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var failureCode, self = this;
         function getUnrelatedElements(parent, name) {
           return axe.commons.utils.toArray(parent.querySelectorAll('select,textarea,button,input:not([name="' + name + '"]):not([type="hidden"])'));
@@ -10924,26 +12382,30 @@ module.exports = {
             return candidate !== current;
           });
         }
-        function runCheck(element) {
-          var name = axe.commons.utils.escapeSelector(node.name);
-          var matchingNodes = document.querySelectorAll('input[type="' + axe.commons.utils.escapeSelector(node.type) + '"][name="' + name + '"]');
+        function runCheck(virtualNode) {
+          var name = axe.commons.utils.escapeSelector(virtualNode.actualNode.name);
+          var root = axe.commons.dom.getRootNode(virtualNode.actualNode);
+          var matchingNodes = root.querySelectorAll('input[type="' + axe.commons.utils.escapeSelector(virtualNode.actualNode.type) + '"][name="' + name + '"]');
           if (matchingNodes.length < 2) {
             return true;
           }
-          var fieldset = axe.commons.dom.findUp(element, 'fieldset');
-          var group = axe.commons.dom.findUp(element, '[role="group"]' + (node.type === 'radio' ? ',[role="radiogroup"]' : ''));
+          var fieldset = axe.commons.dom.findUpVirtual(virtualNode, 'fieldset');
+          var group = axe.commons.dom.findUpVirtual(virtualNode, '[role="group"]' + (virtualNode.actualNode.type === 'radio' ? ',[role="radiogroup"]' : ''));
           if (!group && !fieldset) {
             failureCode = 'no-group';
-            self.relatedNodes(spliceCurrentNode(matchingNodes, element));
+            self.relatedNodes(spliceCurrentNode(matchingNodes, virtualNode.actualNode));
             return false;
+          } else if (fieldset) {
+            return checkFieldset(fieldset, name);
+          } else {
+            return checkARIAGroup(group, name);
           }
-          return fieldset ? checkFieldset(fieldset, name) : checkARIAGroup(group, name);
         }
         var data = {
           name: node.getAttribute('name'),
           type: node.getAttribute('type')
         };
-        var result = runCheck(node);
+        var result = runCheck(virtualNode);
         if (!result) {
           data.failureCode = failureCode;
         }
@@ -10976,12 +12438,13 @@ module.exports = {
       }
     }, {
       id: 'group-labelledby',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         this.data({
           name: node.getAttribute('name'),
           type: node.getAttribute('type')
         });
-        var matchingNodes = document.querySelectorAll('input[type="' + axe.commons.utils.escapeSelector(node.type) + '"][name="' + axe.commons.utils.escapeSelector(node.name) + '"]');
+        var doc = axe.commons.dom.getRootNode(node);
+        var matchingNodes = doc.querySelectorAll('input[type="' + axe.commons.utils.escapeSelector(node.type) + '"][name="' + axe.commons.utils.escapeSelector(node.name) + '"]');
         if (matchingNodes.length <= 1) {
           return true;
         }
@@ -10990,11 +12453,11 @@ module.exports = {
           return l ? l.split(/\s+/) : [];
         }).reduce(function(prev, curr) {
           return prev.filter(function(n) {
-            return curr.indexOf(n) !== -1;
+            return curr.includes(n);
           });
         }).filter(function(n) {
-          var labelNode = document.getElementById(n);
-          return labelNode && axe.commons.text.accessibleText(labelNode);
+          var labelNode = doc.getElementById(n);
+          return labelNode && axe.commons.text.accessibleText(labelNode, true);
         }).length !== 0;
       },
       after: function after(results, options) {
@@ -11013,7 +12476,7 @@ module.exports = {
       }
     }, {
       id: 'accesskeys',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         if (axe.commons.dom.isVisible(node, false)) {
           this.data(node.getAttribute('accesskey'));
           this.relatedNodes([ node ]);
@@ -11041,83 +12504,174 @@ module.exports = {
       }
     }, {
       id: 'focusable-no-name',
-      evaluate: function evaluate(node, options) {
-        var tabIndex = node.getAttribute('tabindex'), isFocusable = axe.commons.dom.isFocusable(node) && tabIndex > -1;
-        if (!isFocusable) {
+      evaluate: function evaluate(node, options, virtualNode) {
+        var tabIndex = node.getAttribute('tabindex'), inFocusOrder = axe.commons.dom.isFocusable(node) && tabIndex > -1;
+        if (!inFocusOrder) {
           return false;
         }
-        return !axe.commons.text.accessibleText(node);
+        return !axe.commons.text.accessibleTextVirtual(virtualNode);
       }
     }, {
-      id: 'has-at-least-one-main',
-      evaluate: function evaluate(node, options) {
-        var mains = document.querySelectorAll('main,[role=main]');
-        this.data(!!mains[0]);
-        return !!mains[0];
-      },
-      after: function after(results, options) {
-        var hasMain = false;
-        for (var i = 0; i < results.length && !hasMain; i++) {
-          hasMain = results[i].data;
-        }
-        for (var i = 0; i < results.length; i++) {
-          results[i].result = hasMain;
-        }
-        return results;
-      }
-    }, {
-      id: 'has-no-more-than-one-main',
-      evaluate: function evaluate(node, options) {
-        var mains = document.querySelectorAll('main,[role=main]');
-        return mains.length <= 1;
-      }
-    }, {
-      id: 'main-is-top-level',
-      evaluate: function evaluate(node, options) {
+      id: 'landmark-is-top-level',
+      evaluate: function evaluate(node, options, virtualNode) {
         var landmarks = axe.commons.aria.getRolesByType('landmark');
-        var parent = node.parentNode;
+        var parent = axe.commons.dom.getComposedParent(node);
+        this.data({
+          role: node.getAttribute('role') || axe.commons.aria.implicitRole(node)
+        });
         while (parent) {
-          if (parent.nodeType === 1) {
-            var role = parent.getAttribute('role');
-            if (!role && parent.tagName.toLowerCase() !== 'form') {
-              role = axe.commons.aria.implicitRole(parent);
-            }
-            if (role && landmarks.includes(role)) {
-              return false;
-            }
+          var role = parent.getAttribute('role');
+          if (!role && parent.tagName.toLowerCase() !== 'form') {
+            role = axe.commons.aria.implicitRole(parent);
           }
-          parent = parent.parentNode;
+          if (role && landmarks.includes(role)) {
+            return false;
+          }
+          parent = axe.commons.dom.getComposedParent(parent);
         }
         return true;
       }
     }, {
+      id: 'page-has-heading-one',
+      evaluate: function evaluate(node, options, virtualNode) {
+        if (!options || !options.selector || typeof options.selector !== 'string') {
+          throw new TypeError('visible-in-page requires options.selector to be a string');
+        }
+        var matchingElms = axe.utils.querySelectorAll(virtualNode, options.selector);
+        this.relatedNodes(matchingElms.map(function(vNode) {
+          return vNode.actualNode;
+        }));
+        return matchingElms.length > 0;
+      },
+      after: function after(results, options) {
+        var elmUsedAnywhere = results.some(function(frameResult) {
+          return frameResult.result === true;
+        });
+        if (elmUsedAnywhere) {
+          results.forEach(function(result) {
+            result.result = true;
+          });
+        }
+        return results;
+      },
+      options: {
+        selector: 'h1:not([role]), [role="heading"][aria-level="1"]'
+      }
+    }, {
+      id: 'page-has-main',
+      evaluate: function evaluate(node, options, virtualNode) {
+        if (!options || !options.selector || typeof options.selector !== 'string') {
+          throw new TypeError('visible-in-page requires options.selector to be a string');
+        }
+        var matchingElms = axe.utils.querySelectorAll(virtualNode, options.selector);
+        this.relatedNodes(matchingElms.map(function(vNode) {
+          return vNode.actualNode;
+        }));
+        return matchingElms.length > 0;
+      },
+      after: function after(results, options) {
+        var elmUsedAnywhere = results.some(function(frameResult) {
+          return frameResult.result === true;
+        });
+        if (elmUsedAnywhere) {
+          results.forEach(function(result) {
+            result.result = true;
+          });
+        }
+        return results;
+      },
+      options: {
+        selector: 'main:not([role]), [role=\'main\']'
+      }
+    }, {
+      id: 'page-no-duplicate-banner',
+      evaluate: function evaluate(node, options, virtualNode) {
+        if (!options || !options.selector || typeof options.selector !== 'string') {
+          throw new TypeError('visible-in-page requires options.selector to be a string');
+        }
+        var elms = axe.utils.querySelectorAll(virtualNode, options.selector);
+        if (typeof options.nativeScopeFilter === 'string') {
+          elms = elms.filter(function(elm) {
+            return elm.actualNode.hasAttribute('role') || !axe.commons.dom.findUpVirtual(elm, options.nativeScopeFilter);
+          });
+        }
+        this.relatedNodes(elms.map(function(elm) {
+          return elm.actualNode;
+        }));
+        return elms.length <= 1;
+      },
+      options: {
+        selector: 'header:not([role]), [role=banner]',
+        nativeScopeFilter: 'article, aside, main, nav, section'
+      }
+    }, {
+      id: 'page-no-duplicate-contentinfo',
+      evaluate: function evaluate(node, options, virtualNode) {
+        if (!options || !options.selector || typeof options.selector !== 'string') {
+          throw new TypeError('visible-in-page requires options.selector to be a string');
+        }
+        var elms = axe.utils.querySelectorAll(virtualNode, options.selector);
+        if (typeof options.nativeScopeFilter === 'string') {
+          elms = elms.filter(function(elm) {
+            return elm.actualNode.hasAttribute('role') || !axe.commons.dom.findUpVirtual(elm, options.nativeScopeFilter);
+          });
+        }
+        this.relatedNodes(elms.map(function(elm) {
+          return elm.actualNode;
+        }));
+        return elms.length <= 1;
+      },
+      options: {
+        selector: 'footer:not([role]), [role=contentinfo]',
+        nativeScopeFilter: 'article, aside, main, nav, section'
+      }
+    }, {
+      id: 'page-no-duplicate-main',
+      evaluate: function evaluate(node, options, virtualNode) {
+        if (!options || !options.selector || typeof options.selector !== 'string') {
+          throw new TypeError('visible-in-page requires options.selector to be a string');
+        }
+        var elms = axe.utils.querySelectorAll(virtualNode, options.selector);
+        if (typeof options.nativeScopeFilter === 'string') {
+          elms = elms.filter(function(elm) {
+            return elm.actualNode.hasAttribute('role') || !axe.commons.dom.findUpVirtual(elm, options.nativeScopeFilter);
+          });
+        }
+        this.relatedNodes(elms.map(function(elm) {
+          return elm.actualNode;
+        }));
+        return elms.length <= 1;
+      },
+      options: {
+        selector: 'main:not([role]), [role=\'main\']'
+      }
+    }, {
       id: 'tabindex',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return node.tabIndex <= 0;
       }
     }, {
       id: 'duplicate-img-label',
-      evaluate: function evaluate(node, options) {
-        var imgs = node.querySelectorAll('img');
-        var text = axe.commons.text.visible(node, true).toLowerCase();
+      evaluate: function evaluate(node, options, virtualNode) {
+        var text = axe.commons.text.visibleVirtual(virtualNode, true).toLowerCase();
         if (text === '') {
           return false;
         }
-        for (var i = 0, len = imgs.length; i < len; i++) {
-          var img = imgs[i];
-          var imgAlt = axe.commons.text.accessibleText(img).toLowerCase();
-          if (imgAlt === text && img.getAttribute('role') !== 'presentation' && axe.commons.dom.isVisible(img)) {
-            return true;
-          }
-        }
-        return false;
+        var images = axe.utils.querySelectorAll(virtualNode, 'img').filter(function(_ref) {
+          var actualNode = _ref.actualNode;
+          return axe.commons.dom.isVisible(actualNode) && ![ 'none', 'presentation' ].includes(actualNode.getAttribute('role'));
+        });
+        return images.some(function(img) {
+          return text === axe.commons.text.accessibleTextVirtual(img).toLowerCase();
+        });
       }
     }, {
       id: 'explicit-label',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         if (node.getAttribute('id')) {
+          var root = axe.commons.dom.getRootNode(node);
           var id = axe.commons.utils.escapeSelector(node.getAttribute('id'));
-          var label = document.querySelector('label[for="' + id + '"]');
+          var label = root.querySelector('label[for="' + id + '"]');
           if (label) {
             return !!axe.commons.text.accessibleText(label);
           }
@@ -11126,8 +12680,8 @@ module.exports = {
       }
     }, {
       id: 'help-same-as-label',
-      evaluate: function evaluate(node, options) {
-        var labelText = axe.commons.text.label(node), check = node.getAttribute('title');
+      evaluate: function evaluate(node, options, virtualNode) {
+        var labelText = axe.commons.text.labelVirtual(virtualNode), check = node.getAttribute('title');
         if (!labelText) {
           return false;
         }
@@ -11145,16 +12699,16 @@ module.exports = {
       enabled: false
     }, {
       id: 'implicit-label',
-      evaluate: function evaluate(node, options) {
-        var label = axe.commons.dom.findUp(node, 'label');
+      evaluate: function evaluate(node, options, virtualNode) {
+        var label = axe.commons.dom.findUpVirtual(virtualNode, 'label');
         if (label) {
-          return !!axe.commons.text.accessibleText(label);
+          return !!axe.commons.text.accessibleTextVirtual(label);
         }
         return false;
       }
     }, {
       id: 'multiple-label',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var id = axe.commons.utils.escapeSelector(node.getAttribute('id'));
         var labels = Array.from(document.querySelectorAll('label[for="' + id + '"]'));
         var parent = node.parentNode;
@@ -11176,18 +12730,18 @@ module.exports = {
       }
     }, {
       id: 'title-only',
-      evaluate: function evaluate(node, options) {
-        var labelText = axe.commons.text.label(node);
+      evaluate: function evaluate(node, options, virtualNode) {
+        var labelText = axe.commons.text.labelVirtual(virtualNode);
         return !labelText && !!(node.getAttribute('title') || node.getAttribute('aria-describedby'));
       }
     }, {
       id: 'has-lang',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return !!(node.getAttribute('lang') || node.getAttribute('xml:lang') || '').trim();
       }
     }, {
       id: 'valid-lang',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         function getBaseLang(lang) {
           return lang.trim().split('-')[0].toLowerCase();
         }
@@ -11212,44 +12766,37 @@ module.exports = {
       }
     }, {
       id: 'dlitem',
-      evaluate: function evaluate(node, options) {
-        return node.parentNode.tagName.toUpperCase() === 'DL';
+      evaluate: function evaluate(node, options, virtualNode) {
+        var parent = axe.commons.dom.getComposedParent(node);
+        return parent.nodeName.toUpperCase() === 'DL';
       }
     }, {
       id: 'has-listitem',
-      evaluate: function evaluate(node, options) {
-        var children = node.children;
-        if (children.length === 0) {
-          return true;
-        }
-        for (var i = 0; i < children.length; i++) {
-          if (children[i].nodeName.toUpperCase() === 'LI') {
-            return false;
-          }
-        }
-        return true;
+      evaluate: function evaluate(node, options, virtualNode) {
+        return virtualNode.children.every(function(_ref2) {
+          var actualNode = _ref2.actualNode;
+          return actualNode.nodeName.toUpperCase() !== 'LI';
+        });
       }
     }, {
       id: 'listitem',
-      evaluate: function evaluate(node, options) {
-        if ([ 'UL', 'OL' ].indexOf(node.parentNode.nodeName.toUpperCase()) !== -1) {
-          return true;
-        }
-        return node.parentNode.getAttribute('role') === 'list';
+      evaluate: function evaluate(node, options, virtualNode) {
+        var parent = axe.commons.dom.getComposedParent(node);
+        return [ 'UL', 'OL' ].includes(parent.nodeName.toUpperCase()) || (parent.getAttribute('role') || '').toLowerCase() === 'list';
       }
     }, {
       id: 'only-dlitems',
-      evaluate: function evaluate(node, options) {
-        var child, nodeName, bad = [], children = node.childNodes, permitted = [ 'STYLE', 'META', 'LINK', 'MAP', 'AREA', 'SCRIPT', 'DATALIST', 'TEMPLATE' ], hasNonEmptyTextNode = false;
-        for (var i = 0; i < children.length; i++) {
-          child = children[i];
-          var nodeName = child.nodeName.toUpperCase();
-          if (child.nodeType === 1 && nodeName !== 'DT' && nodeName !== 'DD' && permitted.indexOf(nodeName) === -1) {
-            bad.push(child);
-          } else if (child.nodeType === 3 && child.nodeValue.trim() !== '') {
+      evaluate: function evaluate(node, options, virtualNode) {
+        var bad = [], permitted = [ 'STYLE', 'META', 'LINK', 'MAP', 'AREA', 'SCRIPT', 'DATALIST', 'TEMPLATE' ], hasNonEmptyTextNode = false;
+        virtualNode.children.forEach(function(_ref3) {
+          var actualNode = _ref3.actualNode;
+          var nodeName = actualNode.nodeName.toUpperCase();
+          if (actualNode.nodeType === 1 && nodeName !== 'DT' && nodeName !== 'DD' && permitted.indexOf(nodeName) === -1) {
+            bad.push(actualNode);
+          } else if (actualNode.nodeType === 3 && actualNode.nodeValue.trim() !== '') {
             hasNonEmptyTextNode = true;
           }
-        }
+        });
         if (bad.length) {
           this.relatedNodes(bad);
         }
@@ -11258,17 +12805,17 @@ module.exports = {
       }
     }, {
       id: 'only-listitems',
-      evaluate: function evaluate(node, options) {
-        var child, nodeName, bad = [], children = node.childNodes, permitted = [ 'STYLE', 'META', 'LINK', 'MAP', 'AREA', 'SCRIPT', 'DATALIST', 'TEMPLATE' ], hasNonEmptyTextNode = false;
-        for (var i = 0; i < children.length; i++) {
-          child = children[i];
-          nodeName = child.nodeName.toUpperCase();
-          if (child.nodeType === 1 && nodeName !== 'LI' && permitted.indexOf(nodeName) === -1) {
-            bad.push(child);
-          } else if (child.nodeType === 3 && child.nodeValue.trim() !== '') {
+      evaluate: function evaluate(node, options, virtualNode) {
+        var bad = [], permitted = [ 'STYLE', 'META', 'LINK', 'MAP', 'AREA', 'SCRIPT', 'DATALIST', 'TEMPLATE' ], hasNonEmptyTextNode = false;
+        virtualNode.children.forEach(function(_ref4) {
+          var actualNode = _ref4.actualNode;
+          var nodeName = actualNode.nodeName.toUpperCase();
+          if (actualNode.nodeType === 1 && nodeName !== 'LI' && permitted.indexOf(nodeName) === -1) {
+            bad.push(actualNode);
+          } else if (actualNode.nodeType === 3 && actualNode.nodeValue.trim() !== '') {
             hasNonEmptyTextNode = true;
           }
-        }
+        });
         if (bad.length) {
           this.relatedNodes(bad);
         }
@@ -11276,14 +12823,14 @@ module.exports = {
       }
     }, {
       id: 'structured-dlitems',
-      evaluate: function evaluate(node, options) {
-        var children = node.children;
+      evaluate: function evaluate(node, options, virtualNode) {
+        var children = virtualNode.children;
         if (!children || !children.length) {
           return false;
         }
         var hasDt = false, hasDd = false, nodeName;
         for (var i = 0; i < children.length; i++) {
-          nodeName = children[i].nodeName.toUpperCase();
+          nodeName = children[i].actualNode.nodeName.toUpperCase();
           if (nodeName === 'DT') {
             hasDt = true;
           }
@@ -11298,37 +12845,56 @@ module.exports = {
       }
     }, {
       id: 'caption',
-      evaluate: function evaluate(node, options) {
-        var tracks = node.querySelectorAll('track');
+      evaluate: function evaluate(node, options, virtualNode) {
+        var tracks = axe.utils.querySelectorAll(virtualNode, 'track');
         if (tracks.length) {
-          for (var i = 0; i < tracks.length; i++) {
-            var kind = tracks[i].getAttribute('kind');
-            if (kind && kind === 'captions') {
-              return false;
-            }
-          }
-          return true;
+          return !tracks.some(function(_ref5) {
+            var actualNode = _ref5.actualNode;
+            return (actualNode.getAttribute('kind') || '').toLowerCase() === 'captions';
+          });
         }
         return undefined;
       }
     }, {
       id: 'description',
-      evaluate: function evaluate(node, options) {
-        var tracks = node.querySelectorAll('track');
+      evaluate: function evaluate(node, options, virtualNode) {
+        var tracks = axe.utils.querySelectorAll(virtualNode, 'track');
         if (tracks.length) {
-          for (var i = 0; i < tracks.length; i++) {
-            var kind = tracks[i].getAttribute('kind');
-            if (kind && kind === 'descriptions') {
-              return false;
-            }
-          }
-          return true;
+          var out = !tracks.some(function(_ref6) {
+            var actualNode = _ref6.actualNode;
+            return (actualNode.getAttribute('kind') || '').toLowerCase() === 'descriptions';
+          });
+          return out;
         }
         return undefined;
       }
     }, {
+      id: 'frame-tested',
+      evaluate: function evaluate(node, options, virtualNode) {
+        var resolve = this.async();
+        var _Object$assign = Object.assign({
+          isViolation: false,
+          timeout: 500
+        }, options), isViolation = _Object$assign.isViolation, timeout = _Object$assign.timeout;
+        var timer = setTimeout(function() {
+          timer = setTimeout(function() {
+            timer = null;
+            resolve(isViolation ? false : undefined);
+          }, 0);
+        }, timeout);
+        axe.utils.respondable(node.contentWindow, 'axe.ping', null, undefined, function() {
+          if (timer !== null) {
+            clearTimeout(timer);
+            resolve(true);
+          }
+        });
+      },
+      options: {
+        isViolation: false
+      }
+    }, {
       id: 'meta-viewport-large',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         options = options || {};
         var params, content = node.getAttribute('content') || '', parsedParams = content.split(/[;,]/), result = {}, minimum = options.scaleMinimum || 2, lowerBound = options.lowerBound || false;
         for (var i = 0, l = parsedParams.length; i < l; i++) {
@@ -11355,7 +12921,7 @@ module.exports = {
       }
     }, {
       id: 'meta-viewport',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         options = options || {};
         var params, content = node.getAttribute('content') || '', parsedParams = content.split(/[;,]/), result = {}, minimum = options.scaleMinimum || 2, lowerBound = options.lowerBound || false;
         for (var i = 0, l = parsedParams.length; i < l; i++) {
@@ -11381,12 +12947,12 @@ module.exports = {
       }
     }, {
       id: 'header-present',
-      evaluate: function evaluate(node, options) {
-        return !!node.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"]');
+      evaluate: function evaluate(node, options, virtualNode) {
+        return !!axe.utils.querySelectorAll(virtualNode, 'h1, h2, h3, h4, h5, h6, [role="heading"]')[0];
       }
     }, {
       id: 'heading-order',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var ariaHeadingLevel = node.getAttribute('aria-level');
         if (ariaHeadingLevel !== null) {
           this.data(parseInt(ariaHeadingLevel, 10));
@@ -11413,33 +12979,27 @@ module.exports = {
         return results;
       }
     }, {
-      id: 'href-no-hash',
-      evaluate: function evaluate(node, options) {
-        var href = node.getAttribute('href');
-        if (href === '#') {
-          return false;
-        }
-        return true;
-      }
-    }, {
       id: 'internal-link-present',
-      evaluate: function evaluate(node, options) {
-        return !!node.querySelector('a[href^="#"]');
+      evaluate: function evaluate(node, options, virtualNode) {
+        var links = axe.utils.querySelectorAll(virtualNode, 'a[href]');
+        return links.some(function(vLink) {
+          return /^#[^/!]/.test(vLink.actualNode.getAttribute('href'));
+        });
       }
     }, {
       id: 'landmark',
-      evaluate: function evaluate(node, options) {
-        return node.getElementsByTagName('main').length > 0 || !!node.querySelector('[role="main"]');
+      evaluate: function evaluate(node, options, virtualNode) {
+        return axe.utils.querySelectorAll(virtualNode, 'main, [role="main"]').length > 0;
       }
     }, {
       id: 'meta-refresh',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var content = node.getAttribute('content') || '', parsedParams = content.split(/[;,]/);
         return content === '' || parsedParams[0] === '0';
       }
     }, {
       id: 'p-as-heading',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var siblings = Array.from(node.parentNode.children);
         var currentIndex = siblings.indexOf(node);
         options = options || {};
@@ -11504,7 +13064,7 @@ module.exports = {
         if (!nextStyle || !isHeaderStyle(currStyle, nextStyle, margins)) {
           return true;
         }
-        var blockquote = axe.commons.dom.findUp(node, 'blockquote');
+        var blockquote = axe.commons.dom.findUpVirtual(virtualNode, 'blockquote');
         if (blockquote && blockquote.nodeName.toUpperCase() === 'BLOCKQUOTE') {
           return undefined;
         }
@@ -11529,67 +13089,76 @@ module.exports = {
       }
     }, {
       id: 'region',
-      evaluate: function evaluate(node, options) {
-        var landmarkRoles = axe.commons.aria.getRolesByType('landmark'), firstLink = node.querySelector('a[href]');
+      evaluate: function evaluate(node, options, virtualNode) {
+        var _axe$commons2 = axe.commons, dom = _axe$commons2.dom, aria = _axe$commons2.aria;
+        function getSkiplink(virtualNode) {
+          var firstLink = axe.utils.querySelectorAll(virtualNode, 'a[href]')[0];
+          if (firstLink && axe.commons.dom.getElementByReference(firstLink.actualNode, 'href')) {
+            return firstLink.actualNode;
+          }
+        }
+        var skipLink = getSkiplink(virtualNode);
+        var landmarkRoles = aria.getRolesByType('landmark');
         var implicitLandmarks = landmarkRoles.reduce(function(arr, role) {
-          return arr.concat(axe.commons.aria.implicitNodes(role));
+          return arr.concat(aria.implicitNodes(role));
         }, []).filter(function(r) {
           return r !== null;
         });
-        function isSkipLink(n) {
-          return firstLink && axe.commons.dom.getElementByReference(firstLink, 'href') && firstLink === n;
+        function isSkipLink(vNode) {
+          return skipLink && skipLink === vNode.actualNode;
         }
-        function isLandmark(node) {
-          if (node.hasAttribute('role')) {
-            return landmarkRoles.includes(node.getAttribute('role').toLowerCase());
+        function isLandmark(virtualNode) {
+          var node = virtualNode.actualNode;
+          var explictRole = (node.getAttribute('role') || '').trim().toLowerCase();
+          if (explictRole) {
+            if (explictRole === 'form') {
+              return !!aria.labelVirtual(virtualNode);
+            }
+            return landmarkRoles.includes(explictRole);
           } else {
             return implicitLandmarks.some(function(implicitSelector) {
-              return axe.utils.matchesSelector(node, implicitSelector);
+              var matches = axe.utils.matchesSelector(node, implicitSelector);
+              if (node.tagName.toLowerCase() === 'form') {
+                return matches && !!aria.labelVirtual(virtualNode);
+              }
+              return matches;
             });
           }
         }
-        function checkRegion(n) {
-          if (isLandmark(n)) {
-            return null;
-          }
-          if (isSkipLink(n)) {
-            return getViolatingChildren(n);
-          }
-          if (axe.commons.dom.isVisible(n, true) && (axe.commons.text.visible(n, true, true) || axe.commons.dom.isVisualContent(n))) {
-            return n;
-          }
-          return getViolatingChildren(n);
-        }
-        function getViolatingChildren(n) {
-          var children = axe.commons.utils.toArray(n.children);
-          if (children.length === 0) {
+        function findRegionlessElms(virtualNode) {
+          var node = virtualNode.actualNode;
+          if (isLandmark(virtualNode) || isSkipLink(virtualNode) || !dom.isVisible(node, true)) {
             return [];
+          } else if (dom.hasContent(node, true)) {
+            return [ node ];
+          } else {
+            return virtualNode.children.filter(function(_ref7) {
+              var actualNode = _ref7.actualNode;
+              return actualNode.nodeType === 1;
+            }).map(findRegionlessElms).reduce(function(a, b) {
+              return a.concat(b);
+            }, []);
           }
-          return children.map(checkRegion).filter(function(c) {
-            return c !== null;
-          }).reduce(function(a, b) {
-            return a.concat(b);
-          }, []);
         }
-        var v = getViolatingChildren(node);
-        this.relatedNodes(v);
-        return !v.length;
+        var regionlessNodes = findRegionlessElms(virtualNode);
+        this.relatedNodes(regionlessNodes);
+        return regionlessNodes.length === 0;
       },
       after: function after(results, options) {
         return [ results[0] ];
       }
     }, {
       id: 'skip-link',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var target = axe.commons.dom.getElementByReference(node, 'href');
-        return !!target && axe.commons.dom.isFocusable(target);
-      },
-      after: function after(results, options) {
-        return [ results[0] ];
+        if (target) {
+          return axe.commons.dom.isVisible(target, true) || undefined;
+        }
+        return false;
       }
     }, {
       id: 'unique-frame-title',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var title = axe.commons.text.sanitize(node.title).trim().toLowerCase();
         this.data(title);
         return true;
@@ -11606,13 +13175,13 @@ module.exports = {
       }
     }, {
       id: 'aria-label',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var label = node.getAttribute('aria-label');
         return !!(label ? axe.commons.text.sanitize(label).trim() : '');
       }
     }, {
       id: 'aria-labelledby',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var getIdRefs = axe.commons.dom.idrefs;
         return getIdRefs(node, 'aria-labelledby').some(function(elm) {
           return elm && axe.commons.text.accessibleText(elm, true);
@@ -11620,12 +13189,12 @@ module.exports = {
       }
     }, {
       id: 'button-has-visible-text',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var nodeName = node.nodeName.toUpperCase();
         var role = node.getAttribute('role');
         var label = void 0;
         if (nodeName === 'BUTTON' || role === 'button' && nodeName !== 'INPUT') {
-          label = axe.commons.text.accessibleText(node);
+          label = axe.commons.text.accessibleTextVirtual(virtualNode);
           this.data(label);
           return !!label;
         } else {
@@ -11634,29 +13203,26 @@ module.exports = {
       }
     }, {
       id: 'doc-has-title',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var title = document.title;
         return !!(title ? axe.commons.text.sanitize(title).trim() : '');
       }
     }, {
       id: 'duplicate-id',
-      evaluate: function evaluate(node, options) {
-        if (!node.getAttribute('id').trim()) {
+      evaluate: function evaluate(node, options, virtualNode) {
+        var id = node.getAttribute('id').trim();
+        if (!id) {
           return true;
         }
-        var id = axe.commons.utils.escapeSelector(node.getAttribute('id'));
-        var matchingNodes = document.querySelectorAll('[id="' + id + '"]');
-        var related = [];
-        for (var i = 0; i < matchingNodes.length; i++) {
-          if (matchingNodes[i] !== node) {
-            related.push(matchingNodes[i]);
-          }
+        var root = axe.commons.dom.getRootNode(node);
+        var matchingNodes = Array.from(root.querySelectorAll('[id="' + axe.commons.utils.escapeSelector(id) + '"]')).filter(function(foundNode) {
+          return foundNode !== node;
+        });
+        if (matchingNodes.length) {
+          this.relatedNodes(matchingNodes);
         }
-        if (related.length) {
-          this.relatedNodes(related);
-        }
-        this.data(node.getAttribute('id'));
-        return matchingNodes.length <= 1;
+        this.data(id);
+        return matchingNodes.length === 0;
       },
       after: function after(results, options) {
         var uniqueIds = [];
@@ -11670,68 +13236,68 @@ module.exports = {
       }
     }, {
       id: 'exists',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return true;
       }
     }, {
       id: 'has-alt',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var nn = node.nodeName.toLowerCase();
         return node.hasAttribute('alt') && (nn === 'img' || nn === 'input' || nn === 'area');
       }
     }, {
       id: 'has-visible-text',
-      evaluate: function evaluate(node, options) {
-        return axe.commons.text.accessibleText(node).length > 0;
+      evaluate: function evaluate(node, options, virtualNode) {
+        return axe.commons.text.accessibleTextVirtual(virtualNode).length > 0;
       }
     }, {
       id: 'is-on-screen',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return axe.commons.dom.isVisible(node, false) && !axe.commons.dom.isOffscreen(node);
       }
     }, {
       id: 'non-empty-alt',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var label = node.getAttribute('alt');
         return !!(label ? axe.commons.text.sanitize(label).trim() : '');
       }
     }, {
       id: 'non-empty-if-present',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var nodeName = node.nodeName.toUpperCase();
         var type = (node.getAttribute('type') || '').toLowerCase();
         var label = node.getAttribute('value');
         this.data(label);
-        if (nodeName === 'INPUT' && [ 'submit', 'reset' ].indexOf(type) !== -1) {
+        if (nodeName === 'INPUT' && [ 'submit', 'reset' ].includes(type)) {
           return label === null;
         }
         return false;
       }
     }, {
       id: 'non-empty-title',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var title = node.getAttribute('title');
         return !!(title ? axe.commons.text.sanitize(title).trim() : '');
       }
     }, {
       id: 'non-empty-value',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var label = node.getAttribute('value');
         return !!(label ? axe.commons.text.sanitize(label).trim() : '');
       }
     }, {
       id: 'role-none',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return node.getAttribute('role') === 'none';
       }
     }, {
       id: 'role-presentation',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return node.getAttribute('role') === 'presentation';
       }
     }, {
       id: 'caption-faked',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var table = axe.commons.table.toGrid(node);
         var firstRow = table[0];
         if (table.length <= 1 || firstRow.length <= 1 || node.rows.length <= 1) {
@@ -11743,17 +13309,17 @@ module.exports = {
       }
     }, {
       id: 'has-caption',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return !!node.caption;
       }
     }, {
       id: 'has-summary',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         return !!node.summary;
       }
     }, {
       id: 'has-th',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var row, cell, badCells = [];
         for (var rowIndex = 0, rowLength = node.rows.length; rowIndex < rowLength; rowIndex++) {
           row = node.rows[rowIndex];
@@ -11772,7 +13338,7 @@ module.exports = {
       }
     }, {
       id: 'html5-scope',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         if (!axe.commons.dom.isHTML5(document)) {
           return true;
         }
@@ -11780,12 +13346,12 @@ module.exports = {
       }
     }, {
       id: 'same-caption-summary',
-      evaluate: function evaluate(node, options) {
-        return !!(node.summary && node.caption) && node.summary === axe.commons.text.accessibleText(node.caption);
+      evaluate: function evaluate(node, options, virtualNode) {
+        return !!(node.summary && node.caption) && node.summary.toLowerCase() === axe.commons.text.accessibleText(node.caption).toLowerCase();
       }
     }, {
       id: 'scope-value',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         options = options || {};
         var value = node.getAttribute('scope').toLowerCase();
         var validVals = [ 'row', 'col', 'rowgroup', 'colgroup' ] || options.values;
@@ -11793,16 +13359,15 @@ module.exports = {
       }
     }, {
       id: 'td-has-header',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var tableUtils = axe.commons.table;
         var badCells = [];
         var cells = tableUtils.getAllCells(node);
         cells.forEach(function(cell) {
           if (axe.commons.dom.hasContent(cell) && tableUtils.isDataCell(cell) && !axe.commons.aria.label(cell)) {
-            var hasHeaders = tableUtils.getHeaders(cell);
-            hasHeaders = hasHeaders.reduce(function(hasHeaders, header) {
-              return hasHeaders || header !== null && !!axe.commons.dom.hasContent(header);
-            }, false);
+            var hasHeaders = tableUtils.getHeaders(cell).some(function(header) {
+              return header !== null && !!axe.commons.dom.hasContent(header);
+            });
             if (!hasHeaders) {
               badCells.push(cell);
             }
@@ -11816,7 +13381,7 @@ module.exports = {
       }
     }, {
       id: 'td-headers-attr',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var cells = [];
         for (var rowIndex = 0, rowLength = node.rows.length; rowIndex < rowLength; rowIndex++) {
           var row = node.rows[rowIndex];
@@ -11861,7 +13426,7 @@ module.exports = {
       }
     }, {
       id: 'th-has-data-cells',
-      evaluate: function evaluate(node, options) {
+      evaluate: function evaluate(node, options, virtualNode) {
         var tableUtils = axe.commons.table;
         var cells = tableUtils.getAllCells(node);
         var checkResult = this;
@@ -11908,16 +13473,15 @@ module.exports = {
       }
     }, {
       id: 'hidden-content',
-      evaluate: function evaluate(node, options) {
-        var styles = window.getComputedStyle(node);
+      evaluate: function evaluate(node, options, virtualNode) {
         var whitelist = [ 'SCRIPT', 'HEAD', 'TITLE', 'NOSCRIPT', 'STYLE', 'TEMPLATE' ];
-        if (!whitelist.includes(node.tagName.toUpperCase()) && axe.commons.dom.hasContent(node)) {
+        if (!whitelist.includes(node.tagName.toUpperCase()) && axe.commons.dom.hasContentVirtual(virtualNode)) {
+          var styles = window.getComputedStyle(node);
           if (styles.getPropertyValue('display') === 'none') {
             return undefined;
           } else if (styles.getPropertyValue('visibility') === 'hidden') {
-            if (node.parentNode) {
-              var parentStyle = window.getComputedStyle(node.parentNode);
-            }
+            var parent = axe.commons.dom.getComposedParent(node);
+            var parentStyle = parent && window.getComputedStyle(parent);
             if (!parentStyle || parentStyle.getPropertyValue('visibility') !== 'hidden') {
               return undefined;
             }
@@ -12009,7 +13573,8 @@ module.exports = {
           type: 'string'
         },
         'aria-labelledby': {
-          type: 'idrefs'
+          type: 'idrefs',
+          values: [ '' ]
         },
         'aria-level': {
           type: 'int'
@@ -12259,6 +13824,357 @@ module.exports = {
           context: null,
           implicit: [ 'body' ]
         },
+        'doc-abstract': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author' ],
+          context: null
+        },
+        'doc-acknowledgments': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author' ],
+          context: null
+        },
+        'doc-afterword': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author' ],
+          context: null
+        },
+        'doc-appendix': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author' ],
+          context: null
+        },
+        'doc-backlink': {
+          type: 'link',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author', 'contents' ],
+          context: null
+        },
+        'doc-biblioentry': {
+          type: 'listitem',
+          attributes: {
+            allowed: [ 'aria-expanded', 'aria-level', 'aria-posinset', 'aria-setsize' ]
+          },
+          owned: null,
+          nameFrom: [ 'author' ],
+          context: [ 'doc-bibliography' ]
+        },
+        'doc-bibliography': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author' ],
+          context: null
+        },
+        'doc-biblioref': {
+          type: 'link',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          nameFrom: [ 'author', 'contents' ],
+          context: null
+        },
+        'doc-chapter': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-colophon': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-conclusion': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-cover': {
+          type: 'img',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-credit': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-credits': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-dedication': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-endnote': {
+          type: 'listitem',
+          attributes: {
+            allowed: [ 'aria-expanded', 'aria-level', 'aria-posinset', 'aria-setsize' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: [ 'doc-endnotes' ]
+        },
+        'doc-endnotes': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: [ 'doc-endnote' ],
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-epigraph': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-epilogue': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-errata': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-example': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-footnote': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-foreword': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-glossary': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: [ 'term', 'definition' ],
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-glossref': {
+          type: 'link',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author', 'contents' ],
+          context: null
+        },
+        'doc-index': {
+          type: 'navigation',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-introduction': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-noteref': {
+          type: 'link',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author', 'contents' ],
+          context: null
+        },
+        'doc-notice': {
+          type: 'note',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-pagebreak': {
+          type: 'separator',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-pagelist': {
+          type: 'navigation',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-part': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-preface': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-prologue': {
+          type: 'landmark',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-pullquote': {
+          type: 'none',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-qna': {
+          type: 'section',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-subtitle': {
+          type: 'sectionhead',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-tip': {
+          type: 'note',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
+        'doc-toc': {
+          type: 'navigation',
+          attributes: {
+            allowed: [ 'aria-expanded' ]
+          },
+          owned: null,
+          namefrom: [ 'author' ],
+          context: null
+        },
         feed: {
           type: 'structure',
           attributes: {
@@ -12315,7 +14231,8 @@ module.exports = {
         heading: {
           type: 'structure',
           attributes: {
-            allowed: [ 'aria-level', 'aria-expanded' ]
+            required: [ 'aria-level' ],
+            allowed: [ 'aria-expanded' ]
           },
           owned: null,
           nameFrom: [ 'author', 'contents' ],
@@ -12831,7 +14748,9 @@ module.exports = {
       commons.color = color;
       var dom = commons.dom = {};
       var table = commons.table = {};
-      var text = commons.text = {};
+      var text = commons.text = {
+        EdgeFormDefaults: {}
+      };
       var utils = commons.utils = axe.utils;
       aria.requiredAttr = function(role) {
         'use strict';
@@ -12849,7 +14768,8 @@ module.exports = {
       };
       aria.validateAttrValue = function(node, attr) {
         'use strict';
-        var matches, list, doc = document, value = node.getAttribute(attr), attrInfo = aria.lookupTable.attributes[attr];
+        var matches, list, value = node.getAttribute(attr), attrInfo = aria.lookupTable.attributes[attr];
+        var doc = dom.getRootNode(node);
         if (!attrInfo) {
           return true;
         }
@@ -12868,10 +14788,13 @@ module.exports = {
           return !!(value && doc.getElementById(value));
 
          case 'idrefs':
+          if (attrInfo.values && attrInfo.values.indexOf('') !== -1 && value.trim().length === 0) {
+            return true;
+          }
           list = axe.utils.tokenList(value);
-          return list.reduce(function(result, token) {
-            return !!(result && doc.getElementById(token));
-          }, list.length !== 0);
+          return list.some(function(token) {
+            return doc.getElementById(token);
+          });
 
          case 'string':
           return true;
@@ -12884,18 +14807,20 @@ module.exports = {
           return /^[-+]?[0-9]+$/.test(value);
         }
       };
-      aria.label = function(node) {
-        var ref, candidate;
-        if (node.getAttribute('aria-labelledby')) {
-          ref = dom.idrefs(node, 'aria-labelledby');
+      aria.labelVirtual = function(_ref8) {
+        var actualNode = _ref8.actualNode;
+        var ref = void 0, candidate = void 0;
+        if (actualNode.getAttribute('aria-labelledby')) {
+          ref = dom.idrefs(actualNode, 'aria-labelledby');
           candidate = ref.map(function(thing) {
-            return thing ? text.visible(thing, true) : '';
+            var vNode = axe.utils.getNodeFromTree(axe._tree[0], thing);
+            return vNode ? text.visibleVirtual(vNode, true) : '';
           }).join(' ').trim();
           if (candidate) {
             return candidate;
           }
         }
-        candidate = node.getAttribute('aria-label');
+        candidate = actualNode.getAttribute('aria-label');
         if (candidate) {
           candidate = text.sanitize(candidate).trim();
           if (candidate) {
@@ -12903,6 +14828,10 @@ module.exports = {
           }
         }
         return null;
+      };
+      aria.label = function(node) {
+        node = axe.utils.getNodeFromTree(axe._tree[0], node);
+        return aria.labelVirtual(node);
       };
       aria.isValidRole = function(role) {
         'use strict';
@@ -13138,7 +15067,7 @@ module.exports = {
       }
       function contentOverlapping(targetElement, bgNode) {
         var targetRect = targetElement.getClientRects()[0];
-        var obscuringElements = document.elementsFromPoint(targetRect.left, targetRect.top);
+        var obscuringElements = dom.shadowElementsFromPoint(targetRect.left, targetRect.top);
         if (obscuringElements) {
           for (var i = 0; i < obscuringElements.length; i++) {
             if (obscuringElements[i] !== targetElement && obscuringElements[i] === bgNode) {
@@ -13229,15 +15158,15 @@ module.exports = {
       color.getRectStack = function(elm) {
         var boundingCoords = color.getCoords(elm.getBoundingClientRect());
         if (boundingCoords) {
+          var boundingStack = dom.shadowElementsFromPoint(boundingCoords.x, boundingCoords.y);
           var rects = Array.from(elm.getClientRects());
-          var boundingStack = Array.from(document.elementsFromPoint(boundingCoords.x, boundingCoords.y));
           if (rects && rects.length > 1) {
             var filteredArr = rects.filter(function(rect) {
               return rect.width && rect.width > 0;
             }).map(function(rect) {
               var coords = color.getCoords(rect);
               if (coords) {
-                return Array.from(document.elementsFromPoint(coords.x, coords.y));
+                return dom.shadowElementsFromPoint(coords.x, coords.y);
               }
             });
             filteredArr.splice(0, 0, boundingStack);
@@ -13378,29 +15307,63 @@ module.exports = {
         }
         return finalElements;
       };
+      dom.findElmsInContext = function(_ref9) {
+        var context = _ref9.context, value = _ref9.value, attr = _ref9.attr, _ref9$elm = _ref9.elm, elm = _ref9$elm === undefined ? '' : _ref9$elm;
+        var root = void 0;
+        var escapedValue = axe.utils.escapeSelector(value);
+        if (context.nodeType === 9 || context.nodeType === 11) {
+          root = context;
+        } else {
+          root = dom.getRootNode(context);
+        }
+        return Array.from(root.querySelectorAll(elm + '[' + attr + '=' + escapedValue + ']'));
+      };
       dom.findUp = function(element, target) {
-        'use strict';
-        var parent, matches = document.querySelectorAll(target), length = matches.length;
-        if (!length) {
+        return dom.findUpVirtual(axe.utils.getNodeFromTree(axe._tree[0], element), target);
+      };
+      dom.findUpVirtual = function(element, target) {
+        var parent = void 0;
+        parent = element.actualNode;
+        if (!element.shadowId && typeof element.actualNode.closest === 'function') {
+          var match = element.actualNode.closest(target);
+          if (match) {
+            return match;
+          }
           return null;
         }
-        matches = axe.utils.toArray(matches);
-        parent = element.parentNode;
-        while (parent && matches.indexOf(parent) === -1) {
-          parent = parent.parentNode;
+        do {
+          parent = parent.assignedSlot ? parent.assignedSlot : parent.parentNode;
+          if (parent && parent.nodeType === 11) {
+            parent = parent.host;
+          }
+        } while (parent && !axe.utils.matchesSelector(parent, target) && parent !== document.documentElement);
+        if (!axe.utils.matchesSelector(parent, target)) {
+          return null;
         }
         return parent;
       };
+      dom.getComposedParent = function getComposedParent(element) {
+        if (element.assignedSlot) {
+          return getComposedParent(element.assignedSlot);
+        } else if (element.parentNode) {
+          var parentNode = element.parentNode;
+          if (parentNode.nodeType === 1) {
+            return parentNode;
+          } else if (parentNode.host) {
+            return parentNode.host;
+          }
+        }
+        return null;
+      };
       dom.getElementByReference = function(node, attr) {
-        'use strict';
-        var candidate, fragment = node.getAttribute(attr), doc = document;
+        var fragment = node.getAttribute(attr);
         if (fragment && fragment.charAt(0) === '#') {
-          fragment = fragment.substring(1);
-          candidate = doc.getElementById(fragment);
+          fragment = decodeURIComponent(fragment.substring(1));
+          var candidate = document.getElementById(fragment);
           if (candidate) {
             return candidate;
           }
-          candidate = doc.getElementsByName(fragment);
+          candidate = document.getElementsByName(fragment);
           if (candidate.length) {
             return candidate[0];
           }
@@ -13418,6 +15381,13 @@ module.exports = {
           width: coords.right - coords.left,
           height: coords.bottom - coords.top
         };
+      };
+      dom.getRootNode = function(node) {
+        var doc = node.getRootNode && node.getRootNode() || document;
+        if (doc === node) {
+          doc = document;
+        }
+        return doc;
       };
       dom.getScrollOffset = function(element) {
         'use strict';
@@ -13457,22 +15427,27 @@ module.exports = {
           height: body.clientHeight
         };
       };
-      dom.hasContent = function hasContent(elm) {
-        var skipItems = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
-        if (elm.textContent.trim() || aria.label(elm)) {
-          return true;
+      var hiddenTextElms = [ 'HEAD', 'TITLE', 'TEMPLATE', 'SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'VIDEO', 'AUDIO', 'NOSCRIPT' ];
+      function hasChildTextNodes(elm) {
+        if (!hiddenTextElms.includes(elm.actualNode.nodeName.toUpperCase())) {
+          return elm.children.some(function(_ref10) {
+            var actualNode = _ref10.actualNode;
+            return actualNode.nodeType === 3 && actualNode.nodeValue.trim();
+          });
         }
-        var contentElms = elm.querySelectorAll('*');
-        for (var i = 0; i < contentElms.length; i++) {
-          if (skipItems.indexOf(contentElms[i]) === -1 && aria.label(contentElms[i]) || dom.isVisualContent(contentElms[i])) {
-            return true;
-          }
-        }
-        return false;
+      }
+      dom.hasContentVirtual = function(elm, noRecursion) {
+        return hasChildTextNodes(elm) || dom.isVisualContent(elm.actualNode) || !!aria.labelVirtual(elm) || !noRecursion && elm.children.some(function(child) {
+          return child.actualNode.nodeType === 1 && dom.hasContentVirtual(child);
+        });
+      };
+      dom.hasContent = function hasContent(elm, noRecursion) {
+        elm = axe.utils.getNodeFromTree(axe._tree[0], elm);
+        return dom.hasContentVirtual(elm, noRecursion);
       };
       dom.idrefs = function(node, attr) {
         'use strict';
-        var index, length, doc = document, result = [], idrefs = node.getAttribute(attr);
+        var index, length, doc = dom.getRootNode(node), result = [], idrefs = node.getAttribute(attr);
         if (idrefs) {
           idrefs = axe.utils.tokenList(idrefs);
           for (index = 0, length = idrefs.length; index < length; index++) {
@@ -13481,9 +15456,14 @@ module.exports = {
         }
         return result;
       };
+      function focusDisabled(el) {
+        return el.disabled || !dom.isVisible(el, true) && el.nodeName.toUpperCase() !== 'AREA';
+      }
       dom.isFocusable = function(el) {
         'use strict';
-        if (dom.isNativelyFocusable(el)) {
+        if (focusDisabled(el)) {
+          return false;
+        } else if (dom.isNativelyFocusable(el)) {
           return true;
         }
         var tabindex = el.getAttribute('tabindex');
@@ -13494,7 +15474,7 @@ module.exports = {
       };
       dom.isNativelyFocusable = function(el) {
         'use strict';
-        if (!el || el.disabled || !dom.isVisible(el) && el.nodeName.toUpperCase() !== 'AREA') {
+        if (!el || focusDisabled(el)) {
           return false;
         }
         switch (el.nodeName.toUpperCase()) {
@@ -13516,6 +15496,9 @@ module.exports = {
         }
         return false;
       };
+      dom.insertedIntoFocusOrder = function(el) {
+        return el.tabIndex > -1 && dom.isFocusable(el) && !dom.isNativelyFocusable(el);
+      };
       dom.isHTML5 = function(doc) {
         var node = doc.doctype;
         if (node === null) {
@@ -13524,35 +15507,33 @@ module.exports = {
         return node.name === 'html' && !node.publicId && !node.systemId;
       };
       function walkDomNode(node, functor) {
-        'use strict';
-        var shouldWalk = functor(node);
-        node = node.firstChild;
-        while (node) {
-          if (shouldWalk !== false) {
-            walkDomNode(node, functor);
-          }
-          node = node.nextSibling;
+        if (functor(node.actualNode) !== false) {
+          node.children.forEach(function(child) {
+            return walkDomNode(child, functor);
+          });
         }
       }
       var blockLike = [ 'block', 'list-item', 'table', 'flex', 'grid', 'inline-block' ];
       function isBlock(elm) {
-        'use strict';
         var display = window.getComputedStyle(elm).getPropertyValue('display');
-        return blockLike.indexOf(display) !== -1 || display.substr(0, 6) === 'table-';
+        return blockLike.includes(display) || display.substr(0, 6) === 'table-';
+      }
+      function getBlockParent(node) {
+        var parentBlock = dom.getComposedParent(node);
+        while (parentBlock && !isBlock(parentBlock)) {
+          parentBlock = dom.getComposedParent(parentBlock);
+        }
+        return axe.utils.getNodeFromTree(axe._tree[0], parentBlock);
       }
       dom.isInTextBlock = function isInTextBlock(node) {
-        'use strict';
         if (isBlock(node)) {
           return false;
         }
-        var parentBlock = node.parentNode;
-        while (parentBlock.nodeType === 1 && !isBlock(parentBlock)) {
-          parentBlock = parentBlock.parentNode;
-        }
+        var virtualParent = getBlockParent(node);
         var parentText = '';
         var linkText = '';
         var inBrBlock = 0;
-        walkDomNode(parentBlock, function(currNode) {
+        walkDomNode(virtualParent, function(currNode) {
           if (inBrBlock === 2) {
             return false;
           }
@@ -13563,14 +15544,14 @@ module.exports = {
             return;
           }
           var nodeName = (currNode.nodeName || '').toUpperCase();
-          if ([ 'BR', 'HR' ].indexOf(nodeName) !== -1) {
+          if ([ 'BR', 'HR' ].includes(nodeName)) {
             if (inBrBlock === 0) {
               parentText = '';
               linkText = '';
             } else {
               inBrBlock = 2;
             }
-          } else if (currNode.style.display === 'none' || currNode.style.overflow === 'hidden' || [ '', null, 'none' ].indexOf(currNode.style.float) === -1 || [ '', null, 'relative' ].indexOf(currNode.style.position) === -1) {
+          } else if (currNode.style.display === 'none' || currNode.style.overflow === 'hidden' || ![ '', null, 'none' ].includes(currNode.style.float) || ![ '', null, 'relative' ].includes(currNode.style.position)) {
             return false;
           } else if (nodeName === 'A' && currNode.href || (currNode.getAttribute('role') || '').toLowerCase() === 'link') {
             if (currNode === node) {
@@ -13588,23 +15569,26 @@ module.exports = {
         'use strict';
         return element instanceof Node;
       };
-      dom.isOffscreen = function(element) {
-        'use strict';
-        var noParentScrolled = function noParentScrolled(element, offset) {
-          element = element.parentNode;
-          while (element.nodeName.toLowerCase() !== 'html') {
-            if (element.scrollTop) {
-              offset += element.scrollTop;
-              if (offset >= 0) {
-                return false;
-              }
+      function noParentScrolled(element, offset) {
+        element = dom.getComposedParent(element);
+        while (element && element.nodeName.toLowerCase() !== 'html') {
+          if (element.scrollTop) {
+            offset += element.scrollTop;
+            if (offset >= 0) {
+              return false;
             }
-            element = element.parentNode;
           }
-          return true;
-        };
-        var leftBoundary, docElement = document.documentElement, dir = window.getComputedStyle(document.body || docElement).getPropertyValue('direction'), coords = dom.getElementCoordinates(element);
-        if (coords.bottom < 0 && noParentScrolled(element, coords.bottom)) {
+          element = dom.getComposedParent(element);
+        }
+        return true;
+      }
+      dom.isOffscreen = function(element) {
+        var leftBoundary = void 0;
+        var docElement = document.documentElement;
+        var styl = window.getComputedStyle(element);
+        var dir = window.getComputedStyle(document.body || docElement).getPropertyValue('direction');
+        var coords = dom.getElementCoordinates(element);
+        if (coords.bottom < 0 && (noParentScrolled(element, coords.bottom) || styl.position === 'absolute')) {
           return true;
         }
         if (coords.left === 0 && coords.right === 0) {
@@ -13632,17 +15616,22 @@ module.exports = {
       }
       dom.isVisible = function(el, screenReader, recursed) {
         'use strict';
-        var style, nodeName = el.nodeName.toUpperCase(), parent = el.parentNode;
+        var style, nodeName, parent;
         if (el.nodeType === 9) {
           return true;
+        }
+        if (el.nodeType === 11) {
+          el = el.host;
         }
         style = window.getComputedStyle(el, null);
         if (style === null) {
           return false;
         }
+        nodeName = el.nodeName.toUpperCase();
         if (style.getPropertyValue('display') === 'none' || nodeName.toUpperCase() === 'STYLE' || nodeName.toUpperCase() === 'SCRIPT' || !screenReader && isClipped(style.getPropertyValue('clip')) || !recursed && (style.getPropertyValue('visibility') === 'hidden' || !screenReader && dom.isOffscreen(el)) || screenReader && el.getAttribute('aria-hidden') === 'true') {
           return false;
         }
+        parent = el.assignedSlot ? el.assignedSlot : el.parentNode;
         if (parent) {
           return dom.isVisible(parent, screenReader, true);
         }
@@ -13677,6 +15666,27 @@ module.exports = {
          default:
           return false;
         }
+      };
+      dom.shadowElementsFromPoint = function(nodeX, nodeY) {
+        var root = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : document;
+        var i = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 0;
+        if (i > 999) {
+          throw new Error('Infinite loop detected');
+        }
+        return Array.from(root.elementsFromPoint(nodeX, nodeY)).filter(function(nodes) {
+          return dom.getRootNode(nodes) === root;
+        }).reduce(function(stack, elm) {
+          if (axe.utils.isShadowRoot(elm)) {
+            var shadowStack = dom.shadowElementsFromPoint(nodeX, nodeY, elm.shadowRoot, i + 1);
+            stack = stack.concat(shadowStack);
+            if (stack.length && axe.commons.dom.visuallyContains(stack[0], elm)) {
+              stack.push(elm);
+            }
+          } else {
+            stack.push(elm);
+          }
+          return stack;
+        }, []);
       };
       dom.visuallyContains = function(node, parent) {
         var rectBound = node.getBoundingClientRect();
@@ -13808,10 +15818,15 @@ module.exports = {
         if (!cell.children.length && !cell.textContent.trim()) {
           return false;
         }
-        return cell.nodeName.toUpperCase() === 'TD';
+        var role = cell.getAttribute('role');
+        if (axe.commons.aria.isValidRole(role)) {
+          return [ 'cell', 'gridcell' ].includes(role);
+        } else {
+          return cell.nodeName.toUpperCase() === 'TD';
+        }
       };
       table.isDataTable = function(node) {
-        var role = node.getAttribute('role');
+        var role = (node.getAttribute('role') || '').toLowerCase();
         if ((role === 'presentation' || role === 'none') && !dom.isFocusable(node)) {
           return false;
         }
@@ -13855,7 +15870,7 @@ module.exports = {
             if (cell.getAttribute('scope') || cell.getAttribute('headers') || cell.getAttribute('abbr')) {
               return true;
             }
-            if ([ 'columnheader', 'rowheader' ].indexOf(cell.getAttribute('role')) !== -1) {
+            if ([ 'columnheader', 'rowheader' ].includes((cell.getAttribute('role') || '').toLowerCase())) {
               return true;
             }
             if (cell.children.length === 1 && cell.children[0].nodeName.toUpperCase() === 'ABBR') {
@@ -14016,41 +16031,48 @@ module.exports = {
       };
       var inputTypes = [ 'text', 'search', 'tel', 'url', 'email', 'date', 'time', 'number', 'range', 'color' ];
       var phrasingElements = [ 'A', 'EM', 'STRONG', 'SMALL', 'MARK', 'ABBR', 'DFN', 'I', 'B', 'S', 'U', 'CODE', 'VAR', 'SAMP', 'KBD', 'SUP', 'SUB', 'Q', 'CITE', 'SPAN', 'BDO', 'BDI', 'BR', 'WBR', 'INS', 'DEL', 'IMG', 'EMBED', 'OBJECT', 'IFRAME', 'MAP', 'AREA', 'SCRIPT', 'NOSCRIPT', 'RUBY', 'VIDEO', 'AUDIO', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'LABEL', 'OUTPUT', 'DATALIST', 'KEYGEN', 'PROGRESS', 'COMMAND', 'CANVAS', 'TIME', 'METER' ];
-      function findLabel(element) {
-        var ref = null;
-        if (element.getAttribute('id')) {
-          var id = axe.utils.escapeSelector(element.getAttribute('id'));
-          ref = document.querySelector('label[for="' + id + '"]');
-          if (ref) {
-            return ref;
-          }
+      function findLabel(virtualNode) {
+        var label = void 0;
+        if (virtualNode.actualNode.id) {
+          label = dom.findElmsInContext({
+            elm: 'label',
+            attr: 'for',
+            value: virtualNode.actualNode.id,
+            context: virtualNode.actualNode
+          })[0];
+        } else {
+          label = dom.findUpVirtual(virtualNode, 'label');
         }
-        ref = dom.findUp(element, 'label');
-        return ref;
+        return axe.utils.getNodeFromTree(axe._tree[0], label);
       }
-      function isButton(element) {
-        return [ 'button', 'reset', 'submit' ].indexOf(element.type) !== -1;
+      function isButton(_ref11) {
+        var actualNode = _ref11.actualNode;
+        return [ 'button', 'reset', 'submit' ].includes(actualNode.type.toLowerCase());
       }
-      function isInput(element) {
-        var nodeName = element.nodeName.toUpperCase();
-        return nodeName === 'TEXTAREA' || nodeName === 'SELECT' || nodeName === 'INPUT' && element.type.toLowerCase() !== 'hidden';
+      function isInput(_ref12) {
+        var actualNode = _ref12.actualNode;
+        var nodeName = actualNode.nodeName.toUpperCase();
+        return nodeName === 'TEXTAREA' || nodeName === 'SELECT' || nodeName === 'INPUT' && actualNode.type.toLowerCase() !== 'hidden';
       }
-      function shouldCheckSubtree(element) {
-        return [ 'BUTTON', 'SUMMARY', 'A' ].indexOf(element.nodeName.toUpperCase()) !== -1;
+      function shouldCheckSubtree(_ref13) {
+        var actualNode = _ref13.actualNode;
+        return [ 'BUTTON', 'SUMMARY', 'A' ].includes(actualNode.nodeName.toUpperCase());
       }
-      function shouldNeverCheckSubtree(element) {
-        return [ 'TABLE', 'FIGURE' ].indexOf(element.nodeName.toUpperCase()) !== -1;
+      function shouldNeverCheckSubtree(_ref14) {
+        var actualNode = _ref14.actualNode;
+        return [ 'TABLE', 'FIGURE', 'SELECT' ].includes(actualNode.nodeName.toUpperCase());
       }
-      function formValueText(element) {
-        var nodeName = element.nodeName.toUpperCase();
+      function formValueText(_ref15, inLabelledByContext) {
+        var actualNode = _ref15.actualNode;
+        var nodeName = actualNode.nodeName.toUpperCase();
         if (nodeName === 'INPUT') {
-          if (!element.hasAttribute('type') || inputTypes.indexOf(element.getAttribute('type').toLowerCase()) !== -1 && element.value) {
-            return element.value;
+          if (!actualNode.hasAttribute('type') || inputTypes.includes(actualNode.type.toLowerCase())) {
+            return actualNode.value;
           }
           return '';
         }
-        if (nodeName === 'SELECT') {
-          var opts = element.options;
+        if (nodeName === 'SELECT' && inLabelledByContext) {
+          var opts = actualNode.options;
           if (opts && opts.length) {
             var returnText = '';
             for (var i = 0; i < opts.length; i++) {
@@ -14062,70 +16084,78 @@ module.exports = {
           }
           return '';
         }
-        if (nodeName === 'TEXTAREA' && element.value) {
-          return element.value;
+        if (nodeName === 'TEXTAREA' && actualNode.value) {
+          return actualNode.value;
         }
         return '';
       }
-      function checkDescendant(element, nodeName) {
-        var candidate = element.querySelector(nodeName.toLowerCase());
+      function checkDescendant(_ref16, nodeName) {
+        var actualNode = _ref16.actualNode;
+        var candidate = actualNode.querySelector(nodeName.toLowerCase());
         if (candidate) {
           return text.accessibleText(candidate);
         }
         return '';
       }
-      function isEmbeddedControl(e) {
-        if (!e) {
+      function isEmbeddedControl(elm) {
+        if (!elm) {
           return false;
         }
-        switch (e.nodeName.toUpperCase()) {
+        var actualNode = elm.actualNode;
+        switch (actualNode.nodeName.toUpperCase()) {
          case 'SELECT':
          case 'TEXTAREA':
           return true;
 
          case 'INPUT':
-          return !e.hasAttribute('type') || inputTypes.indexOf(e.getAttribute('type').toLowerCase()) !== -1;
+          return !actualNode.hasAttribute('type') || inputTypes.includes(actualNode.getAttribute('type').toLowerCase());
 
          default:
           return false;
         }
       }
-      function shouldCheckAlt(element) {
-        var nodeName = element.nodeName.toUpperCase();
-        return nodeName === 'INPUT' && element.type.toLowerCase() === 'image' || [ 'IMG', 'APPLET', 'AREA' ].indexOf(nodeName) !== -1;
+      function shouldCheckAlt(_ref17) {
+        var actualNode = _ref17.actualNode;
+        var nodeName = actualNode.nodeName.toUpperCase();
+        return [ 'IMG', 'APPLET', 'AREA' ].includes(nodeName) || nodeName === 'INPUT' && actualNode.type.toLowerCase() === 'image';
       }
       function nonEmptyText(t) {
         return !!text.sanitize(t);
       }
-      text.accessibleText = function(element, inLabelledByContext) {
-        var accessibleNameComputation;
+      text.accessibleText = function accessibleText(element, inLabelledByContext) {
+        var virtualNode = axe.utils.getNodeFromTree(axe._tree[0], element);
+        return axe.commons.text.accessibleTextVirtual(virtualNode, inLabelledByContext);
+      };
+      text.accessibleTextVirtual = function accessibleTextVirtual(element, inLabelledByContext) {
+        var accessibleNameComputation = void 0;
         var encounteredNodes = [];
+        if (element instanceof Node) {
+          element = axe.utils.getNodeFromTree(axe._tree[0], element);
+        }
         function getInnerText(element, inLabelledByContext, inControlContext) {
-          var nodes = element.childNodes;
-          var returnText = '';
-          var node;
-          for (var i = 0; i < nodes.length; i++) {
-            node = nodes[i];
-            if (node.nodeType === 3) {
-              returnText += node.textContent;
-            } else if (node.nodeType === 1) {
-              if (phrasingElements.indexOf(node.nodeName.toUpperCase()) === -1) {
+          return element.children.reduce(function(returnText, child) {
+            var actualNode = child.actualNode;
+            if (actualNode.nodeType === 3) {
+              returnText += actualNode.nodeValue;
+            } else if (actualNode.nodeType === 1) {
+              if (!phrasingElements.includes(actualNode.nodeName.toUpperCase())) {
                 returnText += ' ';
               }
-              returnText += accessibleNameComputation(nodes[i], inLabelledByContext, inControlContext);
+              returnText += accessibleNameComputation(child, inLabelledByContext, inControlContext);
             }
-          }
-          return returnText;
+            return returnText;
+          }, '');
         }
         function getLayoutTableText(element) {
-          if (!axe.commons.table.isDataTable(element) && axe.commons.table.getAllCells(element).length === 1) {
+          if (!axe.commons.table.isDataTable(element.actualNode) && axe.commons.table.getAllCells(element.actualNode).length === 1) {
             return getInnerText(element, false, false).trim();
           }
           return '';
         }
         function checkNative(element, inLabelledByContext, inControlContext) {
           var returnText = '';
-          var nodeName = element.nodeName.toUpperCase();
+          var actualNode = element.actualNode;
+          var nodeName = actualNode.nodeName.toUpperCase();
           if (shouldCheckSubtree(element)) {
             returnText = getInnerText(element, false, false) || '';
             if (nonEmptyText(returnText)) {
@@ -14143,17 +16173,17 @@ module.exports = {
             if (nonEmptyText(returnText)) {
               return returnText;
             }
-            returnText = element.getAttribute('title') || element.getAttribute('summary') || getLayoutTableText(element) || '';
+            returnText = actualNode.getAttribute('title') || actualNode.getAttribute('summary') || getLayoutTableText(element) || '';
             if (nonEmptyText(returnText)) {
               return returnText;
             }
           }
           if (shouldCheckAlt(element)) {
-            return element.getAttribute('alt') || '';
+            return actualNode.getAttribute('alt') || '';
           }
           if (isInput(element) && !inControlContext) {
             if (isButton(element)) {
-              return element.value || element.title || defaultButtonValues[element.type] || '';
+              return actualNode.value || actualNode.title || defaultButtonValues[actualNode.type] || '';
             }
             var labelElement = findLabel(element);
             if (labelElement) {
@@ -14163,29 +16193,37 @@ module.exports = {
           return '';
         }
         function checkARIA(element, inLabelledByContext, inControlContext) {
-          if (!inLabelledByContext && element.hasAttribute('aria-labelledby')) {
-            return text.sanitize(dom.idrefs(element, 'aria-labelledby').map(function(l) {
-              if (element === l) {
-                encounteredNodes.pop();
+          var returnText = '';
+          var actualNode = element.actualNode;
+          if (!inLabelledByContext && actualNode.hasAttribute('aria-labelledby')) {
+            returnText = text.sanitize(dom.idrefs(actualNode, 'aria-labelledby').map(function(label) {
+              if (label !== null) {
+                if (actualNode === label) {
+                  encounteredNodes.pop();
+                }
+                var vLabel = axe.utils.getNodeFromTree(axe._tree[0], label);
+                return accessibleNameComputation(vLabel, true, actualNode !== label);
+              } else {
+                return '';
               }
-              return accessibleNameComputation(l, true, element !== l);
             }).join(' '));
           }
-          if (!(inControlContext && isEmbeddedControl(element)) && element.hasAttribute('aria-label')) {
-            return text.sanitize(element.getAttribute('aria-label'));
+          if (!returnText && !(inControlContext && isEmbeddedControl(element)) && actualNode.hasAttribute('aria-label')) {
+            return text.sanitize(actualNode.getAttribute('aria-label'));
           }
-          return '';
+          return returnText;
         }
         accessibleNameComputation = function accessibleNameComputation(element, inLabelledByContext, inControlContext) {
-          'use strict';
-          var returnText;
-          if (element === null || encounteredNodes.indexOf(element) !== -1) {
+          var returnText = void 0;
+          if (!element || encounteredNodes.includes(element)) {
             return '';
-          } else if (!inLabelledByContext && !dom.isVisible(element, true)) {
+          } else if (element !== null && element.actualNode instanceof Node !== true) {
+            throw new Error('Invalid argument. Virtual Node must be provided');
+          } else if (!inLabelledByContext && !dom.isVisible(element.actualNode, true)) {
             return '';
           }
           encounteredNodes.push(element);
-          var role = element.getAttribute('role');
+          var role = element.actualNode.getAttribute('role');
           returnText = checkARIA(element, inLabelledByContext, inControlContext);
           if (nonEmptyText(returnText)) {
             return returnText;
@@ -14195,74 +16233,76 @@ module.exports = {
             return returnText;
           }
           if (inControlContext) {
-            returnText = formValueText(element);
+            returnText = formValueText(element, inLabelledByContext);
             if (nonEmptyText(returnText)) {
               return returnText;
             }
           }
-          if (!shouldNeverCheckSubtree(element) && (!role || aria.getRolesWithNameFromContents().indexOf(role) !== -1)) {
+          if ((inLabelledByContext || !shouldNeverCheckSubtree(element)) && (!role || aria.getRolesWithNameFromContents().indexOf(role) !== -1)) {
             returnText = getInnerText(element, inLabelledByContext, inControlContext);
             if (nonEmptyText(returnText)) {
               return returnText;
             }
           }
-          if (element.hasAttribute('title')) {
-            return element.getAttribute('title');
+          if (element.actualNode.hasAttribute('title')) {
+            return element.actualNode.getAttribute('title');
           }
           return '';
         };
         return text.sanitize(accessibleNameComputation(element, inLabelledByContext));
       };
-      text.label = function(node) {
-        var ref, candidate;
-        candidate = aria.label(node);
+      text.labelVirtual = function(node) {
+        var ref, candidate, doc;
+        candidate = aria.labelVirtual(node);
         if (candidate) {
           return candidate;
         }
-        if (node.getAttribute('id')) {
-          var id = axe.commons.utils.escapeSelector(node.getAttribute('id'));
-          ref = document.querySelector('label[for="' + id + '"]');
+        if (node.actualNode.id) {
+          var id = axe.commons.utils.escapeSelector(node.actualNode.getAttribute('id'));
+          doc = axe.commons.dom.getRootNode(node.actualNode);
+          ref = doc.querySelector('label[for="' + id + '"]');
           candidate = ref && text.visible(ref, true);
           if (candidate) {
             return candidate;
           }
         }
-        ref = dom.findUp(node, 'label');
+        ref = dom.findUpVirtual(node, 'label');
         candidate = ref && text.visible(ref, true);
         if (candidate) {
           return candidate;
         }
         return null;
       };
+      text.label = function(node) {
+        node = axe.utils.getNodeFromTree(axe._tree[0], node);
+        return text.labelVirtual(node);
+      };
       text.sanitize = function(str) {
         'use strict';
         return str.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ').replace(/[\s]{2,}/g, ' ').trim();
       };
-      text.visible = function(element, screenReader, noRecursing) {
-        'use strict';
-        var index, child, nodeValue, childNodes = element.childNodes, length = childNodes.length, result = '';
-        for (index = 0; index < length; index++) {
-          child = childNodes[index];
-          if (child.nodeType === 3) {
-            nodeValue = child.nodeValue;
-            if (nodeValue && dom.isVisible(element, screenReader)) {
-              result += child.nodeValue;
+      text.visibleVirtual = function(element, screenReader, noRecursing) {
+        var result = element.children.map(function(child) {
+          if (child.actualNode.nodeType === 3) {
+            var nodeValue = child.actualNode.nodeValue;
+            if (nodeValue && dom.isVisible(element.actualNode, screenReader)) {
+              return nodeValue;
             }
           } else if (!noRecursing) {
-            result += text.visible(child, screenReader);
+            return text.visibleVirtual(child, screenReader);
           }
-        }
+        }).join('');
         return text.sanitize(result);
       };
-      axe.utils.toArray = function(thing) {
-        'use strict';
-        return Array.prototype.slice.call(thing);
+      text.visible = function(element, screenReader, noRecursing) {
+        element = axe.utils.getNodeFromTree(axe._tree[0], element);
+        return text.visibleVirtual(element, screenReader, noRecursing);
       };
       axe.utils.tokenList = function(str) {
         'use strict';
         return str.trim().replace(/\s{2,}/g, ' ').split(' ');
       };
-      var langs = [ 'aa', 'ab', 'ae', 'af', 'ak', 'am', 'an', 'ar', 'as', 'av', 'ay', 'az', 'ba', 'be', 'bg', 'bh', 'bi', 'bm', 'bn', 'bo', 'br', 'bs', 'ca', 'ce', 'ch', 'co', 'cr', 'cs', 'cu', 'cv', 'cy', 'da', 'de', 'dv', 'dz', 'ee', 'el', 'en', 'eo', 'es', 'et', 'eu', 'fa', 'ff', 'fi', 'fj', 'fo', 'fr', 'fy', 'ga', 'gd', 'gl', 'gn', 'gu', 'gv', 'ha', 'he', 'hi', 'ho', 'hr', 'ht', 'hu', 'hy', 'hz', 'ia', 'id', 'ie', 'ig', 'ii', 'ik', 'in', 'io', 'is', 'it', 'iu', 'iw', 'ja', 'ji', 'jv', 'jw', 'ka', 'kg', 'ki', 'kj', 'kk', 'kl', 'km', 'kn', 'ko', 'kr', 'ks', 'ku', 'kv', 'kw', 'ky', 'la', 'lb', 'lg', 'li', 'ln', 'lo', 'lt', 'lu', 'lv', 'mg', 'mh', 'mi', 'mk', 'ml', 'mn', 'mo', 'mr', 'ms', 'mt', 'my', 'na', 'nb', 'nd', 'ne', 'ng', 'nl', 'nn', 'no', 'nr', 'nv', 'ny', 'oc', 'oj', 'om', 'or', 'os', 'pa', 'pi', 'pl', 'ps', 'pt', 'qu', 'rm', 'rn', 'ro', 'ru', 'rw', 'sa', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sk', 'sl', 'sm', 'sn', 'so', 'sq', 'sr', 'ss', 'st', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'ti', 'tk', 'tl', 'tn', 'to', 'tr', 'ts', 'tt', 'tw', 'ty', 'ug', 'uk', 'ur', 'uz', 've', 'vi', 'vo', 'wa', 'wo', 'xh', 'yi', 'yo', 'za', 'zh', 'zu', 'aaa', 'aab', 'aac', 'aad', 'aae', 'aaf', 'aag', 'aah', 'aai', 'aak', 'aal', 'aam', 'aan', 'aao', 'aap', 'aaq', 'aas', 'aat', 'aau', 'aav', 'aaw', 'aax', 'aaz', 'aba', 'abb', 'abc', 'abd', 'abe', 'abf', 'abg', 'abh', 'abi', 'abj', 'abl', 'abm', 'abn', 'abo', 'abp', 'abq', 'abr', 'abs', 'abt', 'abu', 'abv', 'abw', 'abx', 'aby', 'abz', 'aca', 'acb', 'acd', 'ace', 'acf', 'ach', 'aci', 'ack', 'acl', 'acm', 'acn', 'acp', 'acq', 'acr', 'acs', 'act', 'acu', 'acv', 'acw', 'acx', 'acy', 'acz', 'ada', 'adb', 'add', 'ade', 'adf', 'adg', 'adh', 'adi', 'adj', 'adl', 'adn', 'ado', 'adp', 'adq', 'adr', 'ads', 'adt', 'adu', 'adw', 'adx', 'ady', 'adz', 'aea', 'aeb', 'aec', 'aed', 'aee', 'aek', 'ael', 'aem', 'aen', 'aeq', 'aer', 'aes', 'aeu', 'aew', 'aey', 'aez', 'afa', 'afb', 'afd', 'afe', 'afg', 'afh', 'afi', 'afk', 'afn', 'afo', 'afp', 'afs', 'aft', 'afu', 'afz', 'aga', 'agb', 'agc', 'agd', 'age', 'agf', 'agg', 'agh', 'agi', 'agj', 'agk', 'agl', 'agm', 'agn', 'ago', 'agp', 'agq', 'agr', 'ags', 'agt', 'agu', 'agv', 'agw', 'agx', 'agy', 'agz', 'aha', 'ahb', 'ahg', 'ahh', 'ahi', 'ahk', 'ahl', 'ahm', 'ahn', 'aho', 'ahp', 'ahr', 'ahs', 'aht', 'aia', 'aib', 'aic', 'aid', 'aie', 'aif', 'aig', 'aih', 'aii', 'aij', 'aik', 'ail', 'aim', 'ain', 'aio', 'aip', 'aiq', 'air', 'ais', 'ait', 'aiw', 'aix', 'aiy', 'aja', 'ajg', 'aji', 'ajn', 'ajp', 'ajt', 'aju', 'ajw', 'ajz', 'akb', 'akc', 'akd', 'ake', 'akf', 'akg', 'akh', 'aki', 'akj', 'akk', 'akl', 'akm', 'ako', 'akp', 'akq', 'akr', 'aks', 'akt', 'aku', 'akv', 'akw', 'akx', 'aky', 'akz', 'ala', 'alc', 'ald', 'ale', 'alf', 'alg', 'alh', 'ali', 'alj', 'alk', 'all', 'alm', 'aln', 'alo', 'alp', 'alq', 'alr', 'als', 'alt', 'alu', 'alv', 'alw', 'alx', 'aly', 'alz', 'ama', 'amb', 'amc', 'ame', 'amf', 'amg', 'ami', 'amj', 'amk', 'aml', 'amm', 'amn', 'amo', 'amp', 'amq', 'amr', 'ams', 'amt', 'amu', 'amv', 'amw', 'amx', 'amy', 'amz', 'ana', 'anb', 'anc', 'and', 'ane', 'anf', 'ang', 'anh', 'ani', 'anj', 'ank', 'anl', 'anm', 'ann', 'ano', 'anp', 'anq', 'anr', 'ans', 'ant', 'anu', 'anv', 'anw', 'anx', 'any', 'anz', 'aoa', 'aob', 'aoc', 'aod', 'aoe', 'aof', 'aog', 'aoh', 'aoi', 'aoj', 'aok', 'aol', 'aom', 'aon', 'aor', 'aos', 'aot', 'aou', 'aox', 'aoz', 'apa', 'apb', 'apc', 'apd', 'ape', 'apf', 'apg', 'aph', 'api', 'apj', 'apk', 'apl', 'apm', 'apn', 'apo', 'app', 'apq', 'apr', 'aps', 'apt', 'apu', 'apv', 'apw', 'apx', 'apy', 'apz', 'aqa', 'aqc', 'aqd', 'aqg', 'aql', 'aqm', 'aqn', 'aqp', 'aqr', 'aqt', 'aqz', 'arb', 'arc', 'ard', 'are', 'arh', 'ari', 'arj', 'ark', 'arl', 'arn', 'aro', 'arp', 'arq', 'arr', 'ars', 'art', 'aru', 'arv', 'arw', 'arx', 'ary', 'arz', 'asa', 'asb', 'asc', 'asd', 'ase', 'asf', 'asg', 'ash', 'asi', 'asj', 'ask', 'asl', 'asn', 'aso', 'asp', 'asq', 'asr', 'ass', 'ast', 'asu', 'asv', 'asw', 'asx', 'asy', 'asz', 'ata', 'atb', 'atc', 'atd', 'ate', 'atg', 'ath', 'ati', 'atj', 'atk', 'atl', 'atm', 'atn', 'ato', 'atp', 'atq', 'atr', 'ats', 'att', 'atu', 'atv', 'atw', 'atx', 'aty', 'atz', 'aua', 'aub', 'auc', 'aud', 'aue', 'auf', 'aug', 'auh', 'aui', 'auj', 'auk', 'aul', 'aum', 'aun', 'auo', 'aup', 'auq', 'aur', 'aus', 'aut', 'auu', 'auw', 'aux', 'auy', 'auz', 'avb', 'avd', 'avi', 'avk', 'avl', 'avm', 'avn', 'avo', 'avs', 'avt', 'avu', 'avv', 'awa', 'awb', 'awc', 'awd', 'awe', 'awg', 'awh', 'awi', 'awk', 'awm', 'awn', 'awo', 'awr', 'aws', 'awt', 'awu', 'awv', 'aww', 'awx', 'awy', 'axb', 'axe', 'axg', 'axk', 'axl', 'axm', 'axx', 'aya', 'ayb', 'ayc', 'ayd', 'aye', 'ayg', 'ayh', 'ayi', 'ayk', 'ayl', 'ayn', 'ayo', 'ayp', 'ayq', 'ayr', 'ays', 'ayt', 'ayu', 'ayx', 'ayy', 'ayz', 'aza', 'azb', 'azc', 'azd', 'azg', 'azj', 'azm', 'azn', 'azo', 'azt', 'azz', 'baa', 'bab', 'bac', 'bad', 'bae', 'baf', 'bag', 'bah', 'bai', 'baj', 'bal', 'ban', 'bao', 'bap', 'bar', 'bas', 'bat', 'bau', 'bav', 'baw', 'bax', 'bay', 'baz', 'bba', 'bbb', 'bbc', 'bbd', 'bbe', 'bbf', 'bbg', 'bbh', 'bbi', 'bbj', 'bbk', 'bbl', 'bbm', 'bbn', 'bbo', 'bbp', 'bbq', 'bbr', 'bbs', 'bbt', 'bbu', 'bbv', 'bbw', 'bbx', 'bby', 'bbz', 'bca', 'bcb', 'bcc', 'bcd', 'bce', 'bcf', 'bcg', 'bch', 'bci', 'bcj', 'bck', 'bcl', 'bcm', 'bcn', 'bco', 'bcp', 'bcq', 'bcr', 'bcs', 'bct', 'bcu', 'bcv', 'bcw', 'bcy', 'bcz', 'bda', 'bdb', 'bdc', 'bdd', 'bde', 'bdf', 'bdg', 'bdh', 'bdi', 'bdj', 'bdk', 'bdl', 'bdm', 'bdn', 'bdo', 'bdp', 'bdq', 'bdr', 'bds', 'bdt', 'bdu', 'bdv', 'bdw', 'bdx', 'bdy', 'bdz', 'bea', 'beb', 'bec', 'bed', 'bee', 'bef', 'beg', 'beh', 'bei', 'bej', 'bek', 'bem', 'beo', 'bep', 'beq', 'ber', 'bes', 'bet', 'beu', 'bev', 'bew', 'bex', 'bey', 'bez', 'bfa', 'bfb', 'bfc', 'bfd', 'bfe', 'bff', 'bfg', 'bfh', 'bfi', 'bfj', 'bfk', 'bfl', 'bfm', 'bfn', 'bfo', 'bfp', 'bfq', 'bfr', 'bfs', 'bft', 'bfu', 'bfw', 'bfx', 'bfy', 'bfz', 'bga', 'bgb', 'bgc', 'bgd', 'bge', 'bgf', 'bgg', 'bgi', 'bgj', 'bgk', 'bgl', 'bgm', 'bgn', 'bgo', 'bgp', 'bgq', 'bgr', 'bgs', 'bgt', 'bgu', 'bgv', 'bgw', 'bgx', 'bgy', 'bgz', 'bha', 'bhb', 'bhc', 'bhd', 'bhe', 'bhf', 'bhg', 'bhh', 'bhi', 'bhj', 'bhk', 'bhl', 'bhm', 'bhn', 'bho', 'bhp', 'bhq', 'bhr', 'bhs', 'bht', 'bhu', 'bhv', 'bhw', 'bhx', 'bhy', 'bhz', 'bia', 'bib', 'bic', 'bid', 'bie', 'bif', 'big', 'bij', 'bik', 'bil', 'bim', 'bin', 'bio', 'bip', 'biq', 'bir', 'bit', 'biu', 'biv', 'biw', 'bix', 'biy', 'biz', 'bja', 'bjb', 'bjc', 'bjd', 'bje', 'bjf', 'bjg', 'bjh', 'bji', 'bjj', 'bjk', 'bjl', 'bjm', 'bjn', 'bjo', 'bjp', 'bjq', 'bjr', 'bjs', 'bjt', 'bju', 'bjv', 'bjw', 'bjx', 'bjy', 'bjz', 'bka', 'bkb', 'bkc', 'bkd', 'bkf', 'bkg', 'bkh', 'bki', 'bkj', 'bkk', 'bkl', 'bkm', 'bkn', 'bko', 'bkp', 'bkq', 'bkr', 'bks', 'bkt', 'bku', 'bkv', 'bkw', 'bkx', 'bky', 'bkz', 'bla', 'blb', 'blc', 'bld', 'ble', 'blf', 'blg', 'blh', 'bli', 'blj', 'blk', 'bll', 'blm', 'bln', 'blo', 'blp', 'blq', 'blr', 'bls', 'blt', 'blv', 'blw', 'blx', 'bly', 'blz', 'bma', 'bmb', 'bmc', 'bmd', 'bme', 'bmf', 'bmg', 'bmh', 'bmi', 'bmj', 'bmk', 'bml', 'bmm', 'bmn', 'bmo', 'bmp', 'bmq', 'bmr', 'bms', 'bmt', 'bmu', 'bmv', 'bmw', 'bmx', 'bmy', 'bmz', 'bna', 'bnb', 'bnc', 'bnd', 'bne', 'bnf', 'bng', 'bni', 'bnj', 'bnk', 'bnl', 'bnm', 'bnn', 'bno', 'bnp', 'bnq', 'bnr', 'bns', 'bnt', 'bnu', 'bnv', 'bnw', 'bnx', 'bny', 'bnz', 'boa', 'bob', 'boe', 'bof', 'bog', 'boh', 'boi', 'boj', 'bok', 'bol', 'bom', 'bon', 'boo', 'bop', 'boq', 'bor', 'bot', 'bou', 'bov', 'bow', 'box', 'boy', 'boz', 'bpa', 'bpb', 'bpd', 'bpg', 'bph', 'bpi', 'bpj', 'bpk', 'bpl', 'bpm', 'bpn', 'bpo', 'bpp', 'bpq', 'bpr', 'bps', 'bpt', 'bpu', 'bpv', 'bpw', 'bpx', 'bpy', 'bpz', 'bqa', 'bqb', 'bqc', 'bqd', 'bqf', 'bqg', 'bqh', 'bqi', 'bqj', 'bqk', 'bql', 'bqm', 'bqn', 'bqo', 'bqp', 'bqq', 'bqr', 'bqs', 'bqt', 'bqu', 'bqv', 'bqw', 'bqx', 'bqy', 'bqz', 'bra', 'brb', 'brc', 'brd', 'brf', 'brg', 'brh', 'bri', 'brj', 'brk', 'brl', 'brm', 'brn', 'bro', 'brp', 'brq', 'brr', 'brs', 'brt', 'bru', 'brv', 'brw', 'brx', 'bry', 'brz', 'bsa', 'bsb', 'bsc', 'bse', 'bsf', 'bsg', 'bsh', 'bsi', 'bsj', 'bsk', 'bsl', 'bsm', 'bsn', 'bso', 'bsp', 'bsq', 'bsr', 'bss', 'bst', 'bsu', 'bsv', 'bsw', 'bsx', 'bsy', 'bta', 'btb', 'btc', 'btd', 'bte', 'btf', 'btg', 'bth', 'bti', 'btj', 'btk', 'btl', 'btm', 'btn', 'bto', 'btp', 'btq', 'btr', 'bts', 'btt', 'btu', 'btv', 'btw', 'btx', 'bty', 'btz', 'bua', 'bub', 'buc', 'bud', 'bue', 'buf', 'bug', 'buh', 'bui', 'buj', 'buk', 'bum', 'bun', 'buo', 'bup', 'buq', 'bus', 'but', 'buu', 'buv', 'buw', 'bux', 'buy', 'buz', 'bva', 'bvb', 'bvc', 'bvd', 'bve', 'bvf', 'bvg', 'bvh', 'bvi', 'bvj', 'bvk', 'bvl', 'bvm', 'bvn', 'bvo', 'bvp', 'bvq', 'bvr', 'bvt', 'bvu', 'bvv', 'bvw', 'bvx', 'bvy', 'bvz', 'bwa', 'bwb', 'bwc', 'bwd', 'bwe', 'bwf', 'bwg', 'bwh', 'bwi', 'bwj', 'bwk', 'bwl', 'bwm', 'bwn', 'bwo', 'bwp', 'bwq', 'bwr', 'bws', 'bwt', 'bwu', 'bww', 'bwx', 'bwy', 'bwz', 'bxa', 'bxb', 'bxc', 'bxd', 'bxe', 'bxf', 'bxg', 'bxh', 'bxi', 'bxj', 'bxk', 'bxl', 'bxm', 'bxn', 'bxo', 'bxp', 'bxq', 'bxr', 'bxs', 'bxu', 'bxv', 'bxw', 'bxx', 'bxz', 'bya', 'byb', 'byc', 'byd', 'bye', 'byf', 'byg', 'byh', 'byi', 'byj', 'byk', 'byl', 'bym', 'byn', 'byo', 'byp', 'byq', 'byr', 'bys', 'byt', 'byv', 'byw', 'byx', 'byy', 'byz', 'bza', 'bzb', 'bzc', 'bzd', 'bze', 'bzf', 'bzg', 'bzh', 'bzi', 'bzj', 'bzk', 'bzl', 'bzm', 'bzn', 'bzo', 'bzp', 'bzq', 'bzr', 'bzs', 'bzt', 'bzu', 'bzv', 'bzw', 'bzx', 'bzy', 'bzz', 'caa', 'cab', 'cac', 'cad', 'cae', 'caf', 'cag', 'cah', 'cai', 'caj', 'cak', 'cal', 'cam', 'can', 'cao', 'cap', 'caq', 'car', 'cas', 'cau', 'cav', 'caw', 'cax', 'cay', 'caz', 'cba', 'cbb', 'cbc', 'cbd', 'cbe', 'cbg', 'cbh', 'cbi', 'cbj', 'cbk', 'cbl', 'cbn', 'cbo', 'cbq', 'cbr', 'cbs', 'cbt', 'cbu', 'cbv', 'cbw', 'cby', 'cca', 'ccc', 'ccd', 'cce', 'ccg', 'cch', 'ccj', 'ccl', 'ccm', 'ccn', 'cco', 'ccp', 'ccq', 'ccr', 'ccs', 'cda', 'cdc', 'cdd', 'cde', 'cdf', 'cdg', 'cdh', 'cdi', 'cdj', 'cdm', 'cdn', 'cdo', 'cdr', 'cds', 'cdy', 'cdz', 'cea', 'ceb', 'ceg', 'cek', 'cel', 'cen', 'cet', 'cfa', 'cfd', 'cfg', 'cfm', 'cga', 'cgc', 'cgg', 'cgk', 'chb', 'chc', 'chd', 'chf', 'chg', 'chh', 'chj', 'chk', 'chl', 'chm', 'chn', 'cho', 'chp', 'chq', 'chr', 'cht', 'chw', 'chx', 'chy', 'chz', 'cia', 'cib', 'cic', 'cid', 'cie', 'cih', 'cik', 'cim', 'cin', 'cip', 'cir', 'ciw', 'ciy', 'cja', 'cje', 'cjh', 'cji', 'cjk', 'cjm', 'cjn', 'cjo', 'cjp', 'cjr', 'cjs', 'cjv', 'cjy', 'cka', 'ckb', 'ckh', 'ckl', 'ckn', 'cko', 'ckq', 'ckr', 'cks', 'ckt', 'cku', 'ckv', 'ckx', 'cky', 'ckz', 'cla', 'clc', 'cld', 'cle', 'clh', 'cli', 'clj', 'clk', 'cll', 'clm', 'clo', 'clt', 'clu', 'clw', 'cly', 'cma', 'cmc', 'cme', 'cmg', 'cmi', 'cmk', 'cml', 'cmm', 'cmn', 'cmo', 'cmr', 'cms', 'cmt', 'cna', 'cnb', 'cnc', 'cng', 'cnh', 'cni', 'cnk', 'cnl', 'cno', 'cns', 'cnt', 'cnu', 'cnw', 'cnx', 'coa', 'cob', 'coc', 'cod', 'coe', 'cof', 'cog', 'coh', 'coj', 'cok', 'col', 'com', 'con', 'coo', 'cop', 'coq', 'cot', 'cou', 'cov', 'cow', 'cox', 'coy', 'coz', 'cpa', 'cpb', 'cpc', 'cpe', 'cpf', 'cpg', 'cpi', 'cpn', 'cpo', 'cpp', 'cps', 'cpu', 'cpx', 'cpy', 'cqd', 'cqu', 'cra', 'crb', 'crc', 'crd', 'crf', 'crg', 'crh', 'cri', 'crj', 'crk', 'crl', 'crm', 'crn', 'cro', 'crp', 'crq', 'crr', 'crs', 'crt', 'crv', 'crw', 'crx', 'cry', 'crz', 'csa', 'csb', 'csc', 'csd', 'cse', 'csf', 'csg', 'csh', 'csi', 'csj', 'csk', 'csl', 'csm', 'csn', 'cso', 'csq', 'csr', 'css', 'cst', 'csu', 'csv', 'csw', 'csy', 'csz', 'cta', 'ctc', 'ctd', 'cte', 'ctg', 'cth', 'ctl', 'ctm', 'ctn', 'cto', 'ctp', 'cts', 'ctt', 'ctu', 'ctz', 'cua', 'cub', 'cuc', 'cug', 'cuh', 'cui', 'cuj', 'cuk', 'cul', 'cum', 'cuo', 'cup', 'cuq', 'cur', 'cus', 'cut', 'cuu', 'cuv', 'cuw', 'cux', 'cvg', 'cvn', 'cwa', 'cwb', 'cwd', 'cwe', 'cwg', 'cwt', 'cya', 'cyb', 'cyo', 'czh', 'czk', 'czn', 'czo', 'czt', 'daa', 'dac', 'dad', 'dae', 'daf', 'dag', 'dah', 'dai', 'daj', 'dak', 'dal', 'dam', 'dao', 'dap', 'daq', 'dar', 'das', 'dau', 'dav', 'daw', 'dax', 'day', 'daz', 'dba', 'dbb', 'dbd', 'dbe', 'dbf', 'dbg', 'dbi', 'dbj', 'dbl', 'dbm', 'dbn', 'dbo', 'dbp', 'dbq', 'dbr', 'dbt', 'dbu', 'dbv', 'dbw', 'dby', 'dcc', 'dcr', 'dda', 'ddd', 'dde', 'ddg', 'ddi', 'ddj', 'ddn', 'ddo', 'ddr', 'dds', 'ddw', 'dec', 'ded', 'dee', 'def', 'deg', 'deh', 'dei', 'dek', 'del', 'dem', 'den', 'dep', 'deq', 'der', 'des', 'dev', 'dez', 'dga', 'dgb', 'dgc', 'dgd', 'dge', 'dgg', 'dgh', 'dgi', 'dgk', 'dgl', 'dgn', 'dgo', 'dgr', 'dgs', 'dgt', 'dgu', 'dgw', 'dgx', 'dgz', 'dha', 'dhd', 'dhg', 'dhi', 'dhl', 'dhm', 'dhn', 'dho', 'dhr', 'dhs', 'dhu', 'dhv', 'dhw', 'dhx', 'dia', 'dib', 'dic', 'did', 'dif', 'dig', 'dih', 'dii', 'dij', 'dik', 'dil', 'dim', 'din', 'dio', 'dip', 'diq', 'dir', 'dis', 'dit', 'diu', 'diw', 'dix', 'diy', 'diz', 'dja', 'djb', 'djc', 'djd', 'dje', 'djf', 'dji', 'djj', 'djk', 'djl', 'djm', 'djn', 'djo', 'djr', 'dju', 'djw', 'dka', 'dkk', 'dkl', 'dkr', 'dks', 'dkx', 'dlg', 'dlk', 'dlm', 'dln', 'dma', 'dmb', 'dmc', 'dmd', 'dme', 'dmg', 'dmk', 'dml', 'dmm', 'dmn', 'dmo', 'dmr', 'dms', 'dmu', 'dmv', 'dmw', 'dmx', 'dmy', 'dna', 'dnd', 'dne', 'dng', 'dni', 'dnj', 'dnk', 'dnn', 'dnr', 'dnt', 'dnu', 'dnv', 'dnw', 'dny', 'doa', 'dob', 'doc', 'doe', 'dof', 'doh', 'doi', 'dok', 'dol', 'don', 'doo', 'dop', 'doq', 'dor', 'dos', 'dot', 'dov', 'dow', 'dox', 'doy', 'doz', 'dpp', 'dra', 'drb', 'drc', 'drd', 'dre', 'drg', 'drh', 'dri', 'drl', 'drn', 'dro', 'drq', 'drr', 'drs', 'drt', 'dru', 'drw', 'dry', 'dsb', 'dse', 'dsh', 'dsi', 'dsl', 'dsn', 'dso', 'dsq', 'dta', 'dtb', 'dtd', 'dth', 'dti', 'dtk', 'dtm', 'dtn', 'dto', 'dtp', 'dtr', 'dts', 'dtt', 'dtu', 'dty', 'dua', 'dub', 'duc', 'dud', 'due', 'duf', 'dug', 'duh', 'dui', 'duj', 'duk', 'dul', 'dum', 'dun', 'duo', 'dup', 'duq', 'dur', 'dus', 'duu', 'duv', 'duw', 'dux', 'duy', 'duz', 'dva', 'dwa', 'dwl', 'dwr', 'dws', 'dwu', 'dww', 'dwy', 'dya', 'dyb', 'dyd', 'dyg', 'dyi', 'dym', 'dyn', 'dyo', 'dyu', 'dyy', 'dza', 'dzd', 'dze', 'dzg', 'dzl', 'dzn', 'eaa', 'ebg', 'ebk', 'ebo', 'ebr', 'ebu', 'ecr', 'ecs', 'ecy', 'eee', 'efa', 'efe', 'efi', 'ega', 'egl', 'ego', 'egx', 'egy', 'ehu', 'eip', 'eit', 'eiv', 'eja', 'eka', 'ekc', 'eke', 'ekg', 'eki', 'ekk', 'ekl', 'ekm', 'eko', 'ekp', 'ekr', 'eky', 'ele', 'elh', 'eli', 'elk', 'elm', 'elo', 'elp', 'elu', 'elx', 'ema', 'emb', 'eme', 'emg', 'emi', 'emk', 'emm', 'emn', 'emo', 'emp', 'ems', 'emu', 'emw', 'emx', 'emy', 'ena', 'enb', 'enc', 'end', 'enf', 'enh', 'enl', 'enm', 'enn', 'eno', 'enq', 'enr', 'enu', 'env', 'enw', 'enx', 'eot', 'epi', 'era', 'erg', 'erh', 'eri', 'erk', 'ero', 'err', 'ers', 'ert', 'erw', 'ese', 'esg', 'esh', 'esi', 'esk', 'esl', 'esm', 'esn', 'eso', 'esq', 'ess', 'esu', 'esx', 'esy', 'etb', 'etc', 'eth', 'etn', 'eto', 'etr', 'ets', 'ett', 'etu', 'etx', 'etz', 'euq', 'eve', 'evh', 'evn', 'ewo', 'ext', 'eya', 'eyo', 'eza', 'eze', 'faa', 'fab', 'fad', 'faf', 'fag', 'fah', 'fai', 'faj', 'fak', 'fal', 'fam', 'fan', 'fap', 'far', 'fat', 'fau', 'fax', 'fay', 'faz', 'fbl', 'fcs', 'fer', 'ffi', 'ffm', 'fgr', 'fia', 'fie', 'fil', 'fip', 'fir', 'fit', 'fiu', 'fiw', 'fkk', 'fkv', 'fla', 'flh', 'fli', 'fll', 'fln', 'flr', 'fly', 'fmp', 'fmu', 'fnb', 'fng', 'fni', 'fod', 'foi', 'fom', 'fon', 'for', 'fos', 'fox', 'fpe', 'fqs', 'frc', 'frd', 'frk', 'frm', 'fro', 'frp', 'frq', 'frr', 'frs', 'frt', 'fse', 'fsl', 'fss', 'fub', 'fuc', 'fud', 'fue', 'fuf', 'fuh', 'fui', 'fuj', 'fum', 'fun', 'fuq', 'fur', 'fut', 'fuu', 'fuv', 'fuy', 'fvr', 'fwa', 'fwe', 'gaa', 'gab', 'gac', 'gad', 'gae', 'gaf', 'gag', 'gah', 'gai', 'gaj', 'gak', 'gal', 'gam', 'gan', 'gao', 'gap', 'gaq', 'gar', 'gas', 'gat', 'gau', 'gav', 'gaw', 'gax', 'gay', 'gaz', 'gba', 'gbb', 'gbc', 'gbd', 'gbe', 'gbf', 'gbg', 'gbh', 'gbi', 'gbj', 'gbk', 'gbl', 'gbm', 'gbn', 'gbo', 'gbp', 'gbq', 'gbr', 'gbs', 'gbu', 'gbv', 'gbw', 'gbx', 'gby', 'gbz', 'gcc', 'gcd', 'gce', 'gcf', 'gcl', 'gcn', 'gcr', 'gct', 'gda', 'gdb', 'gdc', 'gdd', 'gde', 'gdf', 'gdg', 'gdh', 'gdi', 'gdj', 'gdk', 'gdl', 'gdm', 'gdn', 'gdo', 'gdq', 'gdr', 'gds', 'gdt', 'gdu', 'gdx', 'gea', 'geb', 'gec', 'ged', 'geg', 'geh', 'gei', 'gej', 'gek', 'gel', 'gem', 'geq', 'ges', 'gev', 'gew', 'gex', 'gey', 'gez', 'gfk', 'gft', 'gfx', 'gga', 'ggb', 'ggd', 'gge', 'ggg', 'ggk', 'ggl', 'ggn', 'ggo', 'ggr', 'ggt', 'ggu', 'ggw', 'gha', 'ghc', 'ghe', 'ghh', 'ghk', 'ghl', 'ghn', 'gho', 'ghr', 'ghs', 'ght', 'gia', 'gib', 'gic', 'gid', 'gie', 'gig', 'gih', 'gil', 'gim', 'gin', 'gio', 'gip', 'giq', 'gir', 'gis', 'git', 'giu', 'giw', 'gix', 'giy', 'giz', 'gji', 'gjk', 'gjm', 'gjn', 'gjr', 'gju', 'gka', 'gke', 'gkn', 'gko', 'gkp', 'gku', 'glc', 'gld', 'glh', 'gli', 'glj', 'glk', 'gll', 'glo', 'glr', 'glu', 'glw', 'gly', 'gma', 'gmb', 'gmd', 'gme', 'gmg', 'gmh', 'gml', 'gmm', 'gmn', 'gmq', 'gmu', 'gmv', 'gmw', 'gmx', 'gmy', 'gmz', 'gna', 'gnb', 'gnc', 'gnd', 'gne', 'gng', 'gnh', 'gni', 'gnk', 'gnl', 'gnm', 'gnn', 'gno', 'gnq', 'gnr', 'gnt', 'gnu', 'gnw', 'gnz', 'goa', 'gob', 'goc', 'god', 'goe', 'gof', 'gog', 'goh', 'goi', 'goj', 'gok', 'gol', 'gom', 'gon', 'goo', 'gop', 'goq', 'gor', 'gos', 'got', 'gou', 'gow', 'gox', 'goy', 'goz', 'gpa', 'gpe', 'gpn', 'gqa', 'gqi', 'gqn', 'gqr', 'gqu', 'gra', 'grb', 'grc', 'grd', 'grg', 'grh', 'gri', 'grj', 'grk', 'grm', 'gro', 'grq', 'grr', 'grs', 'grt', 'gru', 'grv', 'grw', 'grx', 'gry', 'grz', 'gse', 'gsg', 'gsl', 'gsm', 'gsn', 'gso', 'gsp', 'gss', 'gsw', 'gta', 'gti', 'gtu', 'gua', 'gub', 'guc', 'gud', 'gue', 'guf', 'gug', 'guh', 'gui', 'guk', 'gul', 'gum', 'gun', 'guo', 'gup', 'guq', 'gur', 'gus', 'gut', 'guu', 'guv', 'guw', 'gux', 'guz', 'gva', 'gvc', 'gve', 'gvf', 'gvj', 'gvl', 'gvm', 'gvn', 'gvo', 'gvp', 'gvr', 'gvs', 'gvy', 'gwa', 'gwb', 'gwc', 'gwd', 'gwe', 'gwf', 'gwg', 'gwi', 'gwj', 'gwm', 'gwn', 'gwr', 'gwt', 'gwu', 'gww', 'gwx', 'gxx', 'gya', 'gyb', 'gyd', 'gye', 'gyf', 'gyg', 'gyi', 'gyl', 'gym', 'gyn', 'gyr', 'gyy', 'gza', 'gzi', 'gzn', 'haa', 'hab', 'hac', 'had', 'hae', 'haf', 'hag', 'hah', 'hai', 'haj', 'hak', 'hal', 'ham', 'han', 'hao', 'hap', 'haq', 'har', 'has', 'hav', 'haw', 'hax', 'hay', 'haz', 'hba', 'hbb', 'hbn', 'hbo', 'hbu', 'hca', 'hch', 'hdn', 'hds', 'hdy', 'hea', 'hed', 'heg', 'heh', 'hei', 'hem', 'hgm', 'hgw', 'hhi', 'hhr', 'hhy', 'hia', 'hib', 'hid', 'hif', 'hig', 'hih', 'hii', 'hij', 'hik', 'hil', 'him', 'hio', 'hir', 'hit', 'hiw', 'hix', 'hji', 'hka', 'hke', 'hkk', 'hks', 'hla', 'hlb', 'hld', 'hle', 'hlt', 'hlu', 'hma', 'hmb', 'hmc', 'hmd', 'hme', 'hmf', 'hmg', 'hmh', 'hmi', 'hmj', 'hmk', 'hml', 'hmm', 'hmn', 'hmp', 'hmq', 'hmr', 'hms', 'hmt', 'hmu', 'hmv', 'hmw', 'hmx', 'hmy', 'hmz', 'hna', 'hnd', 'hne', 'hnh', 'hni', 'hnj', 'hnn', 'hno', 'hns', 'hnu', 'hoa', 'hob', 'hoc', 'hod', 'hoe', 'hoh', 'hoi', 'hoj', 'hok', 'hol', 'hom', 'hoo', 'hop', 'hor', 'hos', 'hot', 'hov', 'how', 'hoy', 'hoz', 'hpo', 'hps', 'hra', 'hrc', 'hre', 'hrk', 'hrm', 'hro', 'hrp', 'hrr', 'hrt', 'hru', 'hrw', 'hrx', 'hrz', 'hsb', 'hsh', 'hsl', 'hsn', 'hss', 'hti', 'hto', 'hts', 'htu', 'htx', 'hub', 'huc', 'hud', 'hue', 'huf', 'hug', 'huh', 'hui', 'huj', 'huk', 'hul', 'hum', 'huo', 'hup', 'huq', 'hur', 'hus', 'hut', 'huu', 'huv', 'huw', 'hux', 'huy', 'huz', 'hvc', 'hve', 'hvk', 'hvn', 'hvv', 'hwa', 'hwc', 'hwo', 'hya', 'hyx', 'iai', 'ian', 'iap', 'iar', 'iba', 'ibb', 'ibd', 'ibe', 'ibg', 'ibh', 'ibi', 'ibl', 'ibm', 'ibn', 'ibr', 'ibu', 'iby', 'ica', 'ich', 'icl', 'icr', 'ida', 'idb', 'idc', 'idd', 'ide', 'idi', 'idr', 'ids', 'idt', 'idu', 'ifa', 'ifb', 'ife', 'iff', 'ifk', 'ifm', 'ifu', 'ify', 'igb', 'ige', 'igg', 'igl', 'igm', 'ign', 'igo', 'igs', 'igw', 'ihb', 'ihi', 'ihp', 'ihw', 'iin', 'iir', 'ijc', 'ije', 'ijj', 'ijn', 'ijo', 'ijs', 'ike', 'iki', 'ikk', 'ikl', 'iko', 'ikp', 'ikr', 'iks', 'ikt', 'ikv', 'ikw', 'ikx', 'ikz', 'ila', 'ilb', 'ilg', 'ili', 'ilk', 'ill', 'ilm', 'ilo', 'ilp', 'ils', 'ilu', 'ilv', 'ilw', 'ima', 'ime', 'imi', 'iml', 'imn', 'imo', 'imr', 'ims', 'imy', 'inb', 'inc', 'ine', 'ing', 'inh', 'inj', 'inl', 'inm', 'inn', 'ino', 'inp', 'ins', 'int', 'inz', 'ior', 'iou', 'iow', 'ipi', 'ipo', 'iqu', 'iqw', 'ira', 'ire', 'irh', 'iri', 'irk', 'irn', 'iro', 'irr', 'iru', 'irx', 'iry', 'isa', 'isc', 'isd', 'ise', 'isg', 'ish', 'isi', 'isk', 'ism', 'isn', 'iso', 'isr', 'ist', 'isu', 'itb', 'itc', 'itd', 'ite', 'iti', 'itk', 'itl', 'itm', 'ito', 'itr', 'its', 'itt', 'itv', 'itw', 'itx', 'ity', 'itz', 'ium', 'ivb', 'ivv', 'iwk', 'iwm', 'iwo', 'iws', 'ixc', 'ixl', 'iya', 'iyo', 'iyx', 'izh', 'izi', 'izr', 'izz', 'jaa', 'jab', 'jac', 'jad', 'jae', 'jaf', 'jah', 'jaj', 'jak', 'jal', 'jam', 'jan', 'jao', 'jaq', 'jar', 'jas', 'jat', 'jau', 'jax', 'jay', 'jaz', 'jbe', 'jbi', 'jbj', 'jbk', 'jbn', 'jbo', 'jbr', 'jbt', 'jbu', 'jbw', 'jcs', 'jct', 'jda', 'jdg', 'jdt', 'jeb', 'jee', 'jeg', 'jeh', 'jei', 'jek', 'jel', 'jen', 'jer', 'jet', 'jeu', 'jgb', 'jge', 'jgk', 'jgo', 'jhi', 'jhs', 'jia', 'jib', 'jic', 'jid', 'jie', 'jig', 'jih', 'jii', 'jil', 'jim', 'jio', 'jiq', 'jit', 'jiu', 'jiv', 'jiy', 'jje', 'jjr', 'jka', 'jkm', 'jko', 'jkp', 'jkr', 'jku', 'jle', 'jls', 'jma', 'jmb', 'jmc', 'jmd', 'jmi', 'jml', 'jmn', 'jmr', 'jms', 'jmw', 'jmx', 'jna', 'jnd', 'jng', 'jni', 'jnj', 'jnl', 'jns', 'job', 'jod', 'jog', 'jor', 'jos', 'jow', 'jpa', 'jpr', 'jpx', 'jqr', 'jra', 'jrb', 'jrr', 'jrt', 'jru', 'jsl', 'jua', 'jub', 'juc', 'jud', 'juh', 'jui', 'juk', 'jul', 'jum', 'jun', 'juo', 'jup', 'jur', 'jus', 'jut', 'juu', 'juw', 'juy', 'jvd', 'jvn', 'jwi', 'jya', 'jye', 'jyy', 'kaa', 'kab', 'kac', 'kad', 'kae', 'kaf', 'kag', 'kah', 'kai', 'kaj', 'kak', 'kam', 'kao', 'kap', 'kaq', 'kar', 'kav', 'kaw', 'kax', 'kay', 'kba', 'kbb', 'kbc', 'kbd', 'kbe', 'kbf', 'kbg', 'kbh', 'kbi', 'kbj', 'kbk', 'kbl', 'kbm', 'kbn', 'kbo', 'kbp', 'kbq', 'kbr', 'kbs', 'kbt', 'kbu', 'kbv', 'kbw', 'kbx', 'kby', 'kbz', 'kca', 'kcb', 'kcc', 'kcd', 'kce', 'kcf', 'kcg', 'kch', 'kci', 'kcj', 'kck', 'kcl', 'kcm', 'kcn', 'kco', 'kcp', 'kcq', 'kcr', 'kcs', 'kct', 'kcu', 'kcv', 'kcw', 'kcx', 'kcy', 'kcz', 'kda', 'kdc', 'kdd', 'kde', 'kdf', 'kdg', 'kdh', 'kdi', 'kdj', 'kdk', 'kdl', 'kdm', 'kdn', 'kdo', 'kdp', 'kdq', 'kdr', 'kdt', 'kdu', 'kdv', 'kdw', 'kdx', 'kdy', 'kdz', 'kea', 'keb', 'kec', 'ked', 'kee', 'kef', 'keg', 'keh', 'kei', 'kej', 'kek', 'kel', 'kem', 'ken', 'keo', 'kep', 'keq', 'ker', 'kes', 'ket', 'keu', 'kev', 'kew', 'kex', 'key', 'kez', 'kfa', 'kfb', 'kfc', 'kfd', 'kfe', 'kff', 'kfg', 'kfh', 'kfi', 'kfj', 'kfk', 'kfl', 'kfm', 'kfn', 'kfo', 'kfp', 'kfq', 'kfr', 'kfs', 'kft', 'kfu', 'kfv', 'kfw', 'kfx', 'kfy', 'kfz', 'kga', 'kgb', 'kgc', 'kgd', 'kge', 'kgf', 'kgg', 'kgh', 'kgi', 'kgj', 'kgk', 'kgl', 'kgm', 'kgn', 'kgo', 'kgp', 'kgq', 'kgr', 'kgs', 'kgt', 'kgu', 'kgv', 'kgw', 'kgx', 'kgy', 'kha', 'khb', 'khc', 'khd', 'khe', 'khf', 'khg', 'khh', 'khi', 'khj', 'khk', 'khl', 'khn', 'kho', 'khp', 'khq', 'khr', 'khs', 'kht', 'khu', 'khv', 'khw', 'khx', 'khy', 'khz', 'kia', 'kib', 'kic', 'kid', 'kie', 'kif', 'kig', 'kih', 'kii', 'kij', 'kil', 'kim', 'kio', 'kip', 'kiq', 'kis', 'kit', 'kiu', 'kiv', 'kiw', 'kix', 'kiy', 'kiz', 'kja', 'kjb', 'kjc', 'kjd', 'kje', 'kjf', 'kjg', 'kjh', 'kji', 'kjj', 'kjk', 'kjl', 'kjm', 'kjn', 'kjo', 'kjp', 'kjq', 'kjr', 'kjs', 'kjt', 'kju', 'kjv', 'kjx', 'kjy', 'kjz', 'kka', 'kkb', 'kkc', 'kkd', 'kke', 'kkf', 'kkg', 'kkh', 'kki', 'kkj', 'kkk', 'kkl', 'kkm', 'kkn', 'kko', 'kkp', 'kkq', 'kkr', 'kks', 'kkt', 'kku', 'kkv', 'kkw', 'kkx', 'kky', 'kkz', 'kla', 'klb', 'klc', 'kld', 'kle', 'klf', 'klg', 'klh', 'kli', 'klj', 'klk', 'kll', 'klm', 'kln', 'klo', 'klp', 'klq', 'klr', 'kls', 'klt', 'klu', 'klv', 'klw', 'klx', 'kly', 'klz', 'kma', 'kmb', 'kmc', 'kmd', 'kme', 'kmf', 'kmg', 'kmh', 'kmi', 'kmj', 'kmk', 'kml', 'kmm', 'kmn', 'kmo', 'kmp', 'kmq', 'kmr', 'kms', 'kmt', 'kmu', 'kmv', 'kmw', 'kmx', 'kmy', 'kmz', 'kna', 'knb', 'knc', 'knd', 'kne', 'knf', 'kng', 'kni', 'knj', 'knk', 'knl', 'knm', 'knn', 'kno', 'knp', 'knq', 'knr', 'kns', 'knt', 'knu', 'knv', 'knw', 'knx', 'kny', 'knz', 'koa', 'koc', 'kod', 'koe', 'kof', 'kog', 'koh', 'koi', 'koj', 'kok', 'kol', 'koo', 'kop', 'koq', 'kos', 'kot', 'kou', 'kov', 'kow', 'kox', 'koy', 'koz', 'kpa', 'kpb', 'kpc', 'kpd', 'kpe', 'kpf', 'kpg', 'kph', 'kpi', 'kpj', 'kpk', 'kpl', 'kpm', 'kpn', 'kpo', 'kpp', 'kpq', 'kpr', 'kps', 'kpt', 'kpu', 'kpv', 'kpw', 'kpx', 'kpy', 'kpz', 'kqa', 'kqb', 'kqc', 'kqd', 'kqe', 'kqf', 'kqg', 'kqh', 'kqi', 'kqj', 'kqk', 'kql', 'kqm', 'kqn', 'kqo', 'kqp', 'kqq', 'kqr', 'kqs', 'kqt', 'kqu', 'kqv', 'kqw', 'kqx', 'kqy', 'kqz', 'kra', 'krb', 'krc', 'krd', 'kre', 'krf', 'krh', 'kri', 'krj', 'krk', 'krl', 'krm', 'krn', 'kro', 'krp', 'krr', 'krs', 'krt', 'kru', 'krv', 'krw', 'krx', 'kry', 'krz', 'ksa', 'ksb', 'ksc', 'ksd', 'kse', 'ksf', 'ksg', 'ksh', 'ksi', 'ksj', 'ksk', 'ksl', 'ksm', 'ksn', 'kso', 'ksp', 'ksq', 'ksr', 'kss', 'kst', 'ksu', 'ksv', 'ksw', 'ksx', 'ksy', 'ksz', 'kta', 'ktb', 'ktc', 'ktd', 'kte', 'ktf', 'ktg', 'kth', 'kti', 'ktj', 'ktk', 'ktl', 'ktm', 'ktn', 'kto', 'ktp', 'ktq', 'ktr', 'kts', 'ktt', 'ktu', 'ktv', 'ktw', 'ktx', 'kty', 'ktz', 'kub', 'kuc', 'kud', 'kue', 'kuf', 'kug', 'kuh', 'kui', 'kuj', 'kuk', 'kul', 'kum', 'kun', 'kuo', 'kup', 'kuq', 'kus', 'kut', 'kuu', 'kuv', 'kuw', 'kux', 'kuy', 'kuz', 'kva', 'kvb', 'kvc', 'kvd', 'kve', 'kvf', 'kvg', 'kvh', 'kvi', 'kvj', 'kvk', 'kvl', 'kvm', 'kvn', 'kvo', 'kvp', 'kvq', 'kvr', 'kvs', 'kvt', 'kvu', 'kvv', 'kvw', 'kvx', 'kvy', 'kvz', 'kwa', 'kwb', 'kwc', 'kwd', 'kwe', 'kwf', 'kwg', 'kwh', 'kwi', 'kwj', 'kwk', 'kwl', 'kwm', 'kwn', 'kwo', 'kwp', 'kwq', 'kwr', 'kws', 'kwt', 'kwu', 'kwv', 'kww', 'kwx', 'kwy', 'kwz', 'kxa', 'kxb', 'kxc', 'kxd', 'kxe', 'kxf', 'kxh', 'kxi', 'kxj', 'kxk', 'kxl', 'kxm', 'kxn', 'kxo', 'kxp', 'kxq', 'kxr', 'kxs', 'kxt', 'kxu', 'kxv', 'kxw', 'kxx', 'kxy', 'kxz', 'kya', 'kyb', 'kyc', 'kyd', 'kye', 'kyf', 'kyg', 'kyh', 'kyi', 'kyj', 'kyk', 'kyl', 'kym', 'kyn', 'kyo', 'kyp', 'kyq', 'kyr', 'kys', 'kyt', 'kyu', 'kyv', 'kyw', 'kyx', 'kyy', 'kyz', 'kza', 'kzb', 'kzc', 'kzd', 'kze', 'kzf', 'kzg', 'kzh', 'kzi', 'kzj', 'kzk', 'kzl', 'kzm', 'kzn', 'kzo', 'kzp', 'kzq', 'kzr', 'kzs', 'kzt', 'kzu', 'kzv', 'kzw', 'kzx', 'kzy', 'kzz', 'laa', 'lab', 'lac', 'lad', 'lae', 'laf', 'lag', 'lah', 'lai', 'laj', 'lak', 'lal', 'lam', 'lan', 'lap', 'laq', 'lar', 'las', 'lau', 'law', 'lax', 'lay', 'laz', 'lba', 'lbb', 'lbc', 'lbe', 'lbf', 'lbg', 'lbi', 'lbj', 'lbk', 'lbl', 'lbm', 'lbn', 'lbo', 'lbq', 'lbr', 'lbs', 'lbt', 'lbu', 'lbv', 'lbw', 'lbx', 'lby', 'lbz', 'lcc', 'lcd', 'lce', 'lcf', 'lch', 'lcl', 'lcm', 'lcp', 'lcq', 'lcs', 'lda', 'ldb', 'ldd', 'ldg', 'ldh', 'ldi', 'ldj', 'ldk', 'ldl', 'ldm', 'ldn', 'ldo', 'ldp', 'ldq', 'lea', 'leb', 'lec', 'led', 'lee', 'lef', 'leg', 'leh', 'lei', 'lej', 'lek', 'lel', 'lem', 'len', 'leo', 'lep', 'leq', 'ler', 'les', 'let', 'leu', 'lev', 'lew', 'lex', 'ley', 'lez', 'lfa', 'lfn', 'lga', 'lgb', 'lgg', 'lgh', 'lgi', 'lgk', 'lgl', 'lgm', 'lgn', 'lgq', 'lgr', 'lgt', 'lgu', 'lgz', 'lha', 'lhh', 'lhi', 'lhl', 'lhm', 'lhn', 'lhp', 'lhs', 'lht', 'lhu', 'lia', 'lib', 'lic', 'lid', 'lie', 'lif', 'lig', 'lih', 'lii', 'lij', 'lik', 'lil', 'lio', 'lip', 'liq', 'lir', 'lis', 'liu', 'liv', 'liw', 'lix', 'liy', 'liz', 'lja', 'lje', 'lji', 'ljl', 'ljp', 'ljw', 'ljx', 'lka', 'lkb', 'lkc', 'lkd', 'lke', 'lkh', 'lki', 'lkj', 'lkl', 'lkm', 'lkn', 'lko', 'lkr', 'lks', 'lkt', 'lku', 'lky', 'lla', 'llb', 'llc', 'lld', 'lle', 'llf', 'llg', 'llh', 'lli', 'llj', 'llk', 'lll', 'llm', 'lln', 'llo', 'llp', 'llq', 'lls', 'llu', 'llx', 'lma', 'lmb', 'lmc', 'lmd', 'lme', 'lmf', 'lmg', 'lmh', 'lmi', 'lmj', 'lmk', 'lml', 'lmm', 'lmn', 'lmo', 'lmp', 'lmq', 'lmr', 'lmu', 'lmv', 'lmw', 'lmx', 'lmy', 'lmz', 'lna', 'lnb', 'lnd', 'lng', 'lnh', 'lni', 'lnj', 'lnl', 'lnm', 'lnn', 'lno', 'lns', 'lnu', 'lnw', 'lnz', 'loa', 'lob', 'loc', 'loe', 'lof', 'log', 'loh', 'loi', 'loj', 'lok', 'lol', 'lom', 'lon', 'loo', 'lop', 'loq', 'lor', 'los', 'lot', 'lou', 'lov', 'low', 'lox', 'loy', 'loz', 'lpa', 'lpe', 'lpn', 'lpo', 'lpx', 'lra', 'lrc', 'lre', 'lrg', 'lri', 'lrk', 'lrl', 'lrm', 'lrn', 'lro', 'lrr', 'lrt', 'lrv', 'lrz', 'lsa', 'lsd', 'lse', 'lsg', 'lsh', 'lsi', 'lsl', 'lsm', 'lso', 'lsp', 'lsr', 'lss', 'lst', 'lsy', 'ltc', 'ltg', 'lth', 'lti', 'ltn', 'lto', 'lts', 'ltu', 'lua', 'luc', 'lud', 'lue', 'luf', 'lui', 'luj', 'luk', 'lul', 'lum', 'lun', 'luo', 'lup', 'luq', 'lur', 'lus', 'lut', 'luu', 'luv', 'luw', 'luy', 'luz', 'lva', 'lvk', 'lvs', 'lvu', 'lwa', 'lwe', 'lwg', 'lwh', 'lwl', 'lwm', 'lwo', 'lwt', 'lwu', 'lww', 'lya', 'lyg', 'lyn', 'lzh', 'lzl', 'lzn', 'lzz', 'maa', 'mab', 'mad', 'mae', 'maf', 'mag', 'mai', 'maj', 'mak', 'mam', 'man', 'map', 'maq', 'mas', 'mat', 'mau', 'mav', 'maw', 'max', 'maz', 'mba', 'mbb', 'mbc', 'mbd', 'mbe', 'mbf', 'mbh', 'mbi', 'mbj', 'mbk', 'mbl', 'mbm', 'mbn', 'mbo', 'mbp', 'mbq', 'mbr', 'mbs', 'mbt', 'mbu', 'mbv', 'mbw', 'mbx', 'mby', 'mbz', 'mca', 'mcb', 'mcc', 'mcd', 'mce', 'mcf', 'mcg', 'mch', 'mci', 'mcj', 'mck', 'mcl', 'mcm', 'mcn', 'mco', 'mcp', 'mcq', 'mcr', 'mcs', 'mct', 'mcu', 'mcv', 'mcw', 'mcx', 'mcy', 'mcz', 'mda', 'mdb', 'mdc', 'mdd', 'mde', 'mdf', 'mdg', 'mdh', 'mdi', 'mdj', 'mdk', 'mdl', 'mdm', 'mdn', 'mdp', 'mdq', 'mdr', 'mds', 'mdt', 'mdu', 'mdv', 'mdw', 'mdx', 'mdy', 'mdz', 'mea', 'meb', 'mec', 'med', 'mee', 'mef', 'meg', 'meh', 'mei', 'mej', 'mek', 'mel', 'mem', 'men', 'meo', 'mep', 'meq', 'mer', 'mes', 'met', 'meu', 'mev', 'mew', 'mey', 'mez', 'mfa', 'mfb', 'mfc', 'mfd', 'mfe', 'mff', 'mfg', 'mfh', 'mfi', 'mfj', 'mfk', 'mfl', 'mfm', 'mfn', 'mfo', 'mfp', 'mfq', 'mfr', 'mfs', 'mft', 'mfu', 'mfv', 'mfw', 'mfx', 'mfy', 'mfz', 'mga', 'mgb', 'mgc', 'mgd', 'mge', 'mgf', 'mgg', 'mgh', 'mgi', 'mgj', 'mgk', 'mgl', 'mgm', 'mgn', 'mgo', 'mgp', 'mgq', 'mgr', 'mgs', 'mgt', 'mgu', 'mgv', 'mgw', 'mgx', 'mgy', 'mgz', 'mha', 'mhb', 'mhc', 'mhd', 'mhe', 'mhf', 'mhg', 'mhh', 'mhi', 'mhj', 'mhk', 'mhl', 'mhm', 'mhn', 'mho', 'mhp', 'mhq', 'mhr', 'mhs', 'mht', 'mhu', 'mhw', 'mhx', 'mhy', 'mhz', 'mia', 'mib', 'mic', 'mid', 'mie', 'mif', 'mig', 'mih', 'mii', 'mij', 'mik', 'mil', 'mim', 'min', 'mio', 'mip', 'miq', 'mir', 'mis', 'mit', 'miu', 'miw', 'mix', 'miy', 'miz', 'mja', 'mjb', 'mjc', 'mjd', 'mje', 'mjg', 'mjh', 'mji', 'mjj', 'mjk', 'mjl', 'mjm', 'mjn', 'mjo', 'mjp', 'mjq', 'mjr', 'mjs', 'mjt', 'mju', 'mjv', 'mjw', 'mjx', 'mjy', 'mjz', 'mka', 'mkb', 'mkc', 'mke', 'mkf', 'mkg', 'mkh', 'mki', 'mkj', 'mkk', 'mkl', 'mkm', 'mkn', 'mko', 'mkp', 'mkq', 'mkr', 'mks', 'mkt', 'mku', 'mkv', 'mkw', 'mkx', 'mky', 'mkz', 'mla', 'mlb', 'mlc', 'mld', 'mle', 'mlf', 'mlh', 'mli', 'mlj', 'mlk', 'mll', 'mlm', 'mln', 'mlo', 'mlp', 'mlq', 'mlr', 'mls', 'mlu', 'mlv', 'mlw', 'mlx', 'mlz', 'mma', 'mmb', 'mmc', 'mmd', 'mme', 'mmf', 'mmg', 'mmh', 'mmi', 'mmj', 'mmk', 'mml', 'mmm', 'mmn', 'mmo', 'mmp', 'mmq', 'mmr', 'mmt', 'mmu', 'mmv', 'mmw', 'mmx', 'mmy', 'mmz', 'mna', 'mnb', 'mnc', 'mnd', 'mne', 'mnf', 'mng', 'mnh', 'mni', 'mnj', 'mnk', 'mnl', 'mnm', 'mnn', 'mno', 'mnp', 'mnq', 'mnr', 'mns', 'mnt', 'mnu', 'mnv', 'mnw', 'mnx', 'mny', 'mnz', 'moa', 'moc', 'mod', 'moe', 'mof', 'mog', 'moh', 'moi', 'moj', 'mok', 'mom', 'moo', 'mop', 'moq', 'mor', 'mos', 'mot', 'mou', 'mov', 'mow', 'mox', 'moy', 'moz', 'mpa', 'mpb', 'mpc', 'mpd', 'mpe', 'mpg', 'mph', 'mpi', 'mpj', 'mpk', 'mpl', 'mpm', 'mpn', 'mpo', 'mpp', 'mpq', 'mpr', 'mps', 'mpt', 'mpu', 'mpv', 'mpw', 'mpx', 'mpy', 'mpz', 'mqa', 'mqb', 'mqc', 'mqe', 'mqf', 'mqg', 'mqh', 'mqi', 'mqj', 'mqk', 'mql', 'mqm', 'mqn', 'mqo', 'mqp', 'mqq', 'mqr', 'mqs', 'mqt', 'mqu', 'mqv', 'mqw', 'mqx', 'mqy', 'mqz', 'mra', 'mrb', 'mrc', 'mrd', 'mre', 'mrf', 'mrg', 'mrh', 'mrj', 'mrk', 'mrl', 'mrm', 'mrn', 'mro', 'mrp', 'mrq', 'mrr', 'mrs', 'mrt', 'mru', 'mrv', 'mrw', 'mrx', 'mry', 'mrz', 'msb', 'msc', 'msd', 'mse', 'msf', 'msg', 'msh', 'msi', 'msj', 'msk', 'msl', 'msm', 'msn', 'mso', 'msp', 'msq', 'msr', 'mss', 'mst', 'msu', 'msv', 'msw', 'msx', 'msy', 'msz', 'mta', 'mtb', 'mtc', 'mtd', 'mte', 'mtf', 'mtg', 'mth', 'mti', 'mtj', 'mtk', 'mtl', 'mtm', 'mtn', 'mto', 'mtp', 'mtq', 'mtr', 'mts', 'mtt', 'mtu', 'mtv', 'mtw', 'mtx', 'mty', 'mua', 'mub', 'muc', 'mud', 'mue', 'mug', 'muh', 'mui', 'muj', 'muk', 'mul', 'mum', 'mun', 'muo', 'mup', 'muq', 'mur', 'mus', 'mut', 'muu', 'muv', 'mux', 'muy', 'muz', 'mva', 'mvb', 'mvd', 'mve', 'mvf', 'mvg', 'mvh', 'mvi', 'mvk', 'mvl', 'mvm', 'mvn', 'mvo', 'mvp', 'mvq', 'mvr', 'mvs', 'mvt', 'mvu', 'mvv', 'mvw', 'mvx', 'mvy', 'mvz', 'mwa', 'mwb', 'mwc', 'mwd', 'mwe', 'mwf', 'mwg', 'mwh', 'mwi', 'mwj', 'mwk', 'mwl', 'mwm', 'mwn', 'mwo', 'mwp', 'mwq', 'mwr', 'mws', 'mwt', 'mwu', 'mwv', 'mww', 'mwx', 'mwy', 'mwz', 'mxa', 'mxb', 'mxc', 'mxd', 'mxe', 'mxf', 'mxg', 'mxh', 'mxi', 'mxj', 'mxk', 'mxl', 'mxm', 'mxn', 'mxo', 'mxp', 'mxq', 'mxr', 'mxs', 'mxt', 'mxu', 'mxv', 'mxw', 'mxx', 'mxy', 'mxz', 'myb', 'myc', 'myd', 'mye', 'myf', 'myg', 'myh', 'myi', 'myj', 'myk', 'myl', 'mym', 'myn', 'myo', 'myp', 'myq', 'myr', 'mys', 'myt', 'myu', 'myv', 'myw', 'myx', 'myy', 'myz', 'mza', 'mzb', 'mzc', 'mzd', 'mze', 'mzg', 'mzh', 'mzi', 'mzj', 'mzk', 'mzl', 'mzm', 'mzn', 'mzo', 'mzp', 'mzq', 'mzr', 'mzs', 'mzt', 'mzu', 'mzv', 'mzw', 'mzx', 'mzy', 'mzz', 'naa', 'nab', 'nac', 'nad', 'nae', 'naf', 'nag', 'nah', 'nai', 'naj', 'nak', 'nal', 'nam', 'nan', 'nao', 'nap', 'naq', 'nar', 'nas', 'nat', 'naw', 'nax', 'nay', 'naz', 'nba', 'nbb', 'nbc', 'nbd', 'nbe', 'nbf', 'nbg', 'nbh', 'nbi', 'nbj', 'nbk', 'nbm', 'nbn', 'nbo', 'nbp', 'nbq', 'nbr', 'nbs', 'nbt', 'nbu', 'nbv', 'nbw', 'nbx', 'nby', 'nca', 'ncb', 'ncc', 'ncd', 'nce', 'ncf', 'ncg', 'nch', 'nci', 'ncj', 'nck', 'ncl', 'ncm', 'ncn', 'nco', 'ncp', 'ncq', 'ncr', 'ncs', 'nct', 'ncu', 'ncx', 'ncz', 'nda', 'ndb', 'ndc', 'ndd', 'ndf', 'ndg', 'ndh', 'ndi', 'ndj', 'ndk', 'ndl', 'ndm', 'ndn', 'ndp', 'ndq', 'ndr', 'nds', 'ndt', 'ndu', 'ndv', 'ndw', 'ndx', 'ndy', 'ndz', 'nea', 'neb', 'nec', 'ned', 'nee', 'nef', 'neg', 'neh', 'nei', 'nej', 'nek', 'nem', 'nen', 'neo', 'neq', 'ner', 'nes', 'net', 'neu', 'nev', 'new', 'nex', 'ney', 'nez', 'nfa', 'nfd', 'nfl', 'nfr', 'nfu', 'nga', 'ngb', 'ngc', 'ngd', 'nge', 'ngf', 'ngg', 'ngh', 'ngi', 'ngj', 'ngk', 'ngl', 'ngm', 'ngn', 'ngo', 'ngp', 'ngq', 'ngr', 'ngs', 'ngt', 'ngu', 'ngv', 'ngw', 'ngx', 'ngy', 'ngz', 'nha', 'nhb', 'nhc', 'nhd', 'nhe', 'nhf', 'nhg', 'nhh', 'nhi', 'nhk', 'nhm', 'nhn', 'nho', 'nhp', 'nhq', 'nhr', 'nht', 'nhu', 'nhv', 'nhw', 'nhx', 'nhy', 'nhz', 'nia', 'nib', 'nic', 'nid', 'nie', 'nif', 'nig', 'nih', 'nii', 'nij', 'nik', 'nil', 'nim', 'nin', 'nio', 'niq', 'nir', 'nis', 'nit', 'niu', 'niv', 'niw', 'nix', 'niy', 'niz', 'nja', 'njb', 'njd', 'njh', 'nji', 'njj', 'njl', 'njm', 'njn', 'njo', 'njr', 'njs', 'njt', 'nju', 'njx', 'njy', 'njz', 'nka', 'nkb', 'nkc', 'nkd', 'nke', 'nkf', 'nkg', 'nkh', 'nki', 'nkj', 'nkk', 'nkm', 'nkn', 'nko', 'nkp', 'nkq', 'nkr', 'nks', 'nkt', 'nku', 'nkv', 'nkw', 'nkx', 'nkz', 'nla', 'nlc', 'nle', 'nlg', 'nli', 'nlj', 'nlk', 'nll', 'nln', 'nlo', 'nlq', 'nlr', 'nlu', 'nlv', 'nlw', 'nlx', 'nly', 'nlz', 'nma', 'nmb', 'nmc', 'nmd', 'nme', 'nmf', 'nmg', 'nmh', 'nmi', 'nmj', 'nmk', 'nml', 'nmm', 'nmn', 'nmo', 'nmp', 'nmq', 'nmr', 'nms', 'nmt', 'nmu', 'nmv', 'nmw', 'nmx', 'nmy', 'nmz', 'nna', 'nnb', 'nnc', 'nnd', 'nne', 'nnf', 'nng', 'nnh', 'nni', 'nnj', 'nnk', 'nnl', 'nnm', 'nnn', 'nnp', 'nnq', 'nnr', 'nns', 'nnt', 'nnu', 'nnv', 'nnw', 'nnx', 'nny', 'nnz', 'noa', 'noc', 'nod', 'noe', 'nof', 'nog', 'noh', 'noi', 'noj', 'nok', 'nol', 'nom', 'non', 'noo', 'nop', 'noq', 'nos', 'not', 'nou', 'nov', 'now', 'noy', 'noz', 'npa', 'npb', 'npg', 'nph', 'npi', 'npl', 'npn', 'npo', 'nps', 'npu', 'npx', 'npy', 'nqg', 'nqk', 'nql', 'nqm', 'nqn', 'nqo', 'nqq', 'nqy', 'nra', 'nrb', 'nrc', 'nre', 'nrf', 'nrg', 'nri', 'nrk', 'nrl', 'nrm', 'nrn', 'nrp', 'nrr', 'nrt', 'nru', 'nrx', 'nrz', 'nsa', 'nsc', 'nsd', 'nse', 'nsf', 'nsg', 'nsh', 'nsi', 'nsk', 'nsl', 'nsm', 'nsn', 'nso', 'nsp', 'nsq', 'nsr', 'nss', 'nst', 'nsu', 'nsv', 'nsw', 'nsx', 'nsy', 'nsz', 'ntd', 'nte', 'ntg', 'nti', 'ntj', 'ntk', 'ntm', 'nto', 'ntp', 'ntr', 'nts', 'ntu', 'ntw', 'ntx', 'nty', 'ntz', 'nua', 'nub', 'nuc', 'nud', 'nue', 'nuf', 'nug', 'nuh', 'nui', 'nuj', 'nuk', 'nul', 'num', 'nun', 'nuo', 'nup', 'nuq', 'nur', 'nus', 'nut', 'nuu', 'nuv', 'nuw', 'nux', 'nuy', 'nuz', 'nvh', 'nvm', 'nvo', 'nwa', 'nwb', 'nwc', 'nwe', 'nwg', 'nwi', 'nwm', 'nwo', 'nwr', 'nwx', 'nwy', 'nxa', 'nxd', 'nxe', 'nxg', 'nxi', 'nxk', 'nxl', 'nxm', 'nxn', 'nxo', 'nxq', 'nxr', 'nxu', 'nxx', 'nyb', 'nyc', 'nyd', 'nye', 'nyf', 'nyg', 'nyh', 'nyi', 'nyj', 'nyk', 'nyl', 'nym', 'nyn', 'nyo', 'nyp', 'nyq', 'nyr', 'nys', 'nyt', 'nyu', 'nyv', 'nyw', 'nyx', 'nyy', 'nza', 'nzb', 'nzi', 'nzk', 'nzm', 'nzs', 'nzu', 'nzy', 'nzz', 'oaa', 'oac', 'oar', 'oav', 'obi', 'obk', 'obl', 'obm', 'obo', 'obr', 'obt', 'obu', 'oca', 'och', 'oco', 'ocu', 'oda', 'odk', 'odt', 'odu', 'ofo', 'ofs', 'ofu', 'ogb', 'ogc', 'oge', 'ogg', 'ogo', 'ogu', 'oht', 'ohu', 'oia', 'oin', 'ojb', 'ojc', 'ojg', 'ojp', 'ojs', 'ojv', 'ojw', 'oka', 'okb', 'okd', 'oke', 'okg', 'okh', 'oki', 'okj', 'okk', 'okl', 'okm', 'okn', 'oko', 'okr', 'oks', 'oku', 'okv', 'okx', 'ola', 'old', 'ole', 'olk', 'olm', 'olo', 'olr', 'olt', 'olu', 'oma', 'omb', 'omc', 'ome', 'omg', 'omi', 'omk', 'oml', 'omn', 'omo', 'omp', 'omq', 'omr', 'omt', 'omu', 'omv', 'omw', 'omx', 'ona', 'onb', 'one', 'ong', 'oni', 'onj', 'onk', 'onn', 'ono', 'onp', 'onr', 'ons', 'ont', 'onu', 'onw', 'onx', 'ood', 'oog', 'oon', 'oor', 'oos', 'opa', 'opk', 'opm', 'opo', 'opt', 'opy', 'ora', 'orc', 'ore', 'org', 'orh', 'orn', 'oro', 'orr', 'ors', 'ort', 'oru', 'orv', 'orw', 'orx', 'ory', 'orz', 'osa', 'osc', 'osi', 'oso', 'osp', 'ost', 'osu', 'osx', 'ota', 'otb', 'otd', 'ote', 'oti', 'otk', 'otl', 'otm', 'otn', 'oto', 'otq', 'otr', 'ots', 'ott', 'otu', 'otw', 'otx', 'oty', 'otz', 'oua', 'oub', 'oue', 'oui', 'oum', 'oun', 'ovd', 'owi', 'owl', 'oyb', 'oyd', 'oym', 'oyy', 'ozm', 'paa', 'pab', 'pac', 'pad', 'pae', 'paf', 'pag', 'pah', 'pai', 'pak', 'pal', 'pam', 'pao', 'pap', 'paq', 'par', 'pas', 'pat', 'pau', 'pav', 'paw', 'pax', 'pay', 'paz', 'pbb', 'pbc', 'pbe', 'pbf', 'pbg', 'pbh', 'pbi', 'pbl', 'pbn', 'pbo', 'pbp', 'pbr', 'pbs', 'pbt', 'pbu', 'pbv', 'pby', 'pbz', 'pca', 'pcb', 'pcc', 'pcd', 'pce', 'pcf', 'pcg', 'pch', 'pci', 'pcj', 'pck', 'pcl', 'pcm', 'pcn', 'pcp', 'pcr', 'pcw', 'pda', 'pdc', 'pdi', 'pdn', 'pdo', 'pdt', 'pdu', 'pea', 'peb', 'ped', 'pee', 'pef', 'peg', 'peh', 'pei', 'pej', 'pek', 'pel', 'pem', 'peo', 'pep', 'peq', 'pes', 'pev', 'pex', 'pey', 'pez', 'pfa', 'pfe', 'pfl', 'pga', 'pgd', 'pgg', 'pgi', 'pgk', 'pgl', 'pgn', 'pgs', 'pgu', 'pgy', 'pgz', 'pha', 'phd', 'phg', 'phh', 'phi', 'phk', 'phl', 'phm', 'phn', 'pho', 'phq', 'phr', 'pht', 'phu', 'phv', 'phw', 'pia', 'pib', 'pic', 'pid', 'pie', 'pif', 'pig', 'pih', 'pii', 'pij', 'pil', 'pim', 'pin', 'pio', 'pip', 'pir', 'pis', 'pit', 'piu', 'piv', 'piw', 'pix', 'piy', 'piz', 'pjt', 'pka', 'pkb', 'pkc', 'pkg', 'pkh', 'pkn', 'pko', 'pkp', 'pkr', 'pks', 'pkt', 'pku', 'pla', 'plb', 'plc', 'pld', 'ple', 'plf', 'plg', 'plh', 'plj', 'plk', 'pll', 'pln', 'plo', 'plp', 'plq', 'plr', 'pls', 'plt', 'plu', 'plv', 'plw', 'ply', 'plz', 'pma', 'pmb', 'pmc', 'pmd', 'pme', 'pmf', 'pmh', 'pmi', 'pmj', 'pmk', 'pml', 'pmm', 'pmn', 'pmo', 'pmq', 'pmr', 'pms', 'pmt', 'pmu', 'pmw', 'pmx', 'pmy', 'pmz', 'pna', 'pnb', 'pnc', 'pne', 'png', 'pnh', 'pni', 'pnj', 'pnk', 'pnl', 'pnm', 'pnn', 'pno', 'pnp', 'pnq', 'pnr', 'pns', 'pnt', 'pnu', 'pnv', 'pnw', 'pnx', 'pny', 'pnz', 'poc', 'pod', 'poe', 'pof', 'pog', 'poh', 'poi', 'pok', 'pom', 'pon', 'poo', 'pop', 'poq', 'pos', 'pot', 'pov', 'pow', 'pox', 'poy', 'poz', 'ppa', 'ppe', 'ppi', 'ppk', 'ppl', 'ppm', 'ppn', 'ppo', 'ppp', 'ppq', 'ppr', 'pps', 'ppt', 'ppu', 'pqa', 'pqe', 'pqm', 'pqw', 'pra', 'prb', 'prc', 'prd', 'pre', 'prf', 'prg', 'prh', 'pri', 'prk', 'prl', 'prm', 'prn', 'pro', 'prp', 'prq', 'prr', 'prs', 'prt', 'pru', 'prw', 'prx', 'pry', 'prz', 'psa', 'psc', 'psd', 'pse', 'psg', 'psh', 'psi', 'psl', 'psm', 'psn', 'pso', 'psp', 'psq', 'psr', 'pss', 'pst', 'psu', 'psw', 'psy', 'pta', 'pth', 'pti', 'ptn', 'pto', 'ptp', 'ptq', 'ptr', 'ptt', 'ptu', 'ptv', 'ptw', 'pty', 'pua', 'pub', 'puc', 'pud', 'pue', 'puf', 'pug', 'pui', 'puj', 'puk', 'pum', 'puo', 'pup', 'puq', 'pur', 'put', 'puu', 'puw', 'pux', 'puy', 'puz', 'pwa', 'pwb', 'pwg', 'pwi', 'pwm', 'pwn', 'pwo', 'pwr', 'pww', 'pxm', 'pye', 'pym', 'pyn', 'pys', 'pyu', 'pyx', 'pyy', 'pzn', 'qaa..qtz', 'qua', 'qub', 'quc', 'qud', 'quf', 'qug', 'quh', 'qui', 'quk', 'qul', 'qum', 'qun', 'qup', 'quq', 'qur', 'qus', 'quv', 'quw', 'qux', 'quy', 'quz', 'qva', 'qvc', 'qve', 'qvh', 'qvi', 'qvj', 'qvl', 'qvm', 'qvn', 'qvo', 'qvp', 'qvs', 'qvw', 'qvy', 'qvz', 'qwa', 'qwc', 'qwe', 'qwh', 'qwm', 'qws', 'qwt', 'qxa', 'qxc', 'qxh', 'qxl', 'qxn', 'qxo', 'qxp', 'qxq', 'qxr', 'qxs', 'qxt', 'qxu', 'qxw', 'qya', 'qyp', 'raa', 'rab', 'rac', 'rad', 'raf', 'rag', 'rah', 'rai', 'raj', 'rak', 'ral', 'ram', 'ran', 'rao', 'rap', 'raq', 'rar', 'ras', 'rat', 'rau', 'rav', 'raw', 'rax', 'ray', 'raz', 'rbb', 'rbk', 'rbl', 'rbp', 'rcf', 'rdb', 'rea', 'reb', 'ree', 'reg', 'rei', 'rej', 'rel', 'rem', 'ren', 'rer', 'res', 'ret', 'rey', 'rga', 'rge', 'rgk', 'rgn', 'rgr', 'rgs', 'rgu', 'rhg', 'rhp', 'ria', 'rie', 'rif', 'ril', 'rim', 'rin', 'rir', 'rit', 'riu', 'rjg', 'rji', 'rjs', 'rka', 'rkb', 'rkh', 'rki', 'rkm', 'rkt', 'rkw', 'rma', 'rmb', 'rmc', 'rmd', 'rme', 'rmf', 'rmg', 'rmh', 'rmi', 'rmk', 'rml', 'rmm', 'rmn', 'rmo', 'rmp', 'rmq', 'rmr', 'rms', 'rmt', 'rmu', 'rmv', 'rmw', 'rmx', 'rmy', 'rmz', 'rna', 'rnd', 'rng', 'rnl', 'rnn', 'rnp', 'rnr', 'rnw', 'roa', 'rob', 'roc', 'rod', 'roe', 'rof', 'rog', 'rol', 'rom', 'roo', 'rop', 'ror', 'rou', 'row', 'rpn', 'rpt', 'rri', 'rro', 'rrt', 'rsb', 'rsi', 'rsl', 'rsm', 'rtc', 'rth', 'rtm', 'rts', 'rtw', 'rub', 'ruc', 'rue', 'ruf', 'rug', 'ruh', 'rui', 'ruk', 'ruo', 'rup', 'ruq', 'rut', 'ruu', 'ruy', 'ruz', 'rwa', 'rwk', 'rwm', 'rwo', 'rwr', 'rxd', 'rxw', 'ryn', 'rys', 'ryu', 'rzh', 'saa', 'sab', 'sac', 'sad', 'sae', 'saf', 'sah', 'sai', 'saj', 'sak', 'sal', 'sam', 'sao', 'sap', 'saq', 'sar', 'sas', 'sat', 'sau', 'sav', 'saw', 'sax', 'say', 'saz', 'sba', 'sbb', 'sbc', 'sbd', 'sbe', 'sbf', 'sbg', 'sbh', 'sbi', 'sbj', 'sbk', 'sbl', 'sbm', 'sbn', 'sbo', 'sbp', 'sbq', 'sbr', 'sbs', 'sbt', 'sbu', 'sbv', 'sbw', 'sbx', 'sby', 'sbz', 'sca', 'scb', 'sce', 'scf', 'scg', 'sch', 'sci', 'sck', 'scl', 'scn', 'sco', 'scp', 'scq', 'scs', 'sct', 'scu', 'scv', 'scw', 'scx', 'sda', 'sdb', 'sdc', 'sde', 'sdf', 'sdg', 'sdh', 'sdj', 'sdk', 'sdl', 'sdm', 'sdn', 'sdo', 'sdp', 'sdr', 'sds', 'sdt', 'sdu', 'sdv', 'sdx', 'sdz', 'sea', 'seb', 'sec', 'sed', 'see', 'sef', 'seg', 'seh', 'sei', 'sej', 'sek', 'sel', 'sem', 'sen', 'seo', 'sep', 'seq', 'ser', 'ses', 'set', 'seu', 'sev', 'sew', 'sey', 'sez', 'sfb', 'sfe', 'sfm', 'sfs', 'sfw', 'sga', 'sgb', 'sgc', 'sgd', 'sge', 'sgg', 'sgh', 'sgi', 'sgj', 'sgk', 'sgl', 'sgm', 'sgn', 'sgo', 'sgp', 'sgr', 'sgs', 'sgt', 'sgu', 'sgw', 'sgx', 'sgy', 'sgz', 'sha', 'shb', 'shc', 'shd', 'she', 'shg', 'shh', 'shi', 'shj', 'shk', 'shl', 'shm', 'shn', 'sho', 'shp', 'shq', 'shr', 'shs', 'sht', 'shu', 'shv', 'shw', 'shx', 'shy', 'shz', 'sia', 'sib', 'sid', 'sie', 'sif', 'sig', 'sih', 'sii', 'sij', 'sik', 'sil', 'sim', 'sio', 'sip', 'siq', 'sir', 'sis', 'sit', 'siu', 'siv', 'siw', 'six', 'siy', 'siz', 'sja', 'sjb', 'sjd', 'sje', 'sjg', 'sjk', 'sjl', 'sjm', 'sjn', 'sjo', 'sjp', 'sjr', 'sjs', 'sjt', 'sju', 'sjw', 'ska', 'skb', 'skc', 'skd', 'ske', 'skf', 'skg', 'skh', 'ski', 'skj', 'skk', 'skm', 'skn', 'sko', 'skp', 'skq', 'skr', 'sks', 'skt', 'sku', 'skv', 'skw', 'skx', 'sky', 'skz', 'sla', 'slc', 'sld', 'sle', 'slf', 'slg', 'slh', 'sli', 'slj', 'sll', 'slm', 'sln', 'slp', 'slq', 'slr', 'sls', 'slt', 'slu', 'slw', 'slx', 'sly', 'slz', 'sma', 'smb', 'smc', 'smd', 'smf', 'smg', 'smh', 'smi', 'smj', 'smk', 'sml', 'smm', 'smn', 'smp', 'smq', 'smr', 'sms', 'smt', 'smu', 'smv', 'smw', 'smx', 'smy', 'smz', 'snb', 'snc', 'sne', 'snf', 'sng', 'snh', 'sni', 'snj', 'snk', 'snl', 'snm', 'snn', 'sno', 'snp', 'snq', 'snr', 'sns', 'snu', 'snv', 'snw', 'snx', 'sny', 'snz', 'soa', 'sob', 'soc', 'sod', 'soe', 'sog', 'soh', 'soi', 'soj', 'sok', 'sol', 'son', 'soo', 'sop', 'soq', 'sor', 'sos', 'sou', 'sov', 'sow', 'sox', 'soy', 'soz', 'spb', 'spc', 'spd', 'spe', 'spg', 'spi', 'spk', 'spl', 'spm', 'spn', 'spo', 'spp', 'spq', 'spr', 'sps', 'spt', 'spu', 'spv', 'spx', 'spy', 'sqa', 'sqh', 'sqj', 'sqk', 'sqm', 'sqn', 'sqo', 'sqq', 'sqr', 'sqs', 'sqt', 'squ', 'sra', 'srb', 'src', 'sre', 'srf', 'srg', 'srh', 'sri', 'srk', 'srl', 'srm', 'srn', 'sro', 'srq', 'srr', 'srs', 'srt', 'sru', 'srv', 'srw', 'srx', 'sry', 'srz', 'ssa', 'ssb', 'ssc', 'ssd', 'sse', 'ssf', 'ssg', 'ssh', 'ssi', 'ssj', 'ssk', 'ssl', 'ssm', 'ssn', 'sso', 'ssp', 'ssq', 'ssr', 'sss', 'sst', 'ssu', 'ssv', 'ssx', 'ssy', 'ssz', 'sta', 'stb', 'std', 'ste', 'stf', 'stg', 'sth', 'sti', 'stj', 'stk', 'stl', 'stm', 'stn', 'sto', 'stp', 'stq', 'str', 'sts', 'stt', 'stu', 'stv', 'stw', 'sty', 'sua', 'sub', 'suc', 'sue', 'sug', 'sui', 'suj', 'suk', 'sul', 'sum', 'suq', 'sur', 'sus', 'sut', 'suv', 'suw', 'sux', 'suy', 'suz', 'sva', 'svb', 'svc', 'sve', 'svk', 'svm', 'svr', 'svs', 'svx', 'swb', 'swc', 'swf', 'swg', 'swh', 'swi', 'swj', 'swk', 'swl', 'swm', 'swn', 'swo', 'swp', 'swq', 'swr', 'sws', 'swt', 'swu', 'swv', 'sww', 'swx', 'swy', 'sxb', 'sxc', 'sxe', 'sxg', 'sxk', 'sxl', 'sxm', 'sxn', 'sxo', 'sxr', 'sxs', 'sxu', 'sxw', 'sya', 'syb', 'syc', 'syd', 'syi', 'syk', 'syl', 'sym', 'syn', 'syo', 'syr', 'sys', 'syw', 'syx', 'syy', 'sza', 'szb', 'szc', 'szd', 'sze', 'szg', 'szl', 'szn', 'szp', 'szs', 'szv', 'szw', 'taa', 'tab', 'tac', 'tad', 'tae', 'taf', 'tag', 'tai', 'taj', 'tak', 'tal', 'tan', 'tao', 'tap', 'taq', 'tar', 'tas', 'tau', 'tav', 'taw', 'tax', 'tay', 'taz', 'tba', 'tbb', 'tbc', 'tbd', 'tbe', 'tbf', 'tbg', 'tbh', 'tbi', 'tbj', 'tbk', 'tbl', 'tbm', 'tbn', 'tbo', 'tbp', 'tbq', 'tbr', 'tbs', 'tbt', 'tbu', 'tbv', 'tbw', 'tbx', 'tby', 'tbz', 'tca', 'tcb', 'tcc', 'tcd', 'tce', 'tcf', 'tcg', 'tch', 'tci', 'tck', 'tcl', 'tcm', 'tcn', 'tco', 'tcp', 'tcq', 'tcs', 'tct', 'tcu', 'tcw', 'tcx', 'tcy', 'tcz', 'tda', 'tdb', 'tdc', 'tdd', 'tde', 'tdf', 'tdg', 'tdh', 'tdi', 'tdj', 'tdk', 'tdl', 'tdm', 'tdn', 'tdo', 'tdq', 'tdr', 'tds', 'tdt', 'tdu', 'tdv', 'tdx', 'tdy', 'tea', 'teb', 'tec', 'ted', 'tee', 'tef', 'teg', 'teh', 'tei', 'tek', 'tem', 'ten', 'teo', 'tep', 'teq', 'ter', 'tes', 'tet', 'teu', 'tev', 'tew', 'tex', 'tey', 'tfi', 'tfn', 'tfo', 'tfr', 'tft', 'tga', 'tgb', 'tgc', 'tgd', 'tge', 'tgf', 'tgg', 'tgh', 'tgi', 'tgj', 'tgn', 'tgo', 'tgp', 'tgq', 'tgr', 'tgs', 'tgt', 'tgu', 'tgv', 'tgw', 'tgx', 'tgy', 'tgz', 'thc', 'thd', 'the', 'thf', 'thh', 'thi', 'thk', 'thl', 'thm', 'thn', 'thp', 'thq', 'thr', 'ths', 'tht', 'thu', 'thv', 'thw', 'thx', 'thy', 'thz', 'tia', 'tic', 'tid', 'tie', 'tif', 'tig', 'tih', 'tii', 'tij', 'tik', 'til', 'tim', 'tin', 'tio', 'tip', 'tiq', 'tis', 'tit', 'tiu', 'tiv', 'tiw', 'tix', 'tiy', 'tiz', 'tja', 'tjg', 'tji', 'tjl', 'tjm', 'tjn', 'tjo', 'tjs', 'tju', 'tjw', 'tka', 'tkb', 'tkd', 'tke', 'tkf', 'tkg', 'tkk', 'tkl', 'tkm', 'tkn', 'tkp', 'tkq', 'tkr', 'tks', 'tkt', 'tku', 'tkv', 'tkw', 'tkx', 'tkz', 'tla', 'tlb', 'tlc', 'tld', 'tlf', 'tlg', 'tlh', 'tli', 'tlj', 'tlk', 'tll', 'tlm', 'tln', 'tlo', 'tlp', 'tlq', 'tlr', 'tls', 'tlt', 'tlu', 'tlv', 'tlw', 'tlx', 'tly', 'tma', 'tmb', 'tmc', 'tmd', 'tme', 'tmf', 'tmg', 'tmh', 'tmi', 'tmj', 'tmk', 'tml', 'tmm', 'tmn', 'tmo', 'tmp', 'tmq', 'tmr', 'tms', 'tmt', 'tmu', 'tmv', 'tmw', 'tmy', 'tmz', 'tna', 'tnb', 'tnc', 'tnd', 'tne', 'tnf', 'tng', 'tnh', 'tni', 'tnk', 'tnl', 'tnm', 'tnn', 'tno', 'tnp', 'tnq', 'tnr', 'tns', 'tnt', 'tnu', 'tnv', 'tnw', 'tnx', 'tny', 'tnz', 'tob', 'toc', 'tod', 'toe', 'tof', 'tog', 'toh', 'toi', 'toj', 'tol', 'tom', 'too', 'top', 'toq', 'tor', 'tos', 'tou', 'tov', 'tow', 'tox', 'toy', 'toz', 'tpa', 'tpc', 'tpe', 'tpf', 'tpg', 'tpi', 'tpj', 'tpk', 'tpl', 'tpm', 'tpn', 'tpo', 'tpp', 'tpq', 'tpr', 'tpt', 'tpu', 'tpv', 'tpw', 'tpx', 'tpy', 'tpz', 'tqb', 'tql', 'tqm', 'tqn', 'tqo', 'tqp', 'tqq', 'tqr', 'tqt', 'tqu', 'tqw', 'tra', 'trb', 'trc', 'trd', 'tre', 'trf', 'trg', 'trh', 'tri', 'trj', 'trk', 'trl', 'trm', 'trn', 'tro', 'trp', 'trq', 'trr', 'trs', 'trt', 'tru', 'trv', 'trw', 'trx', 'try', 'trz', 'tsa', 'tsb', 'tsc', 'tsd', 'tse', 'tsf', 'tsg', 'tsh', 'tsi', 'tsj', 'tsk', 'tsl', 'tsm', 'tsp', 'tsq', 'tsr', 'tss', 'tst', 'tsu', 'tsv', 'tsw', 'tsx', 'tsy', 'tsz', 'tta', 'ttb', 'ttc', 'ttd', 'tte', 'ttf', 'ttg', 'tth', 'tti', 'ttj', 'ttk', 'ttl', 'ttm', 'ttn', 'tto', 'ttp', 'ttq', 'ttr', 'tts', 'ttt', 'ttu', 'ttv', 'ttw', 'tty', 'ttz', 'tua', 'tub', 'tuc', 'tud', 'tue', 'tuf', 'tug', 'tuh', 'tui', 'tuj', 'tul', 'tum', 'tun', 'tuo', 'tup', 'tuq', 'tus', 'tut', 'tuu', 'tuv', 'tuw', 'tux', 'tuy', 'tuz', 'tva', 'tvd', 'tve', 'tvk', 'tvl', 'tvm', 'tvn', 'tvo', 'tvs', 'tvt', 'tvu', 'tvw', 'tvy', 'twa', 'twb', 'twc', 'twd', 'twe', 'twf', 'twg', 'twh', 'twl', 'twm', 'twn', 'two', 'twp', 'twq', 'twr', 'twt', 'twu', 'tww', 'twx', 'twy', 'txa', 'txb', 'txc', 'txe', 'txg', 'txh', 'txi', 'txj', 'txm', 'txn', 'txo', 'txq', 'txr', 'txs', 'txt', 'txu', 'txx', 'txy', 'tya', 'tye', 'tyh', 'tyi', 'tyj', 'tyl', 'tyn', 'typ', 'tyr', 'tys', 'tyt', 'tyu', 'tyv', 'tyx', 'tyz', 'tza', 'tzh', 'tzj', 'tzl', 'tzm', 'tzn', 'tzo', 'tzx', 'uam', 'uan', 'uar', 'uba', 'ubi', 'ubl', 'ubr', 'ubu', 'uby', 'uda', 'ude', 'udg', 'udi', 'udj', 'udl', 'udm', 'udu', 'ues', 'ufi', 'uga', 'ugb', 'uge', 'ugn', 'ugo', 'ugy', 'uha', 'uhn', 'uis', 'uiv', 'uji', 'uka', 'ukg', 'ukh', 'ukk', 'ukl', 'ukp', 'ukq', 'uks', 'uku', 'ukw', 'uky', 'ula', 'ulb', 'ulc', 'ule', 'ulf', 'uli', 'ulk', 'ull', 'ulm', 'uln', 'ulu', 'ulw', 'uma', 'umb', 'umc', 'umd', 'umg', 'umi', 'umm', 'umn', 'umo', 'ump', 'umr', 'ums', 'umu', 'una', 'und', 'une', 'ung', 'unk', 'unm', 'unn', 'unp', 'unr', 'unu', 'unx', 'unz', 'uok', 'upi', 'upv', 'ura', 'urb', 'urc', 'ure', 'urf', 'urg', 'urh', 'uri', 'urj', 'urk', 'url', 'urm', 'urn', 'uro', 'urp', 'urr', 'urt', 'uru', 'urv', 'urw', 'urx', 'ury', 'urz', 'usa', 'ush', 'usi', 'usk', 'usp', 'usu', 'uta', 'ute', 'utp', 'utr', 'utu', 'uum', 'uun', 'uur', 'uuu', 'uve', 'uvh', 'uvl', 'uwa', 'uya', 'uzn', 'uzs', 'vaa', 'vae', 'vaf', 'vag', 'vah', 'vai', 'vaj', 'val', 'vam', 'van', 'vao', 'vap', 'var', 'vas', 'vau', 'vav', 'vay', 'vbb', 'vbk', 'vec', 'ved', 'vel', 'vem', 'veo', 'vep', 'ver', 'vgr', 'vgt', 'vic', 'vid', 'vif', 'vig', 'vil', 'vin', 'vis', 'vit', 'viv', 'vka', 'vki', 'vkj', 'vkk', 'vkl', 'vkm', 'vko', 'vkp', 'vkt', 'vku', 'vlp', 'vls', 'vma', 'vmb', 'vmc', 'vmd', 'vme', 'vmf', 'vmg', 'vmh', 'vmi', 'vmj', 'vmk', 'vml', 'vmm', 'vmp', 'vmq', 'vmr', 'vms', 'vmu', 'vmv', 'vmw', 'vmx', 'vmy', 'vmz', 'vnk', 'vnm', 'vnp', 'vor', 'vot', 'vra', 'vro', 'vrs', 'vrt', 'vsi', 'vsl', 'vsv', 'vto', 'vum', 'vun', 'vut', 'vwa', 'waa', 'wab', 'wac', 'wad', 'wae', 'waf', 'wag', 'wah', 'wai', 'waj', 'wak', 'wal', 'wam', 'wan', 'wao', 'wap', 'waq', 'war', 'was', 'wat', 'wau', 'wav', 'waw', 'wax', 'way', 'waz', 'wba', 'wbb', 'wbe', 'wbf', 'wbh', 'wbi', 'wbj', 'wbk', 'wbl', 'wbm', 'wbp', 'wbq', 'wbr', 'wbs', 'wbt', 'wbv', 'wbw', 'wca', 'wci', 'wdd', 'wdg', 'wdj', 'wdk', 'wdu', 'wdy', 'wea', 'wec', 'wed', 'weg', 'weh', 'wei', 'wem', 'wen', 'weo', 'wep', 'wer', 'wes', 'wet', 'weu', 'wew', 'wfg', 'wga', 'wgb', 'wgg', 'wgi', 'wgo', 'wgu', 'wgw', 'wgy', 'wha', 'whg', 'whk', 'whu', 'wib', 'wic', 'wie', 'wif', 'wig', 'wih', 'wii', 'wij', 'wik', 'wil', 'wim', 'win', 'wir', 'wit', 'wiu', 'wiv', 'wiw', 'wiy', 'wja', 'wji', 'wka', 'wkb', 'wkd', 'wkl', 'wku', 'wkw', 'wky', 'wla', 'wlc', 'wle', 'wlg', 'wli', 'wlk', 'wll', 'wlm', 'wlo', 'wlr', 'wls', 'wlu', 'wlv', 'wlw', 'wlx', 'wly', 'wma', 'wmb', 'wmc', 'wmd', 'wme', 'wmh', 'wmi', 'wmm', 'wmn', 'wmo', 'wms', 'wmt', 'wmw', 'wmx', 'wnb', 'wnc', 'wnd', 'wne', 'wng', 'wni', 'wnk', 'wnm', 'wnn', 'wno', 'wnp', 'wnu', 'wnw', 'wny', 'woa', 'wob', 'woc', 'wod', 'woe', 'wof', 'wog', 'woi', 'wok', 'wom', 'won', 'woo', 'wor', 'wos', 'wow', 'woy', 'wpc', 'wra', 'wrb', 'wrd', 'wrg', 'wrh', 'wri', 'wrk', 'wrl', 'wrm', 'wrn', 'wro', 'wrp', 'wrr', 'wrs', 'wru', 'wrv', 'wrw', 'wrx', 'wry', 'wrz', 'wsa', 'wsg', 'wsi', 'wsk', 'wsr', 'wss', 'wsu', 'wsv', 'wtf', 'wth', 'wti', 'wtk', 'wtm', 'wtw', 'wua', 'wub', 'wud', 'wuh', 'wul', 'wum', 'wun', 'wur', 'wut', 'wuu', 'wuv', 'wux', 'wuy', 'wwa', 'wwb', 'wwo', 'wwr', 'www', 'wxa', 'wxw', 'wya', 'wyb', 'wyi', 'wym', 'wyr', 'wyy', 'xaa', 'xab', 'xac', 'xad', 'xae', 'xag', 'xai', 'xaj', 'xak', 'xal', 'xam', 'xan', 'xao', 'xap', 'xaq', 'xar', 'xas', 'xat', 'xau', 'xav', 'xaw', 'xay', 'xba', 'xbb', 'xbc', 'xbd', 'xbe', 'xbg', 'xbi', 'xbj', 'xbm', 'xbn', 'xbo', 'xbp', 'xbr', 'xbw', 'xbx', 'xby', 'xcb', 'xcc', 'xce', 'xcg', 'xch', 'xcl', 'xcm', 'xcn', 'xco', 'xcr', 'xct', 'xcu', 'xcv', 'xcw', 'xcy', 'xda', 'xdc', 'xdk', 'xdm', 'xdo', 'xdy', 'xeb', 'xed', 'xeg', 'xel', 'xem', 'xep', 'xer', 'xes', 'xet', 'xeu', 'xfa', 'xga', 'xgb', 'xgd', 'xgf', 'xgg', 'xgi', 'xgl', 'xgm', 'xgn', 'xgr', 'xgu', 'xgw', 'xha', 'xhc', 'xhd', 'xhe', 'xhr', 'xht', 'xhu', 'xhv', 'xia', 'xib', 'xii', 'xil', 'xin', 'xip', 'xir', 'xis', 'xiv', 'xiy', 'xjb', 'xjt', 'xka', 'xkb', 'xkc', 'xkd', 'xke', 'xkf', 'xkg', 'xkh', 'xki', 'xkj', 'xkk', 'xkl', 'xkn', 'xko', 'xkp', 'xkq', 'xkr', 'xks', 'xkt', 'xku', 'xkv', 'xkw', 'xkx', 'xky', 'xkz', 'xla', 'xlb', 'xlc', 'xld', 'xle', 'xlg', 'xli', 'xln', 'xlo', 'xlp', 'xls', 'xlu', 'xly', 'xma', 'xmb', 'xmc', 'xmd', 'xme', 'xmf', 'xmg', 'xmh', 'xmj', 'xmk', 'xml', 'xmm', 'xmn', 'xmo', 'xmp', 'xmq', 'xmr', 'xms', 'xmt', 'xmu', 'xmv', 'xmw', 'xmx', 'xmy', 'xmz', 'xna', 'xnb', 'xnd', 'xng', 'xnh', 'xni', 'xnk', 'xnn', 'xno', 'xnr', 'xns', 'xnt', 'xnu', 'xny', 'xnz', 'xoc', 'xod', 'xog', 'xoi', 'xok', 'xom', 'xon', 'xoo', 'xop', 'xor', 'xow', 'xpa', 'xpc', 'xpe', 'xpg', 'xpi', 'xpj', 'xpk', 'xpm', 'xpn', 'xpo', 'xpp', 'xpq', 'xpr', 'xps', 'xpt', 'xpu', 'xpy', 'xqa', 'xqt', 'xra', 'xrb', 'xrd', 'xre', 'xrg', 'xri', 'xrm', 'xrn', 'xrq', 'xrr', 'xrt', 'xru', 'xrw', 'xsa', 'xsb', 'xsc', 'xsd', 'xse', 'xsh', 'xsi', 'xsj', 'xsl', 'xsm', 'xsn', 'xso', 'xsp', 'xsq', 'xsr', 'xss', 'xsu', 'xsv', 'xsy', 'xta', 'xtb', 'xtc', 'xtd', 'xte', 'xtg', 'xth', 'xti', 'xtj', 'xtl', 'xtm', 'xtn', 'xto', 'xtp', 'xtq', 'xtr', 'xts', 'xtt', 'xtu', 'xtv', 'xtw', 'xty', 'xtz', 'xua', 'xub', 'xud', 'xug', 'xuj', 'xul', 'xum', 'xun', 'xuo', 'xup', 'xur', 'xut', 'xuu', 'xve', 'xvi', 'xvn', 'xvo', 'xvs', 'xwa', 'xwc', 'xwd', 'xwe', 'xwg', 'xwj', 'xwk', 'xwl', 'xwo', 'xwr', 'xwt', 'xww', 'xxb', 'xxk', 'xxm', 'xxr', 'xxt', 'xya', 'xyb', 'xyj', 'xyk', 'xyl', 'xyt', 'xyy', 'xzh', 'xzm', 'xzp', 'yaa', 'yab', 'yac', 'yad', 'yae', 'yaf', 'yag', 'yah', 'yai', 'yaj', 'yak', 'yal', 'yam', 'yan', 'yao', 'yap', 'yaq', 'yar', 'yas', 'yat', 'yau', 'yav', 'yaw', 'yax', 'yay', 'yaz', 'yba', 'ybb', 'ybd', 'ybe', 'ybh', 'ybi', 'ybj', 'ybk', 'ybl', 'ybm', 'ybn', 'ybo', 'ybx', 'yby', 'ych', 'ycl', 'ycn', 'ycp', 'yda', 'ydd', 'yde', 'ydg', 'ydk', 'yds', 'yea', 'yec', 'yee', 'yei', 'yej', 'yel', 'yen', 'yer', 'yes', 'yet', 'yeu', 'yev', 'yey', 'yga', 'ygi', 'ygl', 'ygm', 'ygp', 'ygr', 'ygs', 'ygu', 'ygw', 'yha', 'yhd', 'yhl', 'yhs', 'yia', 'yif', 'yig', 'yih', 'yii', 'yij', 'yik', 'yil', 'yim', 'yin', 'yip', 'yiq', 'yir', 'yis', 'yit', 'yiu', 'yiv', 'yix', 'yiy', 'yiz', 'yka', 'ykg', 'yki', 'ykk', 'ykl', 'ykm', 'ykn', 'yko', 'ykr', 'ykt', 'yku', 'yky', 'yla', 'ylb', 'yle', 'ylg', 'yli', 'yll', 'ylm', 'yln', 'ylo', 'ylr', 'ylu', 'yly', 'yma', 'ymb', 'ymc', 'ymd', 'yme', 'ymg', 'ymh', 'ymi', 'ymk', 'yml', 'ymm', 'ymn', 'ymo', 'ymp', 'ymq', 'ymr', 'yms', 'ymt', 'ymx', 'ymz', 'yna', 'ynd', 'yne', 'yng', 'ynh', 'ynk', 'ynl', 'ynn', 'yno', 'ynq', 'yns', 'ynu', 'yob', 'yog', 'yoi', 'yok', 'yol', 'yom', 'yon', 'yos', 'yot', 'yox', 'yoy', 'ypa', 'ypb', 'ypg', 'yph', 'ypk', 'ypm', 'ypn', 'ypo', 'ypp', 'ypz', 'yra', 'yrb', 'yre', 'yri', 'yrk', 'yrl', 'yrm', 'yrn', 'yro', 'yrs', 'yrw', 'yry', 'ysc', 'ysd', 'ysg', 'ysl', 'ysn', 'yso', 'ysp', 'ysr', 'yss', 'ysy', 'yta', 'ytl', 'ytp', 'ytw', 'yty', 'yua', 'yub', 'yuc', 'yud', 'yue', 'yuf', 'yug', 'yui', 'yuj', 'yuk', 'yul', 'yum', 'yun', 'yup', 'yuq', 'yur', 'yut', 'yuu', 'yuw', 'yux', 'yuy', 'yuz', 'yva', 'yvt', 'ywa', 'ywg', 'ywl', 'ywn', 'ywq', 'ywr', 'ywt', 'ywu', 'yww', 'yxa', 'yxg', 'yxl', 'yxm', 'yxu', 'yxy', 'yyr', 'yyu', 'yyz', 'yzg', 'yzk', 'zaa', 'zab', 'zac', 'zad', 'zae', 'zaf', 'zag', 'zah', 'zai', 'zaj', 'zak', 'zal', 'zam', 'zao', 'zap', 'zaq', 'zar', 'zas', 'zat', 'zau', 'zav', 'zaw', 'zax', 'zay', 'zaz', 'zbc', 'zbe', 'zbl', 'zbt', 'zbw', 'zca', 'zch', 'zdj', 'zea', 'zeg', 'zeh', 'zen', 'zga', 'zgb', 'zgh', 'zgm', 'zgn', 'zgr', 'zhb', 'zhd', 'zhi', 'zhn', 'zhw', 'zhx', 'zia', 'zib', 'zik', 'zil', 'zim', 'zin', 'zir', 'ziw', 'ziz', 'zka', 'zkb', 'zkd', 'zkg', 'zkh', 'zkk', 'zkn', 'zko', 'zkp', 'zkr', 'zkt', 'zku', 'zkv', 'zkz', 'zle', 'zlj', 'zlm', 'zln', 'zlq', 'zls', 'zlw', 'zma', 'zmb', 'zmc', 'zmd', 'zme', 'zmf', 'zmg', 'zmh', 'zmi', 'zmj', 'zmk', 'zml', 'zmm', 'zmn', 'zmo', 'zmp', 'zmq', 'zmr', 'zms', 'zmt', 'zmu', 'zmv', 'zmw', 'zmx', 'zmy', 'zmz', 'zna', 'znd', 'zne', 'zng', 'znk', 'zns', 'zoc', 'zoh', 'zom', 'zoo', 'zoq', 'zor', 'zos', 'zpa', 'zpb', 'zpc', 'zpd', 'zpe', 'zpf', 'zpg', 'zph', 'zpi', 'zpj', 'zpk', 'zpl', 'zpm', 'zpn', 'zpo', 'zpp', 'zpq', 'zpr', 'zps', 'zpt', 'zpu', 'zpv', 'zpw', 'zpx', 'zpy', 'zpz', 'zqe', 'zra', 'zrg', 'zrn', 'zro', 'zrp', 'zrs', 'zsa', 'zsk', 'zsl', 'zsm', 'zsr', 'zsu', 'zte', 'ztg', 'ztl', 'ztm', 'ztn', 'ztp', 'ztq', 'zts', 'ztt', 'ztu', 'ztx', 'zty', 'zua', 'zuh', 'zum', 'zun', 'zuy', 'zwa', 'zxx', 'zyb', 'zyg', 'zyj', 'zyn', 'zyp', 'zza', 'zzj' ];
+      var langs = [ 'aa', 'ab', 'ae', 'af', 'ak', 'am', 'an', 'ar', 'as', 'av', 'ay', 'az', 'ba', 'be', 'bg', 'bh', 'bi', 'bm', 'bn', 'bo', 'br', 'bs', 'ca', 'ce', 'ch', 'co', 'cr', 'cs', 'cu', 'cv', 'cy', 'da', 'de', 'dv', 'dz', 'ee', 'el', 'en', 'eo', 'es', 'et', 'eu', 'fa', 'ff', 'fi', 'fj', 'fo', 'fr', 'fy', 'ga', 'gd', 'gl', 'gn', 'gu', 'gv', 'ha', 'he', 'hi', 'ho', 'hr', 'ht', 'hu', 'hy', 'hz', 'ia', 'id', 'ie', 'ig', 'ii', 'ik', 'in', 'io', 'is', 'it', 'iu', 'iw', 'ja', 'ji', 'jv', 'jw', 'ka', 'kg', 'ki', 'kj', 'kk', 'kl', 'km', 'kn', 'ko', 'kr', 'ks', 'ku', 'kv', 'kw', 'ky', 'la', 'lb', 'lg', 'li', 'ln', 'lo', 'lt', 'lu', 'lv', 'mg', 'mh', 'mi', 'mk', 'ml', 'mn', 'mo', 'mr', 'ms', 'mt', 'my', 'na', 'nb', 'nd', 'ne', 'ng', 'nl', 'nn', 'no', 'nr', 'nv', 'ny', 'oc', 'oj', 'om', 'or', 'os', 'pa', 'pi', 'pl', 'ps', 'pt', 'qu', 'rm', 'rn', 'ro', 'ru', 'rw', 'sa', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sk', 'sl', 'sm', 'sn', 'so', 'sq', 'sr', 'ss', 'st', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'ti', 'tk', 'tl', 'tn', 'to', 'tr', 'ts', 'tt', 'tw', 'ty', 'ug', 'uk', 'ur', 'uz', 've', 'vi', 'vo', 'wa', 'wo', 'xh', 'yi', 'yo', 'za', 'zh', 'zu', 'aaa', 'aab', 'aac', 'aad', 'aae', 'aaf', 'aag', 'aah', 'aai', 'aak', 'aal', 'aam', 'aan', 'aao', 'aap', 'aaq', 'aas', 'aat', 'aau', 'aav', 'aaw', 'aax', 'aaz', 'aba', 'abb', 'abc', 'abd', 'abe', 'abf', 'abg', 'abh', 'abi', 'abj', 'abl', 'abm', 'abn', 'abo', 'abp', 'abq', 'abr', 'abs', 'abt', 'abu', 'abv', 'abw', 'abx', 'aby', 'abz', 'aca', 'acb', 'acd', 'ace', 'acf', 'ach', 'aci', 'ack', 'acl', 'acm', 'acn', 'acp', 'acq', 'acr', 'acs', 'act', 'acu', 'acv', 'acw', 'acx', 'acy', 'acz', 'ada', 'adb', 'add', 'ade', 'adf', 'adg', 'adh', 'adi', 'adj', 'adl', 'adn', 'ado', 'adp', 'adq', 'adr', 'ads', 'adt', 'adu', 'adw', 'adx', 'ady', 'adz', 'aea', 'aeb', 'aec', 'aed', 'aee', 'aek', 'ael', 'aem', 'aen', 'aeq', 'aer', 'aes', 'aeu', 'aew', 'aey', 'aez', 'afa', 'afb', 'afd', 'afe', 'afg', 'afh', 'afi', 'afk', 'afn', 'afo', 'afp', 'afs', 'aft', 'afu', 'afz', 'aga', 'agb', 'agc', 'agd', 'age', 'agf', 'agg', 'agh', 'agi', 'agj', 'agk', 'agl', 'agm', 'agn', 'ago', 'agp', 'agq', 'agr', 'ags', 'agt', 'agu', 'agv', 'agw', 'agx', 'agy', 'agz', 'aha', 'ahb', 'ahg', 'ahh', 'ahi', 'ahk', 'ahl', 'ahm', 'ahn', 'aho', 'ahp', 'ahr', 'ahs', 'aht', 'aia', 'aib', 'aic', 'aid', 'aie', 'aif', 'aig', 'aih', 'aii', 'aij', 'aik', 'ail', 'aim', 'ain', 'aio', 'aip', 'aiq', 'air', 'ais', 'ait', 'aiw', 'aix', 'aiy', 'aja', 'ajg', 'aji', 'ajn', 'ajp', 'ajt', 'aju', 'ajw', 'ajz', 'akb', 'akc', 'akd', 'ake', 'akf', 'akg', 'akh', 'aki', 'akj', 'akk', 'akl', 'akm', 'ako', 'akp', 'akq', 'akr', 'aks', 'akt', 'aku', 'akv', 'akw', 'akx', 'aky', 'akz', 'ala', 'alc', 'ald', 'ale', 'alf', 'alg', 'alh', 'ali', 'alj', 'alk', 'all', 'alm', 'aln', 'alo', 'alp', 'alq', 'alr', 'als', 'alt', 'alu', 'alv', 'alw', 'alx', 'aly', 'alz', 'ama', 'amb', 'amc', 'ame', 'amf', 'amg', 'ami', 'amj', 'amk', 'aml', 'amm', 'amn', 'amo', 'amp', 'amq', 'amr', 'ams', 'amt', 'amu', 'amv', 'amw', 'amx', 'amy', 'amz', 'ana', 'anb', 'anc', 'and', 'ane', 'anf', 'ang', 'anh', 'ani', 'anj', 'ank', 'anl', 'anm', 'ann', 'ano', 'anp', 'anq', 'anr', 'ans', 'ant', 'anu', 'anv', 'anw', 'anx', 'any', 'anz', 'aoa', 'aob', 'aoc', 'aod', 'aoe', 'aof', 'aog', 'aoh', 'aoi', 'aoj', 'aok', 'aol', 'aom', 'aon', 'aor', 'aos', 'aot', 'aou', 'aox', 'aoz', 'apa', 'apb', 'apc', 'apd', 'ape', 'apf', 'apg', 'aph', 'api', 'apj', 'apk', 'apl', 'apm', 'apn', 'apo', 'app', 'apq', 'apr', 'aps', 'apt', 'apu', 'apv', 'apw', 'apx', 'apy', 'apz', 'aqa', 'aqc', 'aqd', 'aqg', 'aql', 'aqm', 'aqn', 'aqp', 'aqr', 'aqt', 'aqz', 'arb', 'arc', 'ard', 'are', 'arh', 'ari', 'arj', 'ark', 'arl', 'arn', 'aro', 'arp', 'arq', 'arr', 'ars', 'art', 'aru', 'arv', 'arw', 'arx', 'ary', 'arz', 'asa', 'asb', 'asc', 'asd', 'ase', 'asf', 'asg', 'ash', 'asi', 'asj', 'ask', 'asl', 'asn', 'aso', 'asp', 'asq', 'asr', 'ass', 'ast', 'asu', 'asv', 'asw', 'asx', 'asy', 'asz', 'ata', 'atb', 'atc', 'atd', 'ate', 'atg', 'ath', 'ati', 'atj', 'atk', 'atl', 'atm', 'atn', 'ato', 'atp', 'atq', 'atr', 'ats', 'att', 'atu', 'atv', 'atw', 'atx', 'aty', 'atz', 'aua', 'aub', 'auc', 'aud', 'aue', 'auf', 'aug', 'auh', 'aui', 'auj', 'auk', 'aul', 'aum', 'aun', 'auo', 'aup', 'auq', 'aur', 'aus', 'aut', 'auu', 'auw', 'aux', 'auy', 'auz', 'avb', 'avd', 'avi', 'avk', 'avl', 'avm', 'avn', 'avo', 'avs', 'avt', 'avu', 'avv', 'awa', 'awb', 'awc', 'awd', 'awe', 'awg', 'awh', 'awi', 'awk', 'awm', 'awn', 'awo', 'awr', 'aws', 'awt', 'awu', 'awv', 'aww', 'awx', 'awy', 'axb', 'axe', 'axg', 'axk', 'axl', 'axm', 'axx', 'aya', 'ayb', 'ayc', 'ayd', 'aye', 'ayg', 'ayh', 'ayi', 'ayk', 'ayl', 'ayn', 'ayo', 'ayp', 'ayq', 'ayr', 'ays', 'ayt', 'ayu', 'ayx', 'ayy', 'ayz', 'aza', 'azb', 'azc', 'azd', 'azg', 'azj', 'azm', 'azn', 'azo', 'azt', 'azz', 'baa', 'bab', 'bac', 'bad', 'bae', 'baf', 'bag', 'bah', 'bai', 'baj', 'bal', 'ban', 'bao', 'bap', 'bar', 'bas', 'bat', 'bau', 'bav', 'baw', 'bax', 'bay', 'baz', 'bba', 'bbb', 'bbc', 'bbd', 'bbe', 'bbf', 'bbg', 'bbh', 'bbi', 'bbj', 'bbk', 'bbl', 'bbm', 'bbn', 'bbo', 'bbp', 'bbq', 'bbr', 'bbs', 'bbt', 'bbu', 'bbv', 'bbw', 'bbx', 'bby', 'bbz', 'bca', 'bcb', 'bcc', 'bcd', 'bce', 'bcf', 'bcg', 'bch', 'bci', 'bcj', 'bck', 'bcl', 'bcm', 'bcn', 'bco', 'bcp', 'bcq', 'bcr', 'bcs', 'bct', 'bcu', 'bcv', 'bcw', 'bcy', 'bcz', 'bda', 'bdb', 'bdc', 'bdd', 'bde', 'bdf', 'bdg', 'bdh', 'bdi', 'bdj', 'bdk', 'bdl', 'bdm', 'bdn', 'bdo', 'bdp', 'bdq', 'bdr', 'bds', 'bdt', 'bdu', 'bdv', 'bdw', 'bdx', 'bdy', 'bdz', 'bea', 'beb', 'bec', 'bed', 'bee', 'bef', 'beg', 'beh', 'bei', 'bej', 'bek', 'bem', 'beo', 'bep', 'beq', 'ber', 'bes', 'bet', 'beu', 'bev', 'bew', 'bex', 'bey', 'bez', 'bfa', 'bfb', 'bfc', 'bfd', 'bfe', 'bff', 'bfg', 'bfh', 'bfi', 'bfj', 'bfk', 'bfl', 'bfm', 'bfn', 'bfo', 'bfp', 'bfq', 'bfr', 'bfs', 'bft', 'bfu', 'bfw', 'bfx', 'bfy', 'bfz', 'bga', 'bgb', 'bgc', 'bgd', 'bge', 'bgf', 'bgg', 'bgi', 'bgj', 'bgk', 'bgl', 'bgm', 'bgn', 'bgo', 'bgp', 'bgq', 'bgr', 'bgs', 'bgt', 'bgu', 'bgv', 'bgw', 'bgx', 'bgy', 'bgz', 'bha', 'bhb', 'bhc', 'bhd', 'bhe', 'bhf', 'bhg', 'bhh', 'bhi', 'bhj', 'bhk', 'bhl', 'bhm', 'bhn', 'bho', 'bhp', 'bhq', 'bhr', 'bhs', 'bht', 'bhu', 'bhv', 'bhw', 'bhx', 'bhy', 'bhz', 'bia', 'bib', 'bic', 'bid', 'bie', 'bif', 'big', 'bij', 'bik', 'bil', 'bim', 'bin', 'bio', 'bip', 'biq', 'bir', 'bit', 'biu', 'biv', 'biw', 'bix', 'biy', 'biz', 'bja', 'bjb', 'bjc', 'bjd', 'bje', 'bjf', 'bjg', 'bjh', 'bji', 'bjj', 'bjk', 'bjl', 'bjm', 'bjn', 'bjo', 'bjp', 'bjq', 'bjr', 'bjs', 'bjt', 'bju', 'bjv', 'bjw', 'bjx', 'bjy', 'bjz', 'bka', 'bkb', 'bkc', 'bkd', 'bkf', 'bkg', 'bkh', 'bki', 'bkj', 'bkk', 'bkl', 'bkm', 'bkn', 'bko', 'bkp', 'bkq', 'bkr', 'bks', 'bkt', 'bku', 'bkv', 'bkw', 'bkx', 'bky', 'bkz', 'bla', 'blb', 'blc', 'bld', 'ble', 'blf', 'blg', 'blh', 'bli', 'blj', 'blk', 'bll', 'blm', 'bln', 'blo', 'blp', 'blq', 'blr', 'bls', 'blt', 'blv', 'blw', 'blx', 'bly', 'blz', 'bma', 'bmb', 'bmc', 'bmd', 'bme', 'bmf', 'bmg', 'bmh', 'bmi', 'bmj', 'bmk', 'bml', 'bmm', 'bmn', 'bmo', 'bmp', 'bmq', 'bmr', 'bms', 'bmt', 'bmu', 'bmv', 'bmw', 'bmx', 'bmy', 'bmz', 'bna', 'bnb', 'bnc', 'bnd', 'bne', 'bnf', 'bng', 'bni', 'bnj', 'bnk', 'bnl', 'bnm', 'bnn', 'bno', 'bnp', 'bnq', 'bnr', 'bns', 'bnt', 'bnu', 'bnv', 'bnw', 'bnx', 'bny', 'bnz', 'boa', 'bob', 'boe', 'bof', 'bog', 'boh', 'boi', 'boj', 'bok', 'bol', 'bom', 'bon', 'boo', 'bop', 'boq', 'bor', 'bot', 'bou', 'bov', 'bow', 'box', 'boy', 'boz', 'bpa', 'bpb', 'bpd', 'bpg', 'bph', 'bpi', 'bpj', 'bpk', 'bpl', 'bpm', 'bpn', 'bpo', 'bpp', 'bpq', 'bpr', 'bps', 'bpt', 'bpu', 'bpv', 'bpw', 'bpx', 'bpy', 'bpz', 'bqa', 'bqb', 'bqc', 'bqd', 'bqf', 'bqg', 'bqh', 'bqi', 'bqj', 'bqk', 'bql', 'bqm', 'bqn', 'bqo', 'bqp', 'bqq', 'bqr', 'bqs', 'bqt', 'bqu', 'bqv', 'bqw', 'bqx', 'bqy', 'bqz', 'bra', 'brb', 'brc', 'brd', 'brf', 'brg', 'brh', 'bri', 'brj', 'brk', 'brl', 'brm', 'brn', 'bro', 'brp', 'brq', 'brr', 'brs', 'brt', 'bru', 'brv', 'brw', 'brx', 'bry', 'brz', 'bsa', 'bsb', 'bsc', 'bse', 'bsf', 'bsg', 'bsh', 'bsi', 'bsj', 'bsk', 'bsl', 'bsm', 'bsn', 'bso', 'bsp', 'bsq', 'bsr', 'bss', 'bst', 'bsu', 'bsv', 'bsw', 'bsx', 'bsy', 'bta', 'btb', 'btc', 'btd', 'bte', 'btf', 'btg', 'bth', 'bti', 'btj', 'btk', 'btl', 'btm', 'btn', 'bto', 'btp', 'btq', 'btr', 'bts', 'btt', 'btu', 'btv', 'btw', 'btx', 'bty', 'btz', 'bua', 'bub', 'buc', 'bud', 'bue', 'buf', 'bug', 'buh', 'bui', 'buj', 'buk', 'bum', 'bun', 'buo', 'bup', 'buq', 'bus', 'but', 'buu', 'buv', 'buw', 'bux', 'buy', 'buz', 'bva', 'bvb', 'bvc', 'bvd', 'bve', 'bvf', 'bvg', 'bvh', 'bvi', 'bvj', 'bvk', 'bvl', 'bvm', 'bvn', 'bvo', 'bvp', 'bvq', 'bvr', 'bvt', 'bvu', 'bvv', 'bvw', 'bvx', 'bvy', 'bvz', 'bwa', 'bwb', 'bwc', 'bwd', 'bwe', 'bwf', 'bwg', 'bwh', 'bwi', 'bwj', 'bwk', 'bwl', 'bwm', 'bwn', 'bwo', 'bwp', 'bwq', 'bwr', 'bws', 'bwt', 'bwu', 'bww', 'bwx', 'bwy', 'bwz', 'bxa', 'bxb', 'bxc', 'bxd', 'bxe', 'bxf', 'bxg', 'bxh', 'bxi', 'bxj', 'bxk', 'bxl', 'bxm', 'bxn', 'bxo', 'bxp', 'bxq', 'bxr', 'bxs', 'bxu', 'bxv', 'bxw', 'bxx', 'bxz', 'bya', 'byb', 'byc', 'byd', 'bye', 'byf', 'byg', 'byh', 'byi', 'byj', 'byk', 'byl', 'bym', 'byn', 'byo', 'byp', 'byq', 'byr', 'bys', 'byt', 'byv', 'byw', 'byx', 'byy', 'byz', 'bza', 'bzb', 'bzc', 'bzd', 'bze', 'bzf', 'bzg', 'bzh', 'bzi', 'bzj', 'bzk', 'bzl', 'bzm', 'bzn', 'bzo', 'bzp', 'bzq', 'bzr', 'bzs', 'bzt', 'bzu', 'bzv', 'bzw', 'bzx', 'bzy', 'bzz', 'caa', 'cab', 'cac', 'cad', 'cae', 'caf', 'cag', 'cah', 'cai', 'caj', 'cak', 'cal', 'cam', 'can', 'cao', 'cap', 'caq', 'car', 'cas', 'cau', 'cav', 'caw', 'cax', 'cay', 'caz', 'cba', 'cbb', 'cbc', 'cbd', 'cbe', 'cbg', 'cbh', 'cbi', 'cbj', 'cbk', 'cbl', 'cbn', 'cbo', 'cbq', 'cbr', 'cbs', 'cbt', 'cbu', 'cbv', 'cbw', 'cby', 'cca', 'ccc', 'ccd', 'cce', 'ccg', 'cch', 'ccj', 'ccl', 'ccm', 'ccn', 'cco', 'ccp', 'ccq', 'ccr', 'ccs', 'cda', 'cdc', 'cdd', 'cde', 'cdf', 'cdg', 'cdh', 'cdi', 'cdj', 'cdm', 'cdn', 'cdo', 'cdr', 'cds', 'cdy', 'cdz', 'cea', 'ceb', 'ceg', 'cek', 'cel', 'cen', 'cet', 'cfa', 'cfd', 'cfg', 'cfm', 'cga', 'cgc', 'cgg', 'cgk', 'chb', 'chc', 'chd', 'chf', 'chg', 'chh', 'chj', 'chk', 'chl', 'chm', 'chn', 'cho', 'chp', 'chq', 'chr', 'cht', 'chw', 'chx', 'chy', 'chz', 'cia', 'cib', 'cic', 'cid', 'cie', 'cih', 'cik', 'cim', 'cin', 'cip', 'cir', 'ciw', 'ciy', 'cja', 'cje', 'cjh', 'cji', 'cjk', 'cjm', 'cjn', 'cjo', 'cjp', 'cjr', 'cjs', 'cjv', 'cjy', 'cka', 'ckb', 'ckh', 'ckl', 'ckn', 'cko', 'ckq', 'ckr', 'cks', 'ckt', 'cku', 'ckv', 'ckx', 'cky', 'ckz', 'cla', 'clc', 'cld', 'cle', 'clh', 'cli', 'clj', 'clk', 'cll', 'clm', 'clo', 'clt', 'clu', 'clw', 'cly', 'cma', 'cmc', 'cme', 'cmg', 'cmi', 'cmk', 'cml', 'cmm', 'cmn', 'cmo', 'cmr', 'cms', 'cmt', 'cna', 'cnb', 'cnc', 'cng', 'cnh', 'cni', 'cnk', 'cnl', 'cno', 'cnr', 'cns', 'cnt', 'cnu', 'cnw', 'cnx', 'coa', 'cob', 'coc', 'cod', 'coe', 'cof', 'cog', 'coh', 'coj', 'cok', 'col', 'com', 'con', 'coo', 'cop', 'coq', 'cot', 'cou', 'cov', 'cow', 'cox', 'coy', 'coz', 'cpa', 'cpb', 'cpc', 'cpe', 'cpf', 'cpg', 'cpi', 'cpn', 'cpo', 'cpp', 'cps', 'cpu', 'cpx', 'cpy', 'cqd', 'cqu', 'cra', 'crb', 'crc', 'crd', 'crf', 'crg', 'crh', 'cri', 'crj', 'crk', 'crl', 'crm', 'crn', 'cro', 'crp', 'crq', 'crr', 'crs', 'crt', 'crv', 'crw', 'crx', 'cry', 'crz', 'csa', 'csb', 'csc', 'csd', 'cse', 'csf', 'csg', 'csh', 'csi', 'csj', 'csk', 'csl', 'csm', 'csn', 'cso', 'csq', 'csr', 'css', 'cst', 'csu', 'csv', 'csw', 'csy', 'csz', 'cta', 'ctc', 'ctd', 'cte', 'ctg', 'cth', 'ctl', 'ctm', 'ctn', 'cto', 'ctp', 'cts', 'ctt', 'ctu', 'ctz', 'cua', 'cub', 'cuc', 'cug', 'cuh', 'cui', 'cuj', 'cuk', 'cul', 'cum', 'cuo', 'cup', 'cuq', 'cur', 'cus', 'cut', 'cuu', 'cuv', 'cuw', 'cux', 'cuy', 'cvg', 'cvn', 'cwa', 'cwb', 'cwd', 'cwe', 'cwg', 'cwt', 'cya', 'cyb', 'cyo', 'czh', 'czk', 'czn', 'czo', 'czt', 'daa', 'dac', 'dad', 'dae', 'daf', 'dag', 'dah', 'dai', 'daj', 'dak', 'dal', 'dam', 'dao', 'dap', 'daq', 'dar', 'das', 'dau', 'dav', 'daw', 'dax', 'day', 'daz', 'dba', 'dbb', 'dbd', 'dbe', 'dbf', 'dbg', 'dbi', 'dbj', 'dbl', 'dbm', 'dbn', 'dbo', 'dbp', 'dbq', 'dbr', 'dbt', 'dbu', 'dbv', 'dbw', 'dby', 'dcc', 'dcr', 'dda', 'ddd', 'dde', 'ddg', 'ddi', 'ddj', 'ddn', 'ddo', 'ddr', 'dds', 'ddw', 'dec', 'ded', 'dee', 'def', 'deg', 'deh', 'dei', 'dek', 'del', 'dem', 'den', 'dep', 'deq', 'der', 'des', 'dev', 'dez', 'dga', 'dgb', 'dgc', 'dgd', 'dge', 'dgg', 'dgh', 'dgi', 'dgk', 'dgl', 'dgn', 'dgo', 'dgr', 'dgs', 'dgt', 'dgu', 'dgw', 'dgx', 'dgz', 'dha', 'dhd', 'dhg', 'dhi', 'dhl', 'dhm', 'dhn', 'dho', 'dhr', 'dhs', 'dhu', 'dhv', 'dhw', 'dhx', 'dia', 'dib', 'dic', 'did', 'dif', 'dig', 'dih', 'dii', 'dij', 'dik', 'dil', 'dim', 'din', 'dio', 'dip', 'diq', 'dir', 'dis', 'dit', 'diu', 'diw', 'dix', 'diy', 'diz', 'dja', 'djb', 'djc', 'djd', 'dje', 'djf', 'dji', 'djj', 'djk', 'djl', 'djm', 'djn', 'djo', 'djr', 'dju', 'djw', 'dka', 'dkk', 'dkl', 'dkr', 'dks', 'dkx', 'dlg', 'dlk', 'dlm', 'dln', 'dma', 'dmb', 'dmc', 'dmd', 'dme', 'dmg', 'dmk', 'dml', 'dmm', 'dmn', 'dmo', 'dmr', 'dms', 'dmu', 'dmv', 'dmw', 'dmx', 'dmy', 'dna', 'dnd', 'dne', 'dng', 'dni', 'dnj', 'dnk', 'dnn', 'dnr', 'dnt', 'dnu', 'dnv', 'dnw', 'dny', 'doa', 'dob', 'doc', 'doe', 'dof', 'doh', 'doi', 'dok', 'dol', 'don', 'doo', 'dop', 'doq', 'dor', 'dos', 'dot', 'dov', 'dow', 'dox', 'doy', 'doz', 'dpp', 'dra', 'drb', 'drc', 'drd', 'dre', 'drg', 'drh', 'dri', 'drl', 'drn', 'dro', 'drq', 'drr', 'drs', 'drt', 'dru', 'drw', 'dry', 'dsb', 'dse', 'dsh', 'dsi', 'dsl', 'dsn', 'dso', 'dsq', 'dta', 'dtb', 'dtd', 'dth', 'dti', 'dtk', 'dtm', 'dtn', 'dto', 'dtp', 'dtr', 'dts', 'dtt', 'dtu', 'dty', 'dua', 'dub', 'duc', 'dud', 'due', 'duf', 'dug', 'duh', 'dui', 'duj', 'duk', 'dul', 'dum', 'dun', 'duo', 'dup', 'duq', 'dur', 'dus', 'duu', 'duv', 'duw', 'dux', 'duy', 'duz', 'dva', 'dwa', 'dwl', 'dwr', 'dws', 'dwu', 'dww', 'dwy', 'dya', 'dyb', 'dyd', 'dyg', 'dyi', 'dym', 'dyn', 'dyo', 'dyu', 'dyy', 'dza', 'dzd', 'dze', 'dzg', 'dzl', 'dzn', 'eaa', 'ebg', 'ebk', 'ebo', 'ebr', 'ebu', 'ecr', 'ecs', 'ecy', 'eee', 'efa', 'efe', 'efi', 'ega', 'egl', 'ego', 'egx', 'egy', 'ehu', 'eip', 'eit', 'eiv', 'eja', 'eka', 'ekc', 'eke', 'ekg', 'eki', 'ekk', 'ekl', 'ekm', 'eko', 'ekp', 'ekr', 'eky', 'ele', 'elh', 'eli', 'elk', 'elm', 'elo', 'elp', 'elu', 'elx', 'ema', 'emb', 'eme', 'emg', 'emi', 'emk', 'emm', 'emn', 'emo', 'emp', 'ems', 'emu', 'emw', 'emx', 'emy', 'ena', 'enb', 'enc', 'end', 'enf', 'enh', 'enl', 'enm', 'enn', 'eno', 'enq', 'enr', 'enu', 'env', 'enw', 'enx', 'eot', 'epi', 'era', 'erg', 'erh', 'eri', 'erk', 'ero', 'err', 'ers', 'ert', 'erw', 'ese', 'esg', 'esh', 'esi', 'esk', 'esl', 'esm', 'esn', 'eso', 'esq', 'ess', 'esu', 'esx', 'esy', 'etb', 'etc', 'eth', 'etn', 'eto', 'etr', 'ets', 'ett', 'etu', 'etx', 'etz', 'euq', 'eve', 'evh', 'evn', 'ewo', 'ext', 'eya', 'eyo', 'eza', 'eze', 'faa', 'fab', 'fad', 'faf', 'fag', 'fah', 'fai', 'faj', 'fak', 'fal', 'fam', 'fan', 'fap', 'far', 'fat', 'fau', 'fax', 'fay', 'faz', 'fbl', 'fcs', 'fer', 'ffi', 'ffm', 'fgr', 'fia', 'fie', 'fil', 'fip', 'fir', 'fit', 'fiu', 'fiw', 'fkk', 'fkv', 'fla', 'flh', 'fli', 'fll', 'fln', 'flr', 'fly', 'fmp', 'fmu', 'fnb', 'fng', 'fni', 'fod', 'foi', 'fom', 'fon', 'for', 'fos', 'fox', 'fpe', 'fqs', 'frc', 'frd', 'frk', 'frm', 'fro', 'frp', 'frq', 'frr', 'frs', 'frt', 'fse', 'fsl', 'fss', 'fub', 'fuc', 'fud', 'fue', 'fuf', 'fuh', 'fui', 'fuj', 'fum', 'fun', 'fuq', 'fur', 'fut', 'fuu', 'fuv', 'fuy', 'fvr', 'fwa', 'fwe', 'gaa', 'gab', 'gac', 'gad', 'gae', 'gaf', 'gag', 'gah', 'gai', 'gaj', 'gak', 'gal', 'gam', 'gan', 'gao', 'gap', 'gaq', 'gar', 'gas', 'gat', 'gau', 'gav', 'gaw', 'gax', 'gay', 'gaz', 'gba', 'gbb', 'gbc', 'gbd', 'gbe', 'gbf', 'gbg', 'gbh', 'gbi', 'gbj', 'gbk', 'gbl', 'gbm', 'gbn', 'gbo', 'gbp', 'gbq', 'gbr', 'gbs', 'gbu', 'gbv', 'gbw', 'gbx', 'gby', 'gbz', 'gcc', 'gcd', 'gce', 'gcf', 'gcl', 'gcn', 'gcr', 'gct', 'gda', 'gdb', 'gdc', 'gdd', 'gde', 'gdf', 'gdg', 'gdh', 'gdi', 'gdj', 'gdk', 'gdl', 'gdm', 'gdn', 'gdo', 'gdq', 'gdr', 'gds', 'gdt', 'gdu', 'gdx', 'gea', 'geb', 'gec', 'ged', 'geg', 'geh', 'gei', 'gej', 'gek', 'gel', 'gem', 'geq', 'ges', 'gev', 'gew', 'gex', 'gey', 'gez', 'gfk', 'gft', 'gfx', 'gga', 'ggb', 'ggd', 'gge', 'ggg', 'ggk', 'ggl', 'ggn', 'ggo', 'ggr', 'ggt', 'ggu', 'ggw', 'gha', 'ghc', 'ghe', 'ghh', 'ghk', 'ghl', 'ghn', 'gho', 'ghr', 'ghs', 'ght', 'gia', 'gib', 'gic', 'gid', 'gie', 'gig', 'gih', 'gil', 'gim', 'gin', 'gio', 'gip', 'giq', 'gir', 'gis', 'git', 'giu', 'giw', 'gix', 'giy', 'giz', 'gji', 'gjk', 'gjm', 'gjn', 'gjr', 'gju', 'gka', 'gkd', 'gke', 'gkn', 'gko', 'gkp', 'gku', 'glc', 'gld', 'glh', 'gli', 'glj', 'glk', 'gll', 'glo', 'glr', 'glu', 'glw', 'gly', 'gma', 'gmb', 'gmd', 'gme', 'gmg', 'gmh', 'gml', 'gmm', 'gmn', 'gmq', 'gmu', 'gmv', 'gmw', 'gmx', 'gmy', 'gmz', 'gna', 'gnb', 'gnc', 'gnd', 'gne', 'gng', 'gnh', 'gni', 'gnj', 'gnk', 'gnl', 'gnm', 'gnn', 'gno', 'gnq', 'gnr', 'gnt', 'gnu', 'gnw', 'gnz', 'goa', 'gob', 'goc', 'god', 'goe', 'gof', 'gog', 'goh', 'goi', 'goj', 'gok', 'gol', 'gom', 'gon', 'goo', 'gop', 'goq', 'gor', 'gos', 'got', 'gou', 'gow', 'gox', 'goy', 'goz', 'gpa', 'gpe', 'gpn', 'gqa', 'gqi', 'gqn', 'gqr', 'gqu', 'gra', 'grb', 'grc', 'grd', 'grg', 'grh', 'gri', 'grj', 'grk', 'grm', 'gro', 'grq', 'grr', 'grs', 'grt', 'gru', 'grv', 'grw', 'grx', 'gry', 'grz', 'gse', 'gsg', 'gsl', 'gsm', 'gsn', 'gso', 'gsp', 'gss', 'gsw', 'gta', 'gti', 'gtu', 'gua', 'gub', 'guc', 'gud', 'gue', 'guf', 'gug', 'guh', 'gui', 'guk', 'gul', 'gum', 'gun', 'guo', 'gup', 'guq', 'gur', 'gus', 'gut', 'guu', 'guv', 'guw', 'gux', 'guz', 'gva', 'gvc', 'gve', 'gvf', 'gvj', 'gvl', 'gvm', 'gvn', 'gvo', 'gvp', 'gvr', 'gvs', 'gvy', 'gwa', 'gwb', 'gwc', 'gwd', 'gwe', 'gwf', 'gwg', 'gwi', 'gwj', 'gwm', 'gwn', 'gwr', 'gwt', 'gwu', 'gww', 'gwx', 'gxx', 'gya', 'gyb', 'gyd', 'gye', 'gyf', 'gyg', 'gyi', 'gyl', 'gym', 'gyn', 'gyo', 'gyr', 'gyy', 'gza', 'gzi', 'gzn', 'haa', 'hab', 'hac', 'had', 'hae', 'haf', 'hag', 'hah', 'hai', 'haj', 'hak', 'hal', 'ham', 'han', 'hao', 'hap', 'haq', 'har', 'has', 'hav', 'haw', 'hax', 'hay', 'haz', 'hba', 'hbb', 'hbn', 'hbo', 'hbu', 'hca', 'hch', 'hdn', 'hds', 'hdy', 'hea', 'hed', 'heg', 'heh', 'hei', 'hem', 'hgm', 'hgw', 'hhi', 'hhr', 'hhy', 'hia', 'hib', 'hid', 'hif', 'hig', 'hih', 'hii', 'hij', 'hik', 'hil', 'him', 'hio', 'hir', 'hit', 'hiw', 'hix', 'hji', 'hka', 'hke', 'hkk', 'hkn', 'hks', 'hla', 'hlb', 'hld', 'hle', 'hlt', 'hlu', 'hma', 'hmb', 'hmc', 'hmd', 'hme', 'hmf', 'hmg', 'hmh', 'hmi', 'hmj', 'hmk', 'hml', 'hmm', 'hmn', 'hmp', 'hmq', 'hmr', 'hms', 'hmt', 'hmu', 'hmv', 'hmw', 'hmx', 'hmy', 'hmz', 'hna', 'hnd', 'hne', 'hnh', 'hni', 'hnj', 'hnn', 'hno', 'hns', 'hnu', 'hoa', 'hob', 'hoc', 'hod', 'hoe', 'hoh', 'hoi', 'hoj', 'hok', 'hol', 'hom', 'hoo', 'hop', 'hor', 'hos', 'hot', 'hov', 'how', 'hoy', 'hoz', 'hpo', 'hps', 'hra', 'hrc', 'hre', 'hrk', 'hrm', 'hro', 'hrp', 'hrr', 'hrt', 'hru', 'hrw', 'hrx', 'hrz', 'hsb', 'hsh', 'hsl', 'hsn', 'hss', 'hti', 'hto', 'hts', 'htu', 'htx', 'hub', 'huc', 'hud', 'hue', 'huf', 'hug', 'huh', 'hui', 'huj', 'huk', 'hul', 'hum', 'huo', 'hup', 'huq', 'hur', 'hus', 'hut', 'huu', 'huv', 'huw', 'hux', 'huy', 'huz', 'hvc', 'hve', 'hvk', 'hvn', 'hvv', 'hwa', 'hwc', 'hwo', 'hya', 'hyw', 'hyx', 'iai', 'ian', 'iap', 'iar', 'iba', 'ibb', 'ibd', 'ibe', 'ibg', 'ibh', 'ibi', 'ibl', 'ibm', 'ibn', 'ibr', 'ibu', 'iby', 'ica', 'ich', 'icl', 'icr', 'ida', 'idb', 'idc', 'idd', 'ide', 'idi', 'idr', 'ids', 'idt', 'idu', 'ifa', 'ifb', 'ife', 'iff', 'ifk', 'ifm', 'ifu', 'ify', 'igb', 'ige', 'igg', 'igl', 'igm', 'ign', 'igo', 'igs', 'igw', 'ihb', 'ihi', 'ihp', 'ihw', 'iin', 'iir', 'ijc', 'ije', 'ijj', 'ijn', 'ijo', 'ijs', 'ike', 'iki', 'ikk', 'ikl', 'iko', 'ikp', 'ikr', 'iks', 'ikt', 'ikv', 'ikw', 'ikx', 'ikz', 'ila', 'ilb', 'ilg', 'ili', 'ilk', 'ill', 'ilm', 'ilo', 'ilp', 'ils', 'ilu', 'ilv', 'ilw', 'ima', 'ime', 'imi', 'iml', 'imn', 'imo', 'imr', 'ims', 'imy', 'inb', 'inc', 'ine', 'ing', 'inh', 'inj', 'inl', 'inm', 'inn', 'ino', 'inp', 'ins', 'int', 'inz', 'ior', 'iou', 'iow', 'ipi', 'ipo', 'iqu', 'iqw', 'ira', 'ire', 'irh', 'iri', 'irk', 'irn', 'iro', 'irr', 'iru', 'irx', 'iry', 'isa', 'isc', 'isd', 'ise', 'isg', 'ish', 'isi', 'isk', 'ism', 'isn', 'iso', 'isr', 'ist', 'isu', 'itb', 'itc', 'itd', 'ite', 'iti', 'itk', 'itl', 'itm', 'ito', 'itr', 'its', 'itt', 'itv', 'itw', 'itx', 'ity', 'itz', 'ium', 'ivb', 'ivv', 'iwk', 'iwm', 'iwo', 'iws', 'ixc', 'ixl', 'iya', 'iyo', 'iyx', 'izh', 'izi', 'izr', 'izz', 'jaa', 'jab', 'jac', 'jad', 'jae', 'jaf', 'jah', 'jaj', 'jak', 'jal', 'jam', 'jan', 'jao', 'jaq', 'jar', 'jas', 'jat', 'jau', 'jax', 'jay', 'jaz', 'jbe', 'jbi', 'jbj', 'jbk', 'jbn', 'jbo', 'jbr', 'jbt', 'jbu', 'jbw', 'jcs', 'jct', 'jda', 'jdg', 'jdt', 'jeb', 'jee', 'jeg', 'jeh', 'jei', 'jek', 'jel', 'jen', 'jer', 'jet', 'jeu', 'jgb', 'jge', 'jgk', 'jgo', 'jhi', 'jhs', 'jia', 'jib', 'jic', 'jid', 'jie', 'jig', 'jih', 'jii', 'jil', 'jim', 'jio', 'jiq', 'jit', 'jiu', 'jiv', 'jiy', 'jje', 'jjr', 'jka', 'jkm', 'jko', 'jkp', 'jkr', 'jku', 'jle', 'jls', 'jma', 'jmb', 'jmc', 'jmd', 'jmi', 'jml', 'jmn', 'jmr', 'jms', 'jmw', 'jmx', 'jna', 'jnd', 'jng', 'jni', 'jnj', 'jnl', 'jns', 'job', 'jod', 'jog', 'jor', 'jos', 'jow', 'jpa', 'jpr', 'jpx', 'jqr', 'jra', 'jrb', 'jrr', 'jrt', 'jru', 'jsl', 'jua', 'jub', 'juc', 'jud', 'juh', 'jui', 'juk', 'jul', 'jum', 'jun', 'juo', 'jup', 'jur', 'jus', 'jut', 'juu', 'juw', 'juy', 'jvd', 'jvn', 'jwi', 'jya', 'jye', 'jyy', 'kaa', 'kab', 'kac', 'kad', 'kae', 'kaf', 'kag', 'kah', 'kai', 'kaj', 'kak', 'kam', 'kao', 'kap', 'kaq', 'kar', 'kav', 'kaw', 'kax', 'kay', 'kba', 'kbb', 'kbc', 'kbd', 'kbe', 'kbf', 'kbg', 'kbh', 'kbi', 'kbj', 'kbk', 'kbl', 'kbm', 'kbn', 'kbo', 'kbp', 'kbq', 'kbr', 'kbs', 'kbt', 'kbu', 'kbv', 'kbw', 'kbx', 'kby', 'kbz', 'kca', 'kcb', 'kcc', 'kcd', 'kce', 'kcf', 'kcg', 'kch', 'kci', 'kcj', 'kck', 'kcl', 'kcm', 'kcn', 'kco', 'kcp', 'kcq', 'kcr', 'kcs', 'kct', 'kcu', 'kcv', 'kcw', 'kcx', 'kcy', 'kcz', 'kda', 'kdc', 'kdd', 'kde', 'kdf', 'kdg', 'kdh', 'kdi', 'kdj', 'kdk', 'kdl', 'kdm', 'kdn', 'kdo', 'kdp', 'kdq', 'kdr', 'kdt', 'kdu', 'kdv', 'kdw', 'kdx', 'kdy', 'kdz', 'kea', 'keb', 'kec', 'ked', 'kee', 'kef', 'keg', 'keh', 'kei', 'kej', 'kek', 'kel', 'kem', 'ken', 'keo', 'kep', 'keq', 'ker', 'kes', 'ket', 'keu', 'kev', 'kew', 'kex', 'key', 'kez', 'kfa', 'kfb', 'kfc', 'kfd', 'kfe', 'kff', 'kfg', 'kfh', 'kfi', 'kfj', 'kfk', 'kfl', 'kfm', 'kfn', 'kfo', 'kfp', 'kfq', 'kfr', 'kfs', 'kft', 'kfu', 'kfv', 'kfw', 'kfx', 'kfy', 'kfz', 'kga', 'kgb', 'kgc', 'kgd', 'kge', 'kgf', 'kgg', 'kgh', 'kgi', 'kgj', 'kgk', 'kgl', 'kgm', 'kgn', 'kgo', 'kgp', 'kgq', 'kgr', 'kgs', 'kgt', 'kgu', 'kgv', 'kgw', 'kgx', 'kgy', 'kha', 'khb', 'khc', 'khd', 'khe', 'khf', 'khg', 'khh', 'khi', 'khj', 'khk', 'khl', 'khn', 'kho', 'khp', 'khq', 'khr', 'khs', 'kht', 'khu', 'khv', 'khw', 'khx', 'khy', 'khz', 'kia', 'kib', 'kic', 'kid', 'kie', 'kif', 'kig', 'kih', 'kii', 'kij', 'kil', 'kim', 'kio', 'kip', 'kiq', 'kis', 'kit', 'kiu', 'kiv', 'kiw', 'kix', 'kiy', 'kiz', 'kja', 'kjb', 'kjc', 'kjd', 'kje', 'kjf', 'kjg', 'kjh', 'kji', 'kjj', 'kjk', 'kjl', 'kjm', 'kjn', 'kjo', 'kjp', 'kjq', 'kjr', 'kjs', 'kjt', 'kju', 'kjv', 'kjx', 'kjy', 'kjz', 'kka', 'kkb', 'kkc', 'kkd', 'kke', 'kkf', 'kkg', 'kkh', 'kki', 'kkj', 'kkk', 'kkl', 'kkm', 'kkn', 'kko', 'kkp', 'kkq', 'kkr', 'kks', 'kkt', 'kku', 'kkv', 'kkw', 'kkx', 'kky', 'kkz', 'kla', 'klb', 'klc', 'kld', 'kle', 'klf', 'klg', 'klh', 'kli', 'klj', 'klk', 'kll', 'klm', 'kln', 'klo', 'klp', 'klq', 'klr', 'kls', 'klt', 'klu', 'klv', 'klw', 'klx', 'kly', 'klz', 'kma', 'kmb', 'kmc', 'kmd', 'kme', 'kmf', 'kmg', 'kmh', 'kmi', 'kmj', 'kmk', 'kml', 'kmm', 'kmn', 'kmo', 'kmp', 'kmq', 'kmr', 'kms', 'kmt', 'kmu', 'kmv', 'kmw', 'kmx', 'kmy', 'kmz', 'kna', 'knb', 'knc', 'knd', 'kne', 'knf', 'kng', 'kni', 'knj', 'knk', 'knl', 'knm', 'knn', 'kno', 'knp', 'knq', 'knr', 'kns', 'knt', 'knu', 'knv', 'knw', 'knx', 'kny', 'knz', 'koa', 'koc', 'kod', 'koe', 'kof', 'kog', 'koh', 'koi', 'koj', 'kok', 'kol', 'koo', 'kop', 'koq', 'kos', 'kot', 'kou', 'kov', 'kow', 'kox', 'koy', 'koz', 'kpa', 'kpb', 'kpc', 'kpd', 'kpe', 'kpf', 'kpg', 'kph', 'kpi', 'kpj', 'kpk', 'kpl', 'kpm', 'kpn', 'kpo', 'kpp', 'kpq', 'kpr', 'kps', 'kpt', 'kpu', 'kpv', 'kpw', 'kpx', 'kpy', 'kpz', 'kqa', 'kqb', 'kqc', 'kqd', 'kqe', 'kqf', 'kqg', 'kqh', 'kqi', 'kqj', 'kqk', 'kql', 'kqm', 'kqn', 'kqo', 'kqp', 'kqq', 'kqr', 'kqs', 'kqt', 'kqu', 'kqv', 'kqw', 'kqx', 'kqy', 'kqz', 'kra', 'krb', 'krc', 'krd', 'kre', 'krf', 'krh', 'kri', 'krj', 'krk', 'krl', 'krm', 'krn', 'kro', 'krp', 'krr', 'krs', 'krt', 'kru', 'krv', 'krw', 'krx', 'kry', 'krz', 'ksa', 'ksb', 'ksc', 'ksd', 'kse', 'ksf', 'ksg', 'ksh', 'ksi', 'ksj', 'ksk', 'ksl', 'ksm', 'ksn', 'kso', 'ksp', 'ksq', 'ksr', 'kss', 'kst', 'ksu', 'ksv', 'ksw', 'ksx', 'ksy', 'ksz', 'kta', 'ktb', 'ktc', 'ktd', 'kte', 'ktf', 'ktg', 'kth', 'kti', 'ktj', 'ktk', 'ktl', 'ktm', 'ktn', 'kto', 'ktp', 'ktq', 'ktr', 'kts', 'ktt', 'ktu', 'ktv', 'ktw', 'ktx', 'kty', 'ktz', 'kub', 'kuc', 'kud', 'kue', 'kuf', 'kug', 'kuh', 'kui', 'kuj', 'kuk', 'kul', 'kum', 'kun', 'kuo', 'kup', 'kuq', 'kus', 'kut', 'kuu', 'kuv', 'kuw', 'kux', 'kuy', 'kuz', 'kva', 'kvb', 'kvc', 'kvd', 'kve', 'kvf', 'kvg', 'kvh', 'kvi', 'kvj', 'kvk', 'kvl', 'kvm', 'kvn', 'kvo', 'kvp', 'kvq', 'kvr', 'kvs', 'kvt', 'kvu', 'kvv', 'kvw', 'kvx', 'kvy', 'kvz', 'kwa', 'kwb', 'kwc', 'kwd', 'kwe', 'kwf', 'kwg', 'kwh', 'kwi', 'kwj', 'kwk', 'kwl', 'kwm', 'kwn', 'kwo', 'kwp', 'kwq', 'kwr', 'kws', 'kwt', 'kwu', 'kwv', 'kww', 'kwx', 'kwy', 'kwz', 'kxa', 'kxb', 'kxc', 'kxd', 'kxe', 'kxf', 'kxh', 'kxi', 'kxj', 'kxk', 'kxl', 'kxm', 'kxn', 'kxo', 'kxp', 'kxq', 'kxr', 'kxs', 'kxt', 'kxu', 'kxv', 'kxw', 'kxx', 'kxy', 'kxz', 'kya', 'kyb', 'kyc', 'kyd', 'kye', 'kyf', 'kyg', 'kyh', 'kyi', 'kyj', 'kyk', 'kyl', 'kym', 'kyn', 'kyo', 'kyp', 'kyq', 'kyr', 'kys', 'kyt', 'kyu', 'kyv', 'kyw', 'kyx', 'kyy', 'kyz', 'kza', 'kzb', 'kzc', 'kzd', 'kze', 'kzf', 'kzg', 'kzh', 'kzi', 'kzj', 'kzk', 'kzl', 'kzm', 'kzn', 'kzo', 'kzp', 'kzq', 'kzr', 'kzs', 'kzt', 'kzu', 'kzv', 'kzw', 'kzx', 'kzy', 'kzz', 'laa', 'lab', 'lac', 'lad', 'lae', 'laf', 'lag', 'lah', 'lai', 'laj', 'lak', 'lal', 'lam', 'lan', 'lap', 'laq', 'lar', 'las', 'lau', 'law', 'lax', 'lay', 'laz', 'lba', 'lbb', 'lbc', 'lbe', 'lbf', 'lbg', 'lbi', 'lbj', 'lbk', 'lbl', 'lbm', 'lbn', 'lbo', 'lbq', 'lbr', 'lbs', 'lbt', 'lbu', 'lbv', 'lbw', 'lbx', 'lby', 'lbz', 'lcc', 'lcd', 'lce', 'lcf', 'lch', 'lcl', 'lcm', 'lcp', 'lcq', 'lcs', 'lda', 'ldb', 'ldd', 'ldg', 'ldh', 'ldi', 'ldj', 'ldk', 'ldl', 'ldm', 'ldn', 'ldo', 'ldp', 'ldq', 'lea', 'leb', 'lec', 'led', 'lee', 'lef', 'leg', 'leh', 'lei', 'lej', 'lek', 'lel', 'lem', 'len', 'leo', 'lep', 'leq', 'ler', 'les', 'let', 'leu', 'lev', 'lew', 'lex', 'ley', 'lez', 'lfa', 'lfn', 'lga', 'lgb', 'lgg', 'lgh', 'lgi', 'lgk', 'lgl', 'lgm', 'lgn', 'lgq', 'lgr', 'lgt', 'lgu', 'lgz', 'lha', 'lhh', 'lhi', 'lhl', 'lhm', 'lhn', 'lhp', 'lhs', 'lht', 'lhu', 'lia', 'lib', 'lic', 'lid', 'lie', 'lif', 'lig', 'lih', 'lii', 'lij', 'lik', 'lil', 'lio', 'lip', 'liq', 'lir', 'lis', 'liu', 'liv', 'liw', 'lix', 'liy', 'liz', 'lja', 'lje', 'lji', 'ljl', 'ljp', 'ljw', 'ljx', 'lka', 'lkb', 'lkc', 'lkd', 'lke', 'lkh', 'lki', 'lkj', 'lkl', 'lkm', 'lkn', 'lko', 'lkr', 'lks', 'lkt', 'lku', 'lky', 'lla', 'llb', 'llc', 'lld', 'lle', 'llf', 'llg', 'llh', 'lli', 'llj', 'llk', 'lll', 'llm', 'lln', 'llo', 'llp', 'llq', 'lls', 'llu', 'llx', 'lma', 'lmb', 'lmc', 'lmd', 'lme', 'lmf', 'lmg', 'lmh', 'lmi', 'lmj', 'lmk', 'lml', 'lmm', 'lmn', 'lmo', 'lmp', 'lmq', 'lmr', 'lmu', 'lmv', 'lmw', 'lmx', 'lmy', 'lmz', 'lna', 'lnb', 'lnd', 'lng', 'lnh', 'lni', 'lnj', 'lnl', 'lnm', 'lnn', 'lno', 'lns', 'lnu', 'lnw', 'lnz', 'loa', 'lob', 'loc', 'loe', 'lof', 'log', 'loh', 'loi', 'loj', 'lok', 'lol', 'lom', 'lon', 'loo', 'lop', 'loq', 'lor', 'los', 'lot', 'lou', 'lov', 'low', 'lox', 'loy', 'loz', 'lpa', 'lpe', 'lpn', 'lpo', 'lpx', 'lra', 'lrc', 'lre', 'lrg', 'lri', 'lrk', 'lrl', 'lrm', 'lrn', 'lro', 'lrr', 'lrt', 'lrv', 'lrz', 'lsa', 'lsd', 'lse', 'lsg', 'lsh', 'lsi', 'lsl', 'lsm', 'lso', 'lsp', 'lsr', 'lss', 'lst', 'lsy', 'ltc', 'ltg', 'lth', 'lti', 'ltn', 'lto', 'lts', 'ltu', 'lua', 'luc', 'lud', 'lue', 'luf', 'lui', 'luj', 'luk', 'lul', 'lum', 'lun', 'luo', 'lup', 'luq', 'lur', 'lus', 'lut', 'luu', 'luv', 'luw', 'luy', 'luz', 'lva', 'lvk', 'lvs', 'lvu', 'lwa', 'lwe', 'lwg', 'lwh', 'lwl', 'lwm', 'lwo', 'lws', 'lwt', 'lwu', 'lww', 'lya', 'lyg', 'lyn', 'lzh', 'lzl', 'lzn', 'lzz', 'maa', 'mab', 'mad', 'mae', 'maf', 'mag', 'mai', 'maj', 'mak', 'mam', 'man', 'map', 'maq', 'mas', 'mat', 'mau', 'mav', 'maw', 'max', 'maz', 'mba', 'mbb', 'mbc', 'mbd', 'mbe', 'mbf', 'mbh', 'mbi', 'mbj', 'mbk', 'mbl', 'mbm', 'mbn', 'mbo', 'mbp', 'mbq', 'mbr', 'mbs', 'mbt', 'mbu', 'mbv', 'mbw', 'mbx', 'mby', 'mbz', 'mca', 'mcb', 'mcc', 'mcd', 'mce', 'mcf', 'mcg', 'mch', 'mci', 'mcj', 'mck', 'mcl', 'mcm', 'mcn', 'mco', 'mcp', 'mcq', 'mcr', 'mcs', 'mct', 'mcu', 'mcv', 'mcw', 'mcx', 'mcy', 'mcz', 'mda', 'mdb', 'mdc', 'mdd', 'mde', 'mdf', 'mdg', 'mdh', 'mdi', 'mdj', 'mdk', 'mdl', 'mdm', 'mdn', 'mdp', 'mdq', 'mdr', 'mds', 'mdt', 'mdu', 'mdv', 'mdw', 'mdx', 'mdy', 'mdz', 'mea', 'meb', 'mec', 'med', 'mee', 'mef', 'meg', 'meh', 'mei', 'mej', 'mek', 'mel', 'mem', 'men', 'meo', 'mep', 'meq', 'mer', 'mes', 'met', 'meu', 'mev', 'mew', 'mey', 'mez', 'mfa', 'mfb', 'mfc', 'mfd', 'mfe', 'mff', 'mfg', 'mfh', 'mfi', 'mfj', 'mfk', 'mfl', 'mfm', 'mfn', 'mfo', 'mfp', 'mfq', 'mfr', 'mfs', 'mft', 'mfu', 'mfv', 'mfw', 'mfx', 'mfy', 'mfz', 'mga', 'mgb', 'mgc', 'mgd', 'mge', 'mgf', 'mgg', 'mgh', 'mgi', 'mgj', 'mgk', 'mgl', 'mgm', 'mgn', 'mgo', 'mgp', 'mgq', 'mgr', 'mgs', 'mgt', 'mgu', 'mgv', 'mgw', 'mgx', 'mgy', 'mgz', 'mha', 'mhb', 'mhc', 'mhd', 'mhe', 'mhf', 'mhg', 'mhh', 'mhi', 'mhj', 'mhk', 'mhl', 'mhm', 'mhn', 'mho', 'mhp', 'mhq', 'mhr', 'mhs', 'mht', 'mhu', 'mhw', 'mhx', 'mhy', 'mhz', 'mia', 'mib', 'mic', 'mid', 'mie', 'mif', 'mig', 'mih', 'mii', 'mij', 'mik', 'mil', 'mim', 'min', 'mio', 'mip', 'miq', 'mir', 'mis', 'mit', 'miu', 'miw', 'mix', 'miy', 'miz', 'mja', 'mjb', 'mjc', 'mjd', 'mje', 'mjg', 'mjh', 'mji', 'mjj', 'mjk', 'mjl', 'mjm', 'mjn', 'mjo', 'mjp', 'mjq', 'mjr', 'mjs', 'mjt', 'mju', 'mjv', 'mjw', 'mjx', 'mjy', 'mjz', 'mka', 'mkb', 'mkc', 'mke', 'mkf', 'mkg', 'mkh', 'mki', 'mkj', 'mkk', 'mkl', 'mkm', 'mkn', 'mko', 'mkp', 'mkq', 'mkr', 'mks', 'mkt', 'mku', 'mkv', 'mkw', 'mkx', 'mky', 'mkz', 'mla', 'mlb', 'mlc', 'mld', 'mle', 'mlf', 'mlh', 'mli', 'mlj', 'mlk', 'mll', 'mlm', 'mln', 'mlo', 'mlp', 'mlq', 'mlr', 'mls', 'mlu', 'mlv', 'mlw', 'mlx', 'mlz', 'mma', 'mmb', 'mmc', 'mmd', 'mme', 'mmf', 'mmg', 'mmh', 'mmi', 'mmj', 'mmk', 'mml', 'mmm', 'mmn', 'mmo', 'mmp', 'mmq', 'mmr', 'mmt', 'mmu', 'mmv', 'mmw', 'mmx', 'mmy', 'mmz', 'mna', 'mnb', 'mnc', 'mnd', 'mne', 'mnf', 'mng', 'mnh', 'mni', 'mnj', 'mnk', 'mnl', 'mnm', 'mnn', 'mno', 'mnp', 'mnq', 'mnr', 'mns', 'mnt', 'mnu', 'mnv', 'mnw', 'mnx', 'mny', 'mnz', 'moa', 'moc', 'mod', 'moe', 'mof', 'mog', 'moh', 'moi', 'moj', 'mok', 'mom', 'moo', 'mop', 'moq', 'mor', 'mos', 'mot', 'mou', 'mov', 'mow', 'mox', 'moy', 'moz', 'mpa', 'mpb', 'mpc', 'mpd', 'mpe', 'mpg', 'mph', 'mpi', 'mpj', 'mpk', 'mpl', 'mpm', 'mpn', 'mpo', 'mpp', 'mpq', 'mpr', 'mps', 'mpt', 'mpu', 'mpv', 'mpw', 'mpx', 'mpy', 'mpz', 'mqa', 'mqb', 'mqc', 'mqe', 'mqf', 'mqg', 'mqh', 'mqi', 'mqj', 'mqk', 'mql', 'mqm', 'mqn', 'mqo', 'mqp', 'mqq', 'mqr', 'mqs', 'mqt', 'mqu', 'mqv', 'mqw', 'mqx', 'mqy', 'mqz', 'mra', 'mrb', 'mrc', 'mrd', 'mre', 'mrf', 'mrg', 'mrh', 'mrj', 'mrk', 'mrl', 'mrm', 'mrn', 'mro', 'mrp', 'mrq', 'mrr', 'mrs', 'mrt', 'mru', 'mrv', 'mrw', 'mrx', 'mry', 'mrz', 'msb', 'msc', 'msd', 'mse', 'msf', 'msg', 'msh', 'msi', 'msj', 'msk', 'msl', 'msm', 'msn', 'mso', 'msp', 'msq', 'msr', 'mss', 'mst', 'msu', 'msv', 'msw', 'msx', 'msy', 'msz', 'mta', 'mtb', 'mtc', 'mtd', 'mte', 'mtf', 'mtg', 'mth', 'mti', 'mtj', 'mtk', 'mtl', 'mtm', 'mtn', 'mto', 'mtp', 'mtq', 'mtr', 'mts', 'mtt', 'mtu', 'mtv', 'mtw', 'mtx', 'mty', 'mua', 'mub', 'muc', 'mud', 'mue', 'mug', 'muh', 'mui', 'muj', 'muk', 'mul', 'mum', 'mun', 'muo', 'mup', 'muq', 'mur', 'mus', 'mut', 'muu', 'muv', 'mux', 'muy', 'muz', 'mva', 'mvb', 'mvd', 'mve', 'mvf', 'mvg', 'mvh', 'mvi', 'mvk', 'mvl', 'mvm', 'mvn', 'mvo', 'mvp', 'mvq', 'mvr', 'mvs', 'mvt', 'mvu', 'mvv', 'mvw', 'mvx', 'mvy', 'mvz', 'mwa', 'mwb', 'mwc', 'mwd', 'mwe', 'mwf', 'mwg', 'mwh', 'mwi', 'mwj', 'mwk', 'mwl', 'mwm', 'mwn', 'mwo', 'mwp', 'mwq', 'mwr', 'mws', 'mwt', 'mwu', 'mwv', 'mww', 'mwx', 'mwy', 'mwz', 'mxa', 'mxb', 'mxc', 'mxd', 'mxe', 'mxf', 'mxg', 'mxh', 'mxi', 'mxj', 'mxk', 'mxl', 'mxm', 'mxn', 'mxo', 'mxp', 'mxq', 'mxr', 'mxs', 'mxt', 'mxu', 'mxv', 'mxw', 'mxx', 'mxy', 'mxz', 'myb', 'myc', 'myd', 'mye', 'myf', 'myg', 'myh', 'myi', 'myj', 'myk', 'myl', 'mym', 'myn', 'myo', 'myp', 'myq', 'myr', 'mys', 'myt', 'myu', 'myv', 'myw', 'myx', 'myy', 'myz', 'mza', 'mzb', 'mzc', 'mzd', 'mze', 'mzg', 'mzh', 'mzi', 'mzj', 'mzk', 'mzl', 'mzm', 'mzn', 'mzo', 'mzp', 'mzq', 'mzr', 'mzs', 'mzt', 'mzu', 'mzv', 'mzw', 'mzx', 'mzy', 'mzz', 'naa', 'nab', 'nac', 'nad', 'nae', 'naf', 'nag', 'nah', 'nai', 'naj', 'nak', 'nal', 'nam', 'nan', 'nao', 'nap', 'naq', 'nar', 'nas', 'nat', 'naw', 'nax', 'nay', 'naz', 'nba', 'nbb', 'nbc', 'nbd', 'nbe', 'nbf', 'nbg', 'nbh', 'nbi', 'nbj', 'nbk', 'nbm', 'nbn', 'nbo', 'nbp', 'nbq', 'nbr', 'nbs', 'nbt', 'nbu', 'nbv', 'nbw', 'nbx', 'nby', 'nca', 'ncb', 'ncc', 'ncd', 'nce', 'ncf', 'ncg', 'nch', 'nci', 'ncj', 'nck', 'ncl', 'ncm', 'ncn', 'nco', 'ncp', 'ncq', 'ncr', 'ncs', 'nct', 'ncu', 'ncx', 'ncz', 'nda', 'ndb', 'ndc', 'ndd', 'ndf', 'ndg', 'ndh', 'ndi', 'ndj', 'ndk', 'ndl', 'ndm', 'ndn', 'ndp', 'ndq', 'ndr', 'nds', 'ndt', 'ndu', 'ndv', 'ndw', 'ndx', 'ndy', 'ndz', 'nea', 'neb', 'nec', 'ned', 'nee', 'nef', 'neg', 'neh', 'nei', 'nej', 'nek', 'nem', 'nen', 'neo', 'neq', 'ner', 'nes', 'net', 'neu', 'nev', 'new', 'nex', 'ney', 'nez', 'nfa', 'nfd', 'nfl', 'nfr', 'nfu', 'nga', 'ngb', 'ngc', 'ngd', 'nge', 'ngf', 'ngg', 'ngh', 'ngi', 'ngj', 'ngk', 'ngl', 'ngm', 'ngn', 'ngo', 'ngp', 'ngq', 'ngr', 'ngs', 'ngt', 'ngu', 'ngv', 'ngw', 'ngx', 'ngy', 'ngz', 'nha', 'nhb', 'nhc', 'nhd', 'nhe', 'nhf', 'nhg', 'nhh', 'nhi', 'nhk', 'nhm', 'nhn', 'nho', 'nhp', 'nhq', 'nhr', 'nht', 'nhu', 'nhv', 'nhw', 'nhx', 'nhy', 'nhz', 'nia', 'nib', 'nic', 'nid', 'nie', 'nif', 'nig', 'nih', 'nii', 'nij', 'nik', 'nil', 'nim', 'nin', 'nio', 'niq', 'nir', 'nis', 'nit', 'niu', 'niv', 'niw', 'nix', 'niy', 'niz', 'nja', 'njb', 'njd', 'njh', 'nji', 'njj', 'njl', 'njm', 'njn', 'njo', 'njr', 'njs', 'njt', 'nju', 'njx', 'njy', 'njz', 'nka', 'nkb', 'nkc', 'nkd', 'nke', 'nkf', 'nkg', 'nkh', 'nki', 'nkj', 'nkk', 'nkm', 'nkn', 'nko', 'nkp', 'nkq', 'nkr', 'nks', 'nkt', 'nku', 'nkv', 'nkw', 'nkx', 'nkz', 'nla', 'nlc', 'nle', 'nlg', 'nli', 'nlj', 'nlk', 'nll', 'nlm', 'nln', 'nlo', 'nlq', 'nlr', 'nlu', 'nlv', 'nlw', 'nlx', 'nly', 'nlz', 'nma', 'nmb', 'nmc', 'nmd', 'nme', 'nmf', 'nmg', 'nmh', 'nmi', 'nmj', 'nmk', 'nml', 'nmm', 'nmn', 'nmo', 'nmp', 'nmq', 'nmr', 'nms', 'nmt', 'nmu', 'nmv', 'nmw', 'nmx', 'nmy', 'nmz', 'nna', 'nnb', 'nnc', 'nnd', 'nne', 'nnf', 'nng', 'nnh', 'nni', 'nnj', 'nnk', 'nnl', 'nnm', 'nnn', 'nnp', 'nnq', 'nnr', 'nns', 'nnt', 'nnu', 'nnv', 'nnw', 'nnx', 'nny', 'nnz', 'noa', 'noc', 'nod', 'noe', 'nof', 'nog', 'noh', 'noi', 'noj', 'nok', 'nol', 'nom', 'non', 'noo', 'nop', 'noq', 'nos', 'not', 'nou', 'nov', 'now', 'noy', 'noz', 'npa', 'npb', 'npg', 'nph', 'npi', 'npl', 'npn', 'npo', 'nps', 'npu', 'npx', 'npy', 'nqg', 'nqk', 'nql', 'nqm', 'nqn', 'nqo', 'nqq', 'nqy', 'nra', 'nrb', 'nrc', 'nre', 'nrf', 'nrg', 'nri', 'nrk', 'nrl', 'nrm', 'nrn', 'nrp', 'nrr', 'nrt', 'nru', 'nrx', 'nrz', 'nsa', 'nsc', 'nsd', 'nse', 'nsf', 'nsg', 'nsh', 'nsi', 'nsk', 'nsl', 'nsm', 'nsn', 'nso', 'nsp', 'nsq', 'nsr', 'nss', 'nst', 'nsu', 'nsv', 'nsw', 'nsx', 'nsy', 'nsz', 'ntd', 'nte', 'ntg', 'nti', 'ntj', 'ntk', 'ntm', 'nto', 'ntp', 'ntr', 'nts', 'ntu', 'ntw', 'ntx', 'nty', 'ntz', 'nua', 'nub', 'nuc', 'nud', 'nue', 'nuf', 'nug', 'nuh', 'nui', 'nuj', 'nuk', 'nul', 'num', 'nun', 'nuo', 'nup', 'nuq', 'nur', 'nus', 'nut', 'nuu', 'nuv', 'nuw', 'nux', 'nuy', 'nuz', 'nvh', 'nvm', 'nvo', 'nwa', 'nwb', 'nwc', 'nwe', 'nwg', 'nwi', 'nwm', 'nwo', 'nwr', 'nwx', 'nwy', 'nxa', 'nxd', 'nxe', 'nxg', 'nxi', 'nxk', 'nxl', 'nxm', 'nxn', 'nxo', 'nxq', 'nxr', 'nxu', 'nxx', 'nyb', 'nyc', 'nyd', 'nye', 'nyf', 'nyg', 'nyh', 'nyi', 'nyj', 'nyk', 'nyl', 'nym', 'nyn', 'nyo', 'nyp', 'nyq', 'nyr', 'nys', 'nyt', 'nyu', 'nyv', 'nyw', 'nyx', 'nyy', 'nza', 'nzb', 'nzd', 'nzi', 'nzk', 'nzm', 'nzs', 'nzu', 'nzy', 'nzz', 'oaa', 'oac', 'oar', 'oav', 'obi', 'obk', 'obl', 'obm', 'obo', 'obr', 'obt', 'obu', 'oca', 'och', 'oco', 'ocu', 'oda', 'odk', 'odt', 'odu', 'ofo', 'ofs', 'ofu', 'ogb', 'ogc', 'oge', 'ogg', 'ogo', 'ogu', 'oht', 'ohu', 'oia', 'oin', 'ojb', 'ojc', 'ojg', 'ojp', 'ojs', 'ojv', 'ojw', 'oka', 'okb', 'okd', 'oke', 'okg', 'okh', 'oki', 'okj', 'okk', 'okl', 'okm', 'okn', 'oko', 'okr', 'oks', 'oku', 'okv', 'okx', 'ola', 'old', 'ole', 'olk', 'olm', 'olo', 'olr', 'olt', 'olu', 'oma', 'omb', 'omc', 'ome', 'omg', 'omi', 'omk', 'oml', 'omn', 'omo', 'omp', 'omq', 'omr', 'omt', 'omu', 'omv', 'omw', 'omx', 'ona', 'onb', 'one', 'ong', 'oni', 'onj', 'onk', 'onn', 'ono', 'onp', 'onr', 'ons', 'ont', 'onu', 'onw', 'onx', 'ood', 'oog', 'oon', 'oor', 'oos', 'opa', 'opk', 'opm', 'opo', 'opt', 'opy', 'ora', 'orc', 'ore', 'org', 'orh', 'orn', 'oro', 'orr', 'ors', 'ort', 'oru', 'orv', 'orw', 'orx', 'ory', 'orz', 'osa', 'osc', 'osi', 'oso', 'osp', 'ost', 'osu', 'osx', 'ota', 'otb', 'otd', 'ote', 'oti', 'otk', 'otl', 'otm', 'otn', 'oto', 'otq', 'otr', 'ots', 'ott', 'otu', 'otw', 'otx', 'oty', 'otz', 'oua', 'oub', 'oue', 'oui', 'oum', 'oun', 'ovd', 'owi', 'owl', 'oyb', 'oyd', 'oym', 'oyy', 'ozm', 'paa', 'pab', 'pac', 'pad', 'pae', 'paf', 'pag', 'pah', 'pai', 'pak', 'pal', 'pam', 'pao', 'pap', 'paq', 'par', 'pas', 'pat', 'pau', 'pav', 'paw', 'pax', 'pay', 'paz', 'pbb', 'pbc', 'pbe', 'pbf', 'pbg', 'pbh', 'pbi', 'pbl', 'pbm', 'pbn', 'pbo', 'pbp', 'pbr', 'pbs', 'pbt', 'pbu', 'pbv', 'pby', 'pbz', 'pca', 'pcb', 'pcc', 'pcd', 'pce', 'pcf', 'pcg', 'pch', 'pci', 'pcj', 'pck', 'pcl', 'pcm', 'pcn', 'pcp', 'pcr', 'pcw', 'pda', 'pdc', 'pdi', 'pdn', 'pdo', 'pdt', 'pdu', 'pea', 'peb', 'ped', 'pee', 'pef', 'peg', 'peh', 'pei', 'pej', 'pek', 'pel', 'pem', 'peo', 'pep', 'peq', 'pes', 'pev', 'pex', 'pey', 'pez', 'pfa', 'pfe', 'pfl', 'pga', 'pgd', 'pgg', 'pgi', 'pgk', 'pgl', 'pgn', 'pgs', 'pgu', 'pgy', 'pgz', 'pha', 'phd', 'phg', 'phh', 'phi', 'phk', 'phl', 'phm', 'phn', 'pho', 'phq', 'phr', 'pht', 'phu', 'phv', 'phw', 'pia', 'pib', 'pic', 'pid', 'pie', 'pif', 'pig', 'pih', 'pii', 'pij', 'pil', 'pim', 'pin', 'pio', 'pip', 'pir', 'pis', 'pit', 'piu', 'piv', 'piw', 'pix', 'piy', 'piz', 'pjt', 'pka', 'pkb', 'pkc', 'pkg', 'pkh', 'pkn', 'pko', 'pkp', 'pkr', 'pks', 'pkt', 'pku', 'pla', 'plb', 'plc', 'pld', 'ple', 'plf', 'plg', 'plh', 'plj', 'plk', 'pll', 'pln', 'plo', 'plp', 'plq', 'plr', 'pls', 'plt', 'plu', 'plv', 'plw', 'ply', 'plz', 'pma', 'pmb', 'pmc', 'pmd', 'pme', 'pmf', 'pmh', 'pmi', 'pmj', 'pmk', 'pml', 'pmm', 'pmn', 'pmo', 'pmq', 'pmr', 'pms', 'pmt', 'pmu', 'pmw', 'pmx', 'pmy', 'pmz', 'pna', 'pnb', 'pnc', 'pne', 'png', 'pnh', 'pni', 'pnj', 'pnk', 'pnl', 'pnm', 'pnn', 'pno', 'pnp', 'pnq', 'pnr', 'pns', 'pnt', 'pnu', 'pnv', 'pnw', 'pnx', 'pny', 'pnz', 'poc', 'pod', 'poe', 'pof', 'pog', 'poh', 'poi', 'pok', 'pom', 'pon', 'poo', 'pop', 'poq', 'pos', 'pot', 'pov', 'pow', 'pox', 'poy', 'poz', 'ppa', 'ppe', 'ppi', 'ppk', 'ppl', 'ppm', 'ppn', 'ppo', 'ppp', 'ppq', 'ppr', 'pps', 'ppt', 'ppu', 'pqa', 'pqe', 'pqm', 'pqw', 'pra', 'prb', 'prc', 'prd', 'pre', 'prf', 'prg', 'prh', 'pri', 'prk', 'prl', 'prm', 'prn', 'pro', 'prp', 'prq', 'prr', 'prs', 'prt', 'pru', 'prw', 'prx', 'pry', 'prz', 'psa', 'psc', 'psd', 'pse', 'psg', 'psh', 'psi', 'psl', 'psm', 'psn', 'pso', 'psp', 'psq', 'psr', 'pss', 'pst', 'psu', 'psw', 'psy', 'pta', 'pth', 'pti', 'ptn', 'pto', 'ptp', 'ptq', 'ptr', 'ptt', 'ptu', 'ptv', 'ptw', 'pty', 'pua', 'pub', 'puc', 'pud', 'pue', 'puf', 'pug', 'pui', 'puj', 'puk', 'pum', 'puo', 'pup', 'puq', 'pur', 'put', 'puu', 'puw', 'pux', 'puy', 'puz', 'pwa', 'pwb', 'pwg', 'pwi', 'pwm', 'pwn', 'pwo', 'pwr', 'pww', 'pxm', 'pye', 'pym', 'pyn', 'pys', 'pyu', 'pyx', 'pyy', 'pzn', 'qaa..qtz', 'qua', 'qub', 'quc', 'qud', 'quf', 'qug', 'quh', 'qui', 'quk', 'qul', 'qum', 'qun', 'qup', 'quq', 'qur', 'qus', 'quv', 'quw', 'qux', 'quy', 'quz', 'qva', 'qvc', 'qve', 'qvh', 'qvi', 'qvj', 'qvl', 'qvm', 'qvn', 'qvo', 'qvp', 'qvs', 'qvw', 'qvy', 'qvz', 'qwa', 'qwc', 'qwe', 'qwh', 'qwm', 'qws', 'qwt', 'qxa', 'qxc', 'qxh', 'qxl', 'qxn', 'qxo', 'qxp', 'qxq', 'qxr', 'qxs', 'qxt', 'qxu', 'qxw', 'qya', 'qyp', 'raa', 'rab', 'rac', 'rad', 'raf', 'rag', 'rah', 'rai', 'raj', 'rak', 'ral', 'ram', 'ran', 'rao', 'rap', 'raq', 'rar', 'ras', 'rat', 'rau', 'rav', 'raw', 'rax', 'ray', 'raz', 'rbb', 'rbk', 'rbl', 'rbp', 'rcf', 'rdb', 'rea', 'reb', 'ree', 'reg', 'rei', 'rej', 'rel', 'rem', 'ren', 'rer', 'res', 'ret', 'rey', 'rga', 'rge', 'rgk', 'rgn', 'rgr', 'rgs', 'rgu', 'rhg', 'rhp', 'ria', 'rie', 'rif', 'ril', 'rim', 'rin', 'rir', 'rit', 'riu', 'rjg', 'rji', 'rjs', 'rka', 'rkb', 'rkh', 'rki', 'rkm', 'rkt', 'rkw', 'rma', 'rmb', 'rmc', 'rmd', 'rme', 'rmf', 'rmg', 'rmh', 'rmi', 'rmk', 'rml', 'rmm', 'rmn', 'rmo', 'rmp', 'rmq', 'rmr', 'rms', 'rmt', 'rmu', 'rmv', 'rmw', 'rmx', 'rmy', 'rmz', 'rna', 'rnd', 'rng', 'rnl', 'rnn', 'rnp', 'rnr', 'rnw', 'roa', 'rob', 'roc', 'rod', 'roe', 'rof', 'rog', 'rol', 'rom', 'roo', 'rop', 'ror', 'rou', 'row', 'rpn', 'rpt', 'rri', 'rro', 'rrt', 'rsb', 'rsi', 'rsl', 'rsm', 'rtc', 'rth', 'rtm', 'rts', 'rtw', 'rub', 'ruc', 'rue', 'ruf', 'rug', 'ruh', 'rui', 'ruk', 'ruo', 'rup', 'ruq', 'rut', 'ruu', 'ruy', 'ruz', 'rwa', 'rwk', 'rwm', 'rwo', 'rwr', 'rxd', 'rxw', 'ryn', 'rys', 'ryu', 'rzh', 'saa', 'sab', 'sac', 'sad', 'sae', 'saf', 'sah', 'sai', 'saj', 'sak', 'sal', 'sam', 'sao', 'sap', 'saq', 'sar', 'sas', 'sat', 'sau', 'sav', 'saw', 'sax', 'say', 'saz', 'sba', 'sbb', 'sbc', 'sbd', 'sbe', 'sbf', 'sbg', 'sbh', 'sbi', 'sbj', 'sbk', 'sbl', 'sbm', 'sbn', 'sbo', 'sbp', 'sbq', 'sbr', 'sbs', 'sbt', 'sbu', 'sbv', 'sbw', 'sbx', 'sby', 'sbz', 'sca', 'scb', 'sce', 'scf', 'scg', 'sch', 'sci', 'sck', 'scl', 'scn', 'sco', 'scp', 'scq', 'scs', 'sct', 'scu', 'scv', 'scw', 'scx', 'sda', 'sdb', 'sdc', 'sde', 'sdf', 'sdg', 'sdh', 'sdj', 'sdk', 'sdl', 'sdm', 'sdn', 'sdo', 'sdp', 'sdr', 'sds', 'sdt', 'sdu', 'sdv', 'sdx', 'sdz', 'sea', 'seb', 'sec', 'sed', 'see', 'sef', 'seg', 'seh', 'sei', 'sej', 'sek', 'sel', 'sem', 'sen', 'seo', 'sep', 'seq', 'ser', 'ses', 'set', 'seu', 'sev', 'sew', 'sey', 'sez', 'sfb', 'sfe', 'sfm', 'sfs', 'sfw', 'sga', 'sgb', 'sgc', 'sgd', 'sge', 'sgg', 'sgh', 'sgi', 'sgj', 'sgk', 'sgl', 'sgm', 'sgn', 'sgo', 'sgp', 'sgr', 'sgs', 'sgt', 'sgu', 'sgw', 'sgx', 'sgy', 'sgz', 'sha', 'shb', 'shc', 'shd', 'she', 'shg', 'shh', 'shi', 'shj', 'shk', 'shl', 'shm', 'shn', 'sho', 'shp', 'shq', 'shr', 'shs', 'sht', 'shu', 'shv', 'shw', 'shx', 'shy', 'shz', 'sia', 'sib', 'sid', 'sie', 'sif', 'sig', 'sih', 'sii', 'sij', 'sik', 'sil', 'sim', 'sio', 'sip', 'siq', 'sir', 'sis', 'sit', 'siu', 'siv', 'siw', 'six', 'siy', 'siz', 'sja', 'sjb', 'sjd', 'sje', 'sjg', 'sjk', 'sjl', 'sjm', 'sjn', 'sjo', 'sjp', 'sjr', 'sjs', 'sjt', 'sju', 'sjw', 'ska', 'skb', 'skc', 'skd', 'ske', 'skf', 'skg', 'skh', 'ski', 'skj', 'skk', 'skm', 'skn', 'sko', 'skp', 'skq', 'skr', 'sks', 'skt', 'sku', 'skv', 'skw', 'skx', 'sky', 'skz', 'sla', 'slc', 'sld', 'sle', 'slf', 'slg', 'slh', 'sli', 'slj', 'sll', 'slm', 'sln', 'slp', 'slq', 'slr', 'sls', 'slt', 'slu', 'slw', 'slx', 'sly', 'slz', 'sma', 'smb', 'smc', 'smd', 'smf', 'smg', 'smh', 'smi', 'smj', 'smk', 'sml', 'smm', 'smn', 'smp', 'smq', 'smr', 'sms', 'smt', 'smu', 'smv', 'smw', 'smx', 'smy', 'smz', 'snb', 'snc', 'sne', 'snf', 'sng', 'snh', 'sni', 'snj', 'snk', 'snl', 'snm', 'snn', 'sno', 'snp', 'snq', 'snr', 'sns', 'snu', 'snv', 'snw', 'snx', 'sny', 'snz', 'soa', 'sob', 'soc', 'sod', 'soe', 'sog', 'soh', 'soi', 'soj', 'sok', 'sol', 'son', 'soo', 'sop', 'soq', 'sor', 'sos', 'sou', 'sov', 'sow', 'sox', 'soy', 'soz', 'spb', 'spc', 'spd', 'spe', 'spg', 'spi', 'spk', 'spl', 'spm', 'spn', 'spo', 'spp', 'spq', 'spr', 'sps', 'spt', 'spu', 'spv', 'spx', 'spy', 'sqa', 'sqh', 'sqj', 'sqk', 'sqm', 'sqn', 'sqo', 'sqq', 'sqr', 'sqs', 'sqt', 'squ', 'sra', 'srb', 'src', 'sre', 'srf', 'srg', 'srh', 'sri', 'srk', 'srl', 'srm', 'srn', 'sro', 'srq', 'srr', 'srs', 'srt', 'sru', 'srv', 'srw', 'srx', 'sry', 'srz', 'ssa', 'ssb', 'ssc', 'ssd', 'sse', 'ssf', 'ssg', 'ssh', 'ssi', 'ssj', 'ssk', 'ssl', 'ssm', 'ssn', 'sso', 'ssp', 'ssq', 'ssr', 'sss', 'sst', 'ssu', 'ssv', 'ssx', 'ssy', 'ssz', 'sta', 'stb', 'std', 'ste', 'stf', 'stg', 'sth', 'sti', 'stj', 'stk', 'stl', 'stm', 'stn', 'sto', 'stp', 'stq', 'str', 'sts', 'stt', 'stu', 'stv', 'stw', 'sty', 'sua', 'sub', 'suc', 'sue', 'sug', 'sui', 'suj', 'suk', 'sul', 'sum', 'suq', 'sur', 'sus', 'sut', 'suv', 'suw', 'sux', 'suy', 'suz', 'sva', 'svb', 'svc', 'sve', 'svk', 'svm', 'svr', 'svs', 'svx', 'swb', 'swc', 'swf', 'swg', 'swh', 'swi', 'swj', 'swk', 'swl', 'swm', 'swn', 'swo', 'swp', 'swq', 'swr', 'sws', 'swt', 'swu', 'swv', 'sww', 'swx', 'swy', 'sxb', 'sxc', 'sxe', 'sxg', 'sxk', 'sxl', 'sxm', 'sxn', 'sxo', 'sxr', 'sxs', 'sxu', 'sxw', 'sya', 'syb', 'syc', 'syd', 'syi', 'syk', 'syl', 'sym', 'syn', 'syo', 'syr', 'sys', 'syw', 'syx', 'syy', 'sza', 'szb', 'szc', 'szd', 'sze', 'szg', 'szl', 'szn', 'szp', 'szs', 'szv', 'szw', 'taa', 'tab', 'tac', 'tad', 'tae', 'taf', 'tag', 'tai', 'taj', 'tak', 'tal', 'tan', 'tao', 'tap', 'taq', 'tar', 'tas', 'tau', 'tav', 'taw', 'tax', 'tay', 'taz', 'tba', 'tbb', 'tbc', 'tbd', 'tbe', 'tbf', 'tbg', 'tbh', 'tbi', 'tbj', 'tbk', 'tbl', 'tbm', 'tbn', 'tbo', 'tbp', 'tbq', 'tbr', 'tbs', 'tbt', 'tbu', 'tbv', 'tbw', 'tbx', 'tby', 'tbz', 'tca', 'tcb', 'tcc', 'tcd', 'tce', 'tcf', 'tcg', 'tch', 'tci', 'tck', 'tcl', 'tcm', 'tcn', 'tco', 'tcp', 'tcq', 'tcs', 'tct', 'tcu', 'tcw', 'tcx', 'tcy', 'tcz', 'tda', 'tdb', 'tdc', 'tdd', 'tde', 'tdf', 'tdg', 'tdh', 'tdi', 'tdj', 'tdk', 'tdl', 'tdm', 'tdn', 'tdo', 'tdq', 'tdr', 'tds', 'tdt', 'tdu', 'tdv', 'tdx', 'tdy', 'tea', 'teb', 'tec', 'ted', 'tee', 'tef', 'teg', 'teh', 'tei', 'tek', 'tem', 'ten', 'teo', 'tep', 'teq', 'ter', 'tes', 'tet', 'teu', 'tev', 'tew', 'tex', 'tey', 'tez', 'tfi', 'tfn', 'tfo', 'tfr', 'tft', 'tga', 'tgb', 'tgc', 'tgd', 'tge', 'tgf', 'tgg', 'tgh', 'tgi', 'tgj', 'tgn', 'tgo', 'tgp', 'tgq', 'tgr', 'tgs', 'tgt', 'tgu', 'tgv', 'tgw', 'tgx', 'tgy', 'tgz', 'thc', 'thd', 'the', 'thf', 'thh', 'thi', 'thk', 'thl', 'thm', 'thn', 'thp', 'thq', 'thr', 'ths', 'tht', 'thu', 'thv', 'thw', 'thx', 'thy', 'thz', 'tia', 'tic', 'tid', 'tie', 'tif', 'tig', 'tih', 'tii', 'tij', 'tik', 'til', 'tim', 'tin', 'tio', 'tip', 'tiq', 'tis', 'tit', 'tiu', 'tiv', 'tiw', 'tix', 'tiy', 'tiz', 'tja', 'tjg', 'tji', 'tjl', 'tjm', 'tjn', 'tjo', 'tjs', 'tju', 'tjw', 'tka', 'tkb', 'tkd', 'tke', 'tkf', 'tkg', 'tkk', 'tkl', 'tkm', 'tkn', 'tkp', 'tkq', 'tkr', 'tks', 'tkt', 'tku', 'tkv', 'tkw', 'tkx', 'tkz', 'tla', 'tlb', 'tlc', 'tld', 'tlf', 'tlg', 'tlh', 'tli', 'tlj', 'tlk', 'tll', 'tlm', 'tln', 'tlo', 'tlp', 'tlq', 'tlr', 'tls', 'tlt', 'tlu', 'tlv', 'tlw', 'tlx', 'tly', 'tma', 'tmb', 'tmc', 'tmd', 'tme', 'tmf', 'tmg', 'tmh', 'tmi', 'tmj', 'tmk', 'tml', 'tmm', 'tmn', 'tmo', 'tmp', 'tmq', 'tmr', 'tms', 'tmt', 'tmu', 'tmv', 'tmw', 'tmy', 'tmz', 'tna', 'tnb', 'tnc', 'tnd', 'tne', 'tnf', 'tng', 'tnh', 'tni', 'tnk', 'tnl', 'tnm', 'tnn', 'tno', 'tnp', 'tnq', 'tnr', 'tns', 'tnt', 'tnu', 'tnv', 'tnw', 'tnx', 'tny', 'tnz', 'tob', 'toc', 'tod', 'toe', 'tof', 'tog', 'toh', 'toi', 'toj', 'tol', 'tom', 'too', 'top', 'toq', 'tor', 'tos', 'tou', 'tov', 'tow', 'tox', 'toy', 'toz', 'tpa', 'tpc', 'tpe', 'tpf', 'tpg', 'tpi', 'tpj', 'tpk', 'tpl', 'tpm', 'tpn', 'tpo', 'tpp', 'tpq', 'tpr', 'tpt', 'tpu', 'tpv', 'tpw', 'tpx', 'tpy', 'tpz', 'tqb', 'tql', 'tqm', 'tqn', 'tqo', 'tqp', 'tqq', 'tqr', 'tqt', 'tqu', 'tqw', 'tra', 'trb', 'trc', 'trd', 'tre', 'trf', 'trg', 'trh', 'tri', 'trj', 'trk', 'trl', 'trm', 'trn', 'tro', 'trp', 'trq', 'trr', 'trs', 'trt', 'tru', 'trv', 'trw', 'trx', 'try', 'trz', 'tsa', 'tsb', 'tsc', 'tsd', 'tse', 'tsf', 'tsg', 'tsh', 'tsi', 'tsj', 'tsk', 'tsl', 'tsm', 'tsp', 'tsq', 'tsr', 'tss', 'tst', 'tsu', 'tsv', 'tsw', 'tsx', 'tsy', 'tsz', 'tta', 'ttb', 'ttc', 'ttd', 'tte', 'ttf', 'ttg', 'tth', 'tti', 'ttj', 'ttk', 'ttl', 'ttm', 'ttn', 'tto', 'ttp', 'ttq', 'ttr', 'tts', 'ttt', 'ttu', 'ttv', 'ttw', 'tty', 'ttz', 'tua', 'tub', 'tuc', 'tud', 'tue', 'tuf', 'tug', 'tuh', 'tui', 'tuj', 'tul', 'tum', 'tun', 'tuo', 'tup', 'tuq', 'tus', 'tut', 'tuu', 'tuv', 'tuw', 'tux', 'tuy', 'tuz', 'tva', 'tvd', 'tve', 'tvk', 'tvl', 'tvm', 'tvn', 'tvo', 'tvs', 'tvt', 'tvu', 'tvw', 'tvy', 'twa', 'twb', 'twc', 'twd', 'twe', 'twf', 'twg', 'twh', 'twl', 'twm', 'twn', 'two', 'twp', 'twq', 'twr', 'twt', 'twu', 'tww', 'twx', 'twy', 'txa', 'txb', 'txc', 'txe', 'txg', 'txh', 'txi', 'txj', 'txm', 'txn', 'txo', 'txq', 'txr', 'txs', 'txt', 'txu', 'txx', 'txy', 'tya', 'tye', 'tyh', 'tyi', 'tyj', 'tyl', 'tyn', 'typ', 'tyr', 'tys', 'tyt', 'tyu', 'tyv', 'tyx', 'tyz', 'tza', 'tzh', 'tzj', 'tzl', 'tzm', 'tzn', 'tzo', 'tzx', 'uam', 'uan', 'uar', 'uba', 'ubi', 'ubl', 'ubr', 'ubu', 'uby', 'uda', 'ude', 'udg', 'udi', 'udj', 'udl', 'udm', 'udu', 'ues', 'ufi', 'uga', 'ugb', 'uge', 'ugn', 'ugo', 'ugy', 'uha', 'uhn', 'uis', 'uiv', 'uji', 'uka', 'ukg', 'ukh', 'ukk', 'ukl', 'ukp', 'ukq', 'uks', 'uku', 'ukw', 'uky', 'ula', 'ulb', 'ulc', 'ule', 'ulf', 'uli', 'ulk', 'ull', 'ulm', 'uln', 'ulu', 'ulw', 'uma', 'umb', 'umc', 'umd', 'umg', 'umi', 'umm', 'umn', 'umo', 'ump', 'umr', 'ums', 'umu', 'una', 'und', 'une', 'ung', 'unk', 'unm', 'unn', 'unp', 'unr', 'unu', 'unx', 'unz', 'uok', 'upi', 'upv', 'ura', 'urb', 'urc', 'ure', 'urf', 'urg', 'urh', 'uri', 'urj', 'urk', 'url', 'urm', 'urn', 'uro', 'urp', 'urr', 'urt', 'uru', 'urv', 'urw', 'urx', 'ury', 'urz', 'usa', 'ush', 'usi', 'usk', 'usp', 'usu', 'uta', 'ute', 'utp', 'utr', 'utu', 'uum', 'uun', 'uur', 'uuu', 'uve', 'uvh', 'uvl', 'uwa', 'uya', 'uzn', 'uzs', 'vaa', 'vae', 'vaf', 'vag', 'vah', 'vai', 'vaj', 'val', 'vam', 'van', 'vao', 'vap', 'var', 'vas', 'vau', 'vav', 'vay', 'vbb', 'vbk', 'vec', 'ved', 'vel', 'vem', 'veo', 'vep', 'ver', 'vgr', 'vgt', 'vic', 'vid', 'vif', 'vig', 'vil', 'vin', 'vis', 'vit', 'viv', 'vka', 'vki', 'vkj', 'vkk', 'vkl', 'vkm', 'vko', 'vkp', 'vkt', 'vku', 'vlp', 'vls', 'vma', 'vmb', 'vmc', 'vmd', 'vme', 'vmf', 'vmg', 'vmh', 'vmi', 'vmj', 'vmk', 'vml', 'vmm', 'vmp', 'vmq', 'vmr', 'vms', 'vmu', 'vmv', 'vmw', 'vmx', 'vmy', 'vmz', 'vnk', 'vnm', 'vnp', 'vor', 'vot', 'vra', 'vro', 'vrs', 'vrt', 'vsi', 'vsl', 'vsv', 'vto', 'vum', 'vun', 'vut', 'vwa', 'waa', 'wab', 'wac', 'wad', 'wae', 'waf', 'wag', 'wah', 'wai', 'waj', 'wak', 'wal', 'wam', 'wan', 'wao', 'wap', 'waq', 'war', 'was', 'wat', 'wau', 'wav', 'waw', 'wax', 'way', 'waz', 'wba', 'wbb', 'wbe', 'wbf', 'wbh', 'wbi', 'wbj', 'wbk', 'wbl', 'wbm', 'wbp', 'wbq', 'wbr', 'wbs', 'wbt', 'wbv', 'wbw', 'wca', 'wci', 'wdd', 'wdg', 'wdj', 'wdk', 'wdu', 'wdy', 'wea', 'wec', 'wed', 'weg', 'weh', 'wei', 'wem', 'wen', 'weo', 'wep', 'wer', 'wes', 'wet', 'weu', 'wew', 'wfg', 'wga', 'wgb', 'wgg', 'wgi', 'wgo', 'wgu', 'wgw', 'wgy', 'wha', 'whg', 'whk', 'whu', 'wib', 'wic', 'wie', 'wif', 'wig', 'wih', 'wii', 'wij', 'wik', 'wil', 'wim', 'win', 'wir', 'wit', 'wiu', 'wiv', 'wiw', 'wiy', 'wja', 'wji', 'wka', 'wkb', 'wkd', 'wkl', 'wku', 'wkw', 'wky', 'wla', 'wlc', 'wle', 'wlg', 'wli', 'wlk', 'wll', 'wlm', 'wlo', 'wlr', 'wls', 'wlu', 'wlv', 'wlw', 'wlx', 'wly', 'wma', 'wmb', 'wmc', 'wmd', 'wme', 'wmh', 'wmi', 'wmm', 'wmn', 'wmo', 'wms', 'wmt', 'wmw', 'wmx', 'wnb', 'wnc', 'wnd', 'wne', 'wng', 'wni', 'wnk', 'wnm', 'wnn', 'wno', 'wnp', 'wnu', 'wnw', 'wny', 'woa', 'wob', 'woc', 'wod', 'woe', 'wof', 'wog', 'woi', 'wok', 'wom', 'won', 'woo', 'wor', 'wos', 'wow', 'woy', 'wpc', 'wra', 'wrb', 'wrd', 'wrg', 'wrh', 'wri', 'wrk', 'wrl', 'wrm', 'wrn', 'wro', 'wrp', 'wrr', 'wrs', 'wru', 'wrv', 'wrw', 'wrx', 'wry', 'wrz', 'wsa', 'wsg', 'wsi', 'wsk', 'wsr', 'wss', 'wsu', 'wsv', 'wtf', 'wth', 'wti', 'wtk', 'wtm', 'wtw', 'wua', 'wub', 'wud', 'wuh', 'wul', 'wum', 'wun', 'wur', 'wut', 'wuu', 'wuv', 'wux', 'wuy', 'wwa', 'wwb', 'wwo', 'wwr', 'www', 'wxa', 'wxw', 'wya', 'wyb', 'wyi', 'wym', 'wyr', 'wyy', 'xaa', 'xab', 'xac', 'xad', 'xae', 'xag', 'xai', 'xaj', 'xak', 'xal', 'xam', 'xan', 'xao', 'xap', 'xaq', 'xar', 'xas', 'xat', 'xau', 'xav', 'xaw', 'xay', 'xba', 'xbb', 'xbc', 'xbd', 'xbe', 'xbg', 'xbi', 'xbj', 'xbm', 'xbn', 'xbo', 'xbp', 'xbr', 'xbw', 'xbx', 'xby', 'xcb', 'xcc', 'xce', 'xcg', 'xch', 'xcl', 'xcm', 'xcn', 'xco', 'xcr', 'xct', 'xcu', 'xcv', 'xcw', 'xcy', 'xda', 'xdc', 'xdk', 'xdm', 'xdo', 'xdy', 'xeb', 'xed', 'xeg', 'xel', 'xem', 'xep', 'xer', 'xes', 'xet', 'xeu', 'xfa', 'xga', 'xgb', 'xgd', 'xgf', 'xgg', 'xgi', 'xgl', 'xgm', 'xgn', 'xgr', 'xgu', 'xgw', 'xha', 'xhc', 'xhd', 'xhe', 'xhr', 'xht', 'xhu', 'xhv', 'xia', 'xib', 'xii', 'xil', 'xin', 'xip', 'xir', 'xis', 'xiv', 'xiy', 'xjb', 'xjt', 'xka', 'xkb', 'xkc', 'xkd', 'xke', 'xkf', 'xkg', 'xkh', 'xki', 'xkj', 'xkk', 'xkl', 'xkn', 'xko', 'xkp', 'xkq', 'xkr', 'xks', 'xkt', 'xku', 'xkv', 'xkw', 'xkx', 'xky', 'xkz', 'xla', 'xlb', 'xlc', 'xld', 'xle', 'xlg', 'xli', 'xln', 'xlo', 'xlp', 'xls', 'xlu', 'xly', 'xma', 'xmb', 'xmc', 'xmd', 'xme', 'xmf', 'xmg', 'xmh', 'xmj', 'xmk', 'xml', 'xmm', 'xmn', 'xmo', 'xmp', 'xmq', 'xmr', 'xms', 'xmt', 'xmu', 'xmv', 'xmw', 'xmx', 'xmy', 'xmz', 'xna', 'xnb', 'xnd', 'xng', 'xnh', 'xni', 'xnk', 'xnn', 'xno', 'xnr', 'xns', 'xnt', 'xnu', 'xny', 'xnz', 'xoc', 'xod', 'xog', 'xoi', 'xok', 'xom', 'xon', 'xoo', 'xop', 'xor', 'xow', 'xpa', 'xpc', 'xpe', 'xpg', 'xpi', 'xpj', 'xpk', 'xpm', 'xpn', 'xpo', 'xpp', 'xpq', 'xpr', 'xps', 'xpt', 'xpu', 'xpy', 'xqa', 'xqt', 'xra', 'xrb', 'xrd', 'xre', 'xrg', 'xri', 'xrm', 'xrn', 'xrq', 'xrr', 'xrt', 'xru', 'xrw', 'xsa', 'xsb', 'xsc', 'xsd', 'xse', 'xsh', 'xsi', 'xsj', 'xsl', 'xsm', 'xsn', 'xso', 'xsp', 'xsq', 'xsr', 'xss', 'xsu', 'xsv', 'xsy', 'xta', 'xtb', 'xtc', 'xtd', 'xte', 'xtg', 'xth', 'xti', 'xtj', 'xtl', 'xtm', 'xtn', 'xto', 'xtp', 'xtq', 'xtr', 'xts', 'xtt', 'xtu', 'xtv', 'xtw', 'xty', 'xtz', 'xua', 'xub', 'xud', 'xug', 'xuj', 'xul', 'xum', 'xun', 'xuo', 'xup', 'xur', 'xut', 'xuu', 'xve', 'xvi', 'xvn', 'xvo', 'xvs', 'xwa', 'xwc', 'xwd', 'xwe', 'xwg', 'xwj', 'xwk', 'xwl', 'xwo', 'xwr', 'xwt', 'xww', 'xxb', 'xxk', 'xxm', 'xxr', 'xxt', 'xya', 'xyb', 'xyj', 'xyk', 'xyl', 'xyt', 'xyy', 'xzh', 'xzm', 'xzp', 'yaa', 'yab', 'yac', 'yad', 'yae', 'yaf', 'yag', 'yah', 'yai', 'yaj', 'yak', 'yal', 'yam', 'yan', 'yao', 'yap', 'yaq', 'yar', 'yas', 'yat', 'yau', 'yav', 'yaw', 'yax', 'yay', 'yaz', 'yba', 'ybb', 'ybd', 'ybe', 'ybh', 'ybi', 'ybj', 'ybk', 'ybl', 'ybm', 'ybn', 'ybo', 'ybx', 'yby', 'ych', 'ycl', 'ycn', 'ycp', 'yda', 'ydd', 'yde', 'ydg', 'ydk', 'yds', 'yea', 'yec', 'yee', 'yei', 'yej', 'yel', 'yen', 'yer', 'yes', 'yet', 'yeu', 'yev', 'yey', 'yga', 'ygi', 'ygl', 'ygm', 'ygp', 'ygr', 'ygs', 'ygu', 'ygw', 'yha', 'yhd', 'yhl', 'yhs', 'yia', 'yif', 'yig', 'yih', 'yii', 'yij', 'yik', 'yil', 'yim', 'yin', 'yip', 'yiq', 'yir', 'yis', 'yit', 'yiu', 'yiv', 'yix', 'yiy', 'yiz', 'yka', 'ykg', 'yki', 'ykk', 'ykl', 'ykm', 'ykn', 'yko', 'ykr', 'ykt', 'yku', 'yky', 'yla', 'ylb', 'yle', 'ylg', 'yli', 'yll', 'ylm', 'yln', 'ylo', 'ylr', 'ylu', 'yly', 'yma', 'ymb', 'ymc', 'ymd', 'yme', 'ymg', 'ymh', 'ymi', 'ymk', 'yml', 'ymm', 'ymn', 'ymo', 'ymp', 'ymq', 'ymr', 'yms', 'ymt', 'ymx', 'ymz', 'yna', 'ynd', 'yne', 'yng', 'ynh', 'ynk', 'ynl', 'ynn', 'yno', 'ynq', 'yns', 'ynu', 'yob', 'yog', 'yoi', 'yok', 'yol', 'yom', 'yon', 'yos', 'yot', 'yox', 'yoy', 'ypa', 'ypb', 'ypg', 'yph', 'ypk', 'ypm', 'ypn', 'ypo', 'ypp', 'ypz', 'yra', 'yrb', 'yre', 'yri', 'yrk', 'yrl', 'yrm', 'yrn', 'yro', 'yrs', 'yrw', 'yry', 'ysc', 'ysd', 'ysg', 'ysl', 'ysn', 'yso', 'ysp', 'ysr', 'yss', 'ysy', 'yta', 'ytl', 'ytp', 'ytw', 'yty', 'yua', 'yub', 'yuc', 'yud', 'yue', 'yuf', 'yug', 'yui', 'yuj', 'yuk', 'yul', 'yum', 'yun', 'yup', 'yuq', 'yur', 'yut', 'yuu', 'yuw', 'yux', 'yuy', 'yuz', 'yva', 'yvt', 'ywa', 'ywg', 'ywl', 'ywn', 'ywq', 'ywr', 'ywt', 'ywu', 'yww', 'yxa', 'yxg', 'yxl', 'yxm', 'yxu', 'yxy', 'yyr', 'yyu', 'yyz', 'yzg', 'yzk', 'zaa', 'zab', 'zac', 'zad', 'zae', 'zaf', 'zag', 'zah', 'zai', 'zaj', 'zak', 'zal', 'zam', 'zao', 'zap', 'zaq', 'zar', 'zas', 'zat', 'zau', 'zav', 'zaw', 'zax', 'zay', 'zaz', 'zbc', 'zbe', 'zbl', 'zbt', 'zbw', 'zca', 'zch', 'zdj', 'zea', 'zeg', 'zeh', 'zen', 'zga', 'zgb', 'zgh', 'zgm', 'zgn', 'zgr', 'zhb', 'zhd', 'zhi', 'zhn', 'zhw', 'zhx', 'zia', 'zib', 'zik', 'zil', 'zim', 'zin', 'zir', 'ziw', 'ziz', 'zka', 'zkb', 'zkd', 'zkg', 'zkh', 'zkk', 'zkn', 'zko', 'zkp', 'zkr', 'zkt', 'zku', 'zkv', 'zkz', 'zle', 'zlj', 'zlm', 'zln', 'zlq', 'zls', 'zlw', 'zma', 'zmb', 'zmc', 'zmd', 'zme', 'zmf', 'zmg', 'zmh', 'zmi', 'zmj', 'zmk', 'zml', 'zmm', 'zmn', 'zmo', 'zmp', 'zmq', 'zmr', 'zms', 'zmt', 'zmu', 'zmv', 'zmw', 'zmx', 'zmy', 'zmz', 'zna', 'znd', 'zne', 'zng', 'znk', 'zns', 'zoc', 'zoh', 'zom', 'zoo', 'zoq', 'zor', 'zos', 'zpa', 'zpb', 'zpc', 'zpd', 'zpe', 'zpf', 'zpg', 'zph', 'zpi', 'zpj', 'zpk', 'zpl', 'zpm', 'zpn', 'zpo', 'zpp', 'zpq', 'zpr', 'zps', 'zpt', 'zpu', 'zpv', 'zpw', 'zpx', 'zpy', 'zpz', 'zqe', 'zra', 'zrg', 'zrn', 'zro', 'zrp', 'zrs', 'zsa', 'zsk', 'zsl', 'zsm', 'zsr', 'zsu', 'zte', 'ztg', 'ztl', 'ztm', 'ztn', 'ztp', 'ztq', 'zts', 'ztt', 'ztu', 'ztx', 'zty', 'zua', 'zuh', 'zum', 'zun', 'zuy', 'zwa', 'zxx', 'zyb', 'zyg', 'zyj', 'zyn', 'zyp', 'zza', 'zzj' ];
       axe.utils.validLangs = function() {
         'use strict';
         return langs;
@@ -14272,7 +16312,7 @@ module.exports = {
   });
 })(typeof window === 'object' ? window : this);
 },{}],13:[function(require,module,exports){
-var currentVersion = '2.11';
+var currentVersion = '2.13';
 
 /*!
 CalcNames: The AccName Computation Prototype, compute the Name and Description property values for a DOM node
@@ -14364,6 +16404,17 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			after: ''
 		};
 
+		if (ownedBy.ref) {
+			if (isParentHidden(refNode, document.body, true, true)) {
+				// If referenced via aria-labelledby or aria-describedby, do not return a name or description if a parent node is hidden.
+				return fullResult;
+			}
+			else if (isHidden(refNode, document.body)) {
+				// Otherwise, if aria-labelledby or aria-describedby reference a node that is explicitly hidden, then process all children regardless of their individual hidden states.
+				var ignoreHidden = true;
+			}
+		}
+
 		if (nodes.indexOf(refNode) === -1) {
 			// Store the before and after pseudo element 'content' values for the top level DOM node
 			// Note: If the pseudo element includes block level styling, a space will be added, otherwise inline is asumed and no spacing is added.
@@ -14398,16 +16449,16 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 				}
 			}
 			res.name += fResult.owns || '';
-			if (nodeIsBlock) {
-				res.name = ' ' + res.name + ' ';
-			}
 			if (!trim(res.name) && trim(fResult.title)) {
-				res.name = fResult.title;
+				res.name = addSpacing(fResult.title);
 			} else {
-				res.title = fResult.title;
+				res.title = addSpacing(fResult.title);
 			}
 			if (trim(fResult.desc)) {
-				res.title = fResult.desc;
+				res.title = addSpacing(fResult.desc);
+			}
+			if (nodeIsBlock || fResult.isWidget) {
+				res.name = addSpacing(res.name);
 			}
 			return res;
 		};
@@ -14420,7 +16471,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 			};
 			var isEmbeddedNode = node && node.nodeType === 1 && nodesToIgnoreValues && nodesToIgnoreValues.length && nodesToIgnoreValues.indexOf(node) !== -1 && node === topNode && node !== refNode ? true : false;
 
-			if ((skip || !node || nodes.indexOf(node) !== -1 || (isHidden(node, ownedBy.top))) && !skipAbort && !isEmbeddedNode) {
+			if ((skip || !node || nodes.indexOf(node) !== -1 || (!ignoreHidden && isHidden(node, ownedBy.top))) && !skipAbort && !isEmbeddedNode) {
 				// Abort if algorithm step is already completed, or if node is a hidden child of refNode, or if this node has already been processed, or skip abort if aria-labelledby self references same node.
 				return result;
 			}
@@ -14469,7 +16520,8 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 				var isEditWidgetRole = editWidgetRoles.indexOf(nRole) !== -1;
 				var isSelectWidgetRole = selectWidgetRoles.indexOf(nRole) !== -1;
 				var isSimulatedFormField = isRangeWidgetRole || isEditWidgetRole || isSelectWidgetRole || nRole == 'combobox';
-				var isWidgetRole = isSimulatedFormField || otherWidgetRoles.indexOf(nRole) !== -1;
+				var isWidgetRole = (isSimulatedFormField || otherWidgetRoles.indexOf(nRole) !== -1) && nRole != 'link';
+				result.isWidget = isNativeFormField || isWidgetRole;
 
 				var hasName = false;
 				var aOwns = node.getAttribute('aria-owns') || '';
@@ -14487,7 +16539,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 							parts.push(walk(element, true, skip, [node], element === refNode, {ref: ownedBy, top: element}).name);
 						}
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						name = addSpacing(trim(parts.join(' ')));
+						name = trim(parts.join(' '));
 
 						if (trim(name)) {
 							hasName = true;
@@ -14507,7 +16559,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 							parts.push(walk(element, true, false, [node], false, {ref: ownedBy, top: element}).name);
 						}
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						desc = addSpacing(trim(parts.join(' ')));
+						desc = trim(parts.join(' '));
 
 						if (trim(desc)) {
 							result.desc = desc;
@@ -14546,7 +16598,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 						}
 
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						name = addSpacing(trim(name));
+						name = trim(name);
 
 					}
 
@@ -14556,12 +16608,9 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 				}
 
 				// Otherwise, if current node has a non-empty aria-label then set as name and process no deeper within the branch.
-				if (!hasName && trim(aLabel) && !isSeparatChildFormField) {
-					if (node === refNode) {
-						name = addSpacing(trim(aLabel));
-					} else {
-						name = aLabel;
-					}
+					if (!hasName && trim(aLabel) && !isSeparatChildFormField) {
+					name = aLabel;
+
 					// Check for blank value, since whitespace chars alone are not valid as a name
 					if (trim(name)) {
 						hasName = true;
@@ -14594,19 +16643,19 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 
 					if (implicitLabel && explicitLabel && isImplicitFirst) {
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						name = addSpacing(trim(walk(implicitLabel, true, skip, [node], false, {ref: ownedBy, top: implicitLabel}).name)) + addSpacing(trim(walk(explicitLabel, true, skip, [node], false, {ref: ownedBy, top: explicitLabel}).name));
+						name = trim(walk(implicitLabel, true, skip, [node], false, {ref: ownedBy, top: implicitLabel}).name + ' ' + walk(explicitLabel, true, skip, [node], false, {ref: ownedBy, top: explicitLabel}).name);
 					}
 					else if (explicitLabel && implicitLabel) {
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						name = addSpacing(trim(walk(explicitLabel, true, skip, [node], false, {ref: ownedBy, top: explicitLabel}).name)) + addSpacing(trim(walk(implicitLabel, true, skip, [node], false, {ref: ownedBy, top: implicitLabel}).name));
+						name = trim(walk(explicitLabel, true, skip, [node], false, {ref: ownedBy, top: explicitLabel}).name + ' ' + walk(implicitLabel, true, skip, [node], false, {ref: ownedBy, top: implicitLabel}).name);
 					}
 					else if (explicitLabel) {
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						name = addSpacing(trim(walk(explicitLabel, true, skip, [node], false, {ref: ownedBy, top: explicitLabel}).name));
+						name = trim(walk(explicitLabel, true, skip, [node], false, {ref: ownedBy, top: explicitLabel}).name);
 					}
 					else if (implicitLabel) {
 						// Check for blank value, since whitespace chars alone are not valid as a name
-						name = addSpacing(trim(walk(implicitLabel, true, skip, [node], false, {ref: ownedBy, top: implicitLabel}).name));
+						name = trim(walk(implicitLabel, true, skip, [node], false, {ref: ownedBy, top: implicitLabel}).name);
 					}
 
 					if (trim(name)) {
@@ -14620,16 +16669,16 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 				// Otherwise, if name is still empty and current node is a standard non-presentational img or image button with a non-empty alt attribute, set alt attribute value as the accessible name.
 				if (!hasName && !rolePresentation && (nTag == 'img' || (nTag == 'input' && node.getAttribute('type') == 'image')) && nAlt) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
-					name = addSpacing(nAlt);
+					name = trim(nAlt);
 					if (trim(name)) {
 						hasName = true;
 					}
 				}
 
-				// Otherwise, if current node is non-presentational and includes a non-empty title attribute and is not another form field, store title attribute value as the accessible name if name is still empty, or the description if not.
+				// Otherwise, if current node is non-presentational and includes a non-empty title attribute and is not a separate embedded form field, store title attribute value as the accessible name if name is still empty, or the description if not.
 				if (!rolePresentation && trim(nTitle) && !isSeparatChildFormField) {
 					// Check for blank value, since whitespace chars alone are not valid as a name
-					result.title = addSpacing(trim(nTitle));
+					result.title = trim(nTitle);
 				}
 
 				// Check for non-empty value of aria-owns, follow each ID ref, then process with same naming computation.
@@ -14648,7 +16697,7 @@ var calcNames = function(node, fnc, preventVisualARIASelfCSSRef) {
 								node: node,
 target: element
 							};
-							if (!isHidden(element, refNode)) {
+							if (!isParentHidden(element, document.body, true)) {
 								parts.push(walk(element, true, skip, [], false, oBy).name);
 							}
 						}
@@ -14667,7 +16716,7 @@ target: element
 			// Prepend and append the current CSS pseudo element text, plus normalize all whitespace such as newline characters and others into flat spaces.
 			name = cssO.before + name.replace(/\s+/g, ' ') + cssO.after;
 
-			if (name.length && !hasParentLabel(node, false, ownedBy.top, ownedBy)) {
+			if (name.length && !hasParentLabelOrHidden(node, ownedBy.top, ownedBy, ignoreHidden)) {
 				result.name = name;
 			}
 
@@ -14735,7 +16784,7 @@ role = roles[i];
 		tags: ['dl', 'ul', 'ol', 'dd', 'details', 'output', 'table', 'thead', 'tbody', 'tfoot', 'tr']
 	};
 
-	var nativeFormFields = ['input', 'select', 'textarea'];
+	var nativeFormFields = ['button', 'input', 'select', 'textarea'];
 	var rangeWidgetRoles = ['scrollbar', 'slider', 'spinbutton'];
 	var editWidgetRoles = ['searchbox', 'textbox'];
 	var selectWidgetRoles = ['grid', 'listbox', 'tablist', 'tree', 'treegrid'];
@@ -14768,12 +16817,23 @@ role = roles[i];
 			if (style['display'] === 'none' || style['visibility'] === 'hidden') {
 				return true;
 			}
-		}
-		while (node && node.nodeType === 1) {
-			if (hidden(node)) {
+			return false;
+		};
+		return hidden(node);
+	};
+
+	var isParentHidden = function(node, refNode, skipOwned, skipCurrent) {
+		var trackNodes = [];
+		while (node && node !== refNode) {
+			if (!skipCurrent && node.nodeType === 1 && isHidden(node, refNode)) {
 				return true;
+			} else skipCurrent = false;
+			if (!skipOwned && node.id && ownedBy && ownedBy[node.id] && ownedBy[node.id].node && trackNodes.indexOf(node) === -1) {
+				trackNodes.push(node);
+				node = ownedBy[node.id].node;
+			} else {
+				node = node.parentNode;
 			}
-			node = node.parentNode;
 		}
 		return false;
 	};
@@ -14880,8 +16940,8 @@ role = roles[i];
 		return val;
 	};
 
-	var addSpacing = function(str) {
-		return str.length ? ' ' + str + ' ' : '';
+	var addSpacing = function(s) {
+		return trim(s).length ? ' ' + s + ' ' : ' ';
 	};
 
 	var joinSelectedParts = function(node, nOA, isNative, childRoles) {
@@ -14952,7 +17012,7 @@ role = roles[i];
 		return {};
 	};
 
-	var hasParentLabel = function(node, noLabel, refNode, ownedBy) {
+	var hasParentLabelOrHidden = function(node, refNode, ownedBy, ignoreHidden) {
 		var trackNodes = [];
 		while (node && node !== refNode) {
 				if (node.id && ownedBy && ownedBy[node.id] && ownedBy[node.id].node && trackNodes.indexOf(node) === -1) {
@@ -14962,10 +17022,7 @@ role = roles[i];
 				node = node.parentNode;
 			}
 			if (node && node.getAttribute) {
-				if (!noLabel && node.getAttribute('aria-label')) {
-					return true;
-				}
-				if (isHidden(node, refNode)) {
+				if (trim(node.getAttribute('aria-label')) || (!ignoreHidden && isHidden(node, refNode))) {
 					return true;
 				}
 			}
@@ -14980,7 +17037,7 @@ role = roles[i];
 		return str.replace(/^\s+|\s+$/g, '');
 	};
 
-	if (isHidden(node, document.body) || hasParentLabel(node, true, document.body)) {
+	if (isParentHidden(node, document.body, true)) {
 		return props;
 	}
 
@@ -15079,7 +17136,10 @@ var implementations = {
 	'accdc': accdc.calcNames,
 	'axe': function(el) {
 		return {
-			name: ex(axe.commons.text.accessibleText, [el]),
+			name: ex(function(el) {
+				axe._tree = axe.utils.getFlattenedTree(document.body);
+				return axe.commons.text.accessibleText(el);
+			}, [el]),
 			desc: '-',
 			role: el.getAttribute('role') || ex(axe.commons.aria.implicitRole, [el]),
 		};
