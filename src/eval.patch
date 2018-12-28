@@ -1,0 +1,8 @@
+7383c7383
+<     var global = Function('return this')();
+---
+>     var global = {};
+7426c7426
+<         return this || (0, eval)('this');
+---
+>         return this || {};

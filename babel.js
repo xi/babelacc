@@ -7380,7 +7380,7 @@ module.exports = {
   }();
   'use strict';
   axe.imports['doT'] = function(module, exports, define, require, process) {
-    var global = Function('return this')();
+    var global = {};
     var __old_global__ = global['doT'];
     (function() {
       'use strict';
@@ -7423,7 +7423,7 @@ module.exports = {
         };
       };
       _globals = function() {
-        return this || (0, eval)('this');
+        return this || {};
       }();
       if (typeof module !== 'undefined' && module.exports) {
         module.exports = doT;
