@@ -16,15 +16,15 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = {
-	'aria-api': function(el) {
+	'aria-api (0.2.6)': function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
 			role: ex(ariaApi.getRole, [el]),
 		};
 	},
-	'accdc': accdc.calcNames,
-	'axe': function(el) {
+	'accdc (2.20)': accdc.calcNames,
+	'axe (3.1.2)': function(el) {
 		return {
 			name: ex(function(el) {
 				axe._tree = axe.utils.getFlattenedTree(document.body);
@@ -34,7 +34,7 @@ var implementations = {
 			role: el.getAttribute('role') || ex(axe.commons.aria.implicitRole, [el]),
 		};
 	},
-	'axs': function(el) {
+	'axs (2.12.0)': function(el) {
 		return {
 			name: ex(axs.properties.findTextAlternatives, [el, {}]),
 			desc: '-',
