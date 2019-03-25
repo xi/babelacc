@@ -1783,17 +1783,40 @@ if (typeof module === "object" && module.exports) {
 }
 
 },{}],7:[function(require,module,exports){
-var attributes = [
-	['role',        ['', '__random__', 'application']],
-	['class',       ['', '__random__']],
-	['hidden',      ['', '__random__']],
-	['aria-hidden', ['', '__random__', 'true', 'false']],
-	['aria-label',  ['', '__random__']],
-	['aria-labelledby',  ['__randint__']],
-	['type',        ['', '__random__', 'hidden', 'checkbox', 'text', 'password', 'color']],
-];
+var constants = require('aria-api/lib/constants');
 
-var tags = ['a', 'div', 'button', 'form', 'label', 'input'];
+var attributes = [
+	['role',             Array.prototype.concat.apply([], Object.values(constants.subRoles)).filter((v, i, a) => a.indexOf(v) === i)],
+	['hidden',           ['']],
+	['aria-hidden',      ['', 'true', 'false']],
+	['aria-label',       ['', '__random__']],
+	['title',            ['', '__random__']],
+	['value',            ['', '__random__']],
+	['placeholder',      ['', '__random__']],
+	['alt',              ['', '__random__']],
+	['aria-valuenow',    ['', '__random__']],
+	['aria-valuetext',   ['', '__random__']],
+	['aria-labelledby',  ['__randint__']],
+	['aria-owns',        ['__randint__']],
+	['list',             ['__randint__']],
+	['for',              ['__randint__']],
+	['type',             ['', '__random__', 'hidden', 'checkbox', 'text', 'password', 'color', 'reset']],
+	['style',            ['', '__random__', 'display: none', 'display: block', 'display: inline-block', 'display: inline', 'visibility: hidden']],
+];
+console.log(attributes[0]);
+
+var tags = ['a', 'button', 'form', 'label', 'input', 'article', 'table', 'td', 'tr', 'th', 'pre', 'legend', 'h1', 'div', 'span', 'fieldset', 'img', 'abbr', 'strong', 'br', 'hr', 'select', 'option', 'datalist'];
+
+var asyncWhile = function(condition, block, done) {
+	if (condition()) {
+		block();
+		setTimeout(function() {
+			asyncWhile(condition, block, done);
+		});
+	} else {
+		done();
+	}
+};
 
 var randomInt = function(n) {
 	return Math.floor(Math.random() * n);
@@ -1844,7 +1867,7 @@ AttributeList.prototype.shrink = function() {
 function Element(len, ctx) {
 	this.tag = randomChoice(tags);
 	this.id = ctx.k;
-	this.content = ctx.k;
+	this.content = ' foo' + ctx.k;
 	ctx.k += 1;
 	this.attrs = new AttributeList(randomInt(len));
 	this.children = new Children(randomInt(len), ctx);
@@ -1854,6 +1877,7 @@ Element.prototype.shrink = function() {
 	var result = [];
 	var tag = this.tag;
 	var id = this.id;
+	var content = this.content;
 	var attrsList = [this.attrs].concat(this.attrs.shrink());
 	var childrenList = [this.children].concat(this.children.shrink());
 	attrsList.forEach(function(attrs) {
@@ -1947,85 +1971,103 @@ var shrink = function(item, oracle) {
 	};
 };
 
-var fuzz = function(corpus, oracle) {
+var fuzz = function(corpus, oracle, onFingerprint, onError, done) {
 	var fingerprints = [];
 	var queue = [];
+	var count = 0;
 
 	corpus.forEach(function(item) {
-		var result = runWithCoverage(item, oracle);
 		queue.push(item);
-		fingerprints.push(result.fingerprint);
 	});
 
-	var handleMutation = function(mutation) {
-		var result = runWithCoverage(mutation, oracle);
-
-		if (result.error) {
-			// var x = shrink(mutation, oracle);
-			// console.log(x.item.toString(), x.result.error);
-			console.log(mutation.toString(), result.error);
-		}
+	asyncWhile(() => queue.length, () => {
+		var item = queue.shift();
+		var result = runWithCoverage(item, oracle);
 
 		if (!fingerprints.includes(result.fingerprint)) {
-			queue.push(mutation);
 			fingerprints.push(result.fingerprint);
-			console.log(fingerprints.length);
-		}
-	};
+			item.mutations().forEach(mutations => queue.push(mutations));
+			onFingerprint(result.fingerprint, fingerprints.length);
 
-	while (queue.length) {
-		var item = queue.shift();
-		item.mutations().forEach(handleMutation);
-	}
+			if (result.error) {
+				// var x = shrink(item, oracle);
+				onError(result);
+			}
+		}
+	}, done);
 };
 
 
 module.exports = {
-	'test': function(len, oracle) {
+	'test': function(len, oracle, onFingerprint, onError, done) {
 		var corpus = [];
 		for (var i = 0; i < len; i++) {
 			corpus.push(new Element(len, {k: 0}));
 		}
-		return fuzz(corpus, oracle);
+		return fuzz(corpus, oracle, onFingerprint, onError, done);
 	},
 };
 
-},{}],8:[function(require,module,exports){
+},{"aria-api/lib/constants":2}],8:[function(require,module,exports){
 var ariaApi = require('aria-api');
 var accdc = require('w3c-alternative-text-computation');
 var fuzz = require('./fuzz');
 
 var preview = document.querySelector('#ba-preview');
+var fingerprints = document.querySelector('#ba-fingerprints');
+var errors = document.querySelector('#ba-errors');
+var results = document.querySelector('#ba-results');
 
 var oracle = function(input) {
 	preview.innerHTML = input.toString();
-	console.log(preview.innerHTML);
 	var el = preview.querySelector('#test') || preview.children[0] || preview;
 	var v1, v2;
 
 	try {
 		v1 = accdc.calcNames(el).name;
 	} catch (error) {
-		return {'error': ['crash:accdc', error]};
+		v1 = '__crash1__';
 	}
 
 	try {
 		v2 = ariaApi.getName(el);
 	} catch (error) {
-		return {'error': ['crash:ariaApi', error]};
+		v2 = '__crash2__';
 	}
 
-	// HACK: accdc does not caculate names for divs, so skip here
-	if (v1 && v1 !== v2) {
-		return {'error': ['no-match', v1, v2]};
-	}
+	return {
+		'v1': v1,
+		'v2': v2,
+		'html': preview.innerHTML,
+		'error': v1 !== v2,
+	};
+};
 
-	return {};
+var renderResult = function(result) {
+	var tr = document.createElement('tr');
+	var td1 = document.createElement('td');
+	td1.textContent = result.html;
+	tr.append(td1);
+	var td2 = document.createElement('td');
+	td2.textContent = result.v1;
+	tr.append(td2);
+	var td3 = document.createElement('td');
+	td3.textContent = result.v2;
+	tr.append(td3);
+	return tr;
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-	fuzz.test(10, oracle);
-	console.log('done');
+	var errorCount = 0;
+	fuzz.test(10, oracle, function(fingerprint, c) {
+		fingerprints.textContent = c;
+	}, function(result) {
+		errorCount += 1;
+		errors.textContent = errorCount;
+		results.append(renderResult(result));
+	}, function() {
+		preview.innerHTML = 'DONE';
+	});
 });
 
 },{"./fuzz":7,"aria-api":1,"w3c-alternative-text-computation":6}]},{},[8]);

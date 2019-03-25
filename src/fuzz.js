@@ -1,14 +1,37 @@
-var attributes = [
-	['role',        ['', '__random__', 'application']],
-	['class',       ['', '__random__']],
-	['hidden',      ['', '__random__']],
-	['aria-hidden', ['', '__random__', 'true', 'false']],
-	['aria-label',  ['', '__random__']],
-	['aria-labelledby',  ['__randint__']],
-	['type',        ['', '__random__', 'hidden', 'checkbox', 'text', 'password', 'color']],
-];
+var constants = require('aria-api/lib/constants');
 
-var tags = ['a', 'div', 'button', 'form', 'label', 'input'];
+var attributes = [
+	['role',             Array.prototype.concat.apply([], Object.values(constants.subRoles)).filter((v, i, a) => a.indexOf(v) === i)],
+	['hidden',           ['']],
+	['aria-hidden',      ['', 'true', 'false']],
+	['aria-label',       ['', '__random__']],
+	['title',            ['', '__random__']],
+	['value',            ['', '__random__']],
+	['placeholder',      ['', '__random__']],
+	['alt',              ['', '__random__']],
+	['aria-valuenow',    ['', '__random__']],
+	['aria-valuetext',   ['', '__random__']],
+	['aria-labelledby',  ['__randint__']],
+	['aria-owns',        ['__randint__']],
+	['list',             ['__randint__']],
+	['for',              ['__randint__']],
+	['type',             ['', '__random__', 'hidden', 'checkbox', 'text', 'password', 'color', 'reset']],
+	['style',            ['', '__random__', 'display: none', 'display: block', 'display: inline-block', 'display: inline', 'visibility: hidden']],
+];
+console.log(attributes[0]);
+
+var tags = ['a', 'button', 'form', 'label', 'input', 'article', 'table', 'td', 'tr', 'th', 'pre', 'legend', 'h1', 'div', 'span', 'fieldset', 'img', 'abbr', 'strong', 'br', 'hr', 'select', 'option', 'datalist'];
+
+var asyncWhile = function(condition, block, done) {
+	if (condition()) {
+		block();
+		setTimeout(function() {
+			asyncWhile(condition, block, done);
+		});
+	} else {
+		done();
+	}
+};
 
 var randomInt = function(n) {
 	return Math.floor(Math.random() * n);
@@ -59,7 +82,7 @@ AttributeList.prototype.shrink = function() {
 function Element(len, ctx) {
 	this.tag = randomChoice(tags);
 	this.id = ctx.k;
-	this.content = ctx.k;
+	this.content = ' foo' + ctx.k;
 	ctx.k += 1;
 	this.attrs = new AttributeList(randomInt(len));
 	this.children = new Children(randomInt(len), ctx);
@@ -69,6 +92,7 @@ Element.prototype.shrink = function() {
 	var result = [];
 	var tag = this.tag;
 	var id = this.id;
+	var content = this.content;
 	var attrsList = [this.attrs].concat(this.attrs.shrink());
 	var childrenList = [this.children].concat(this.children.shrink());
 	attrsList.forEach(function(attrs) {
@@ -162,45 +186,39 @@ var shrink = function(item, oracle) {
 	};
 };
 
-var fuzz = function(corpus, oracle) {
+var fuzz = function(corpus, oracle, onFingerprint, onError, done) {
 	var fingerprints = [];
 	var queue = [];
+	var count = 0;
 
 	corpus.forEach(function(item) {
-		var result = runWithCoverage(item, oracle);
 		queue.push(item);
-		fingerprints.push(result.fingerprint);
 	});
 
-	var handleMutation = function(mutation) {
-		var result = runWithCoverage(mutation, oracle);
-
-		if (result.error) {
-			// var x = shrink(mutation, oracle);
-			// console.log(x.item.toString(), x.result.error);
-			console.log(mutation.toString(), result.error);
-		}
+	asyncWhile(() => queue.length, () => {
+		var item = queue.shift();
+		var result = runWithCoverage(item, oracle);
 
 		if (!fingerprints.includes(result.fingerprint)) {
-			queue.push(mutation);
 			fingerprints.push(result.fingerprint);
-			console.log(fingerprints.length);
-		}
-	};
+			item.mutations().forEach(mutations => queue.push(mutations));
+			onFingerprint(result.fingerprint, fingerprints.length);
 
-	while (queue.length) {
-		var item = queue.shift();
-		item.mutations().forEach(handleMutation);
-	}
+			if (result.error) {
+				// var x = shrink(item, oracle);
+				onError(result);
+			}
+		}
+	}, done);
 };
 
 
 module.exports = {
-	'test': function(len, oracle) {
+	'test': function(len, oracle, onFingerprint, onError, done) {
 		var corpus = [];
 		for (var i = 0; i < len; i++) {
 			corpus.push(new Element(len, {k: 0}));
 		}
-		return fuzz(corpus, oracle);
+		return fuzz(corpus, oracle, onFingerprint, onError, done);
 	},
 };
