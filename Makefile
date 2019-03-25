@@ -1,3 +1,2 @@
-babel.js: src/babel.js src/axs.js src/eval.patch
+babel.js: src/fuzz_test.js src/fuzz.js
 	browserify $< -o $@
-	patch $@ src/eval.patch

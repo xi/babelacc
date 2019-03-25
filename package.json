@@ -20,5 +20,8 @@
   "bugs": {
     "url": "https://github.com/xi/babelacc/issues"
   },
-  "homepage": "https://github.com/xi/babelacc#readme"
+  "homepage": "https://github.com/xi/babelacc#readme",
+  "dependencies": {
+    "nyc": "^13.3.0"
+  }
 }
