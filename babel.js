@@ -5255,18 +5255,22 @@ var getPseudoContent = function(node, selector) {
 	}
 };
 
-var getContent = function(root, referenced) {
+var getContent = function(root, referenced, owned) {
 	var children = [];
 
 	for (var i = 0; i < root.childNodes.length; i++) {
-		children.push(root.childNodes[i]);
+		var node = root.childNodes[i];
+		if (!node.id || !document.querySelector('[aria-owns~="' + node.id + '"]')) {
+			children.push(node);
+		}
 	}
 
 	var owns = query.getAttribute(root, 'owns') || [];
 	for (var i = 0; i < owns.length; i++) {
-		var owned = document.getElementById(owns[i]);
-		if (owned) {
-			children.push(owned);
+		var child = document.getElementById(owns[i]);
+		if (child && child !== root && owned.indexOf(child.id) === -1) {
+			children.push(child);
+			owned.push(child.id);
 		}
 	}
 
@@ -5281,9 +5285,9 @@ var getContent = function(root, referenced) {
 			} else if (window.getComputedStyle(node).display.substr(0, 6) === 'inline' &&
 					node.tagName.toLowerCase() !== 'input' &&
 					node.tagName.toLowerCase() !== 'img') {  // https://github.com/w3c/accname/issues/3
-				ret += getName(node, true, referenced);
+				ret += getName(node, true, referenced, owned);
 			} else {
-				ret += ' ' + getName(node, true, referenced) + ' ';
+				ret += ' ' + getName(node, true, referenced, owned) + ' ';
 			}
 		}
 	}
@@ -5321,8 +5325,9 @@ var getLabelNodes = function(element) {
 
 // http://www.ssbbartgroup.com/blog/how-the-w3c-text-alternative-computation-works/
 // https://www.w3.org/TR/accname-aam-1.1/#h-mapping_additional_nd_te
-var getName = function(el, recursive, referenced) {
+var getName = function(el, recursive, referenced, owned) {
 	var ret = '';
+	var owned = owned || [];
 
 	if (query.getAttribute(el, 'hidden', referenced)) {
 		return '';
@@ -5331,7 +5336,7 @@ var getName = function(el, recursive, referenced) {
 		var ids = el.getAttribute('aria-labelledby').split(/\s+/);
 		var strings = ids.map(function(id) {
 			var label = document.getElementById(id);
-			return label ? getName(label, true, label) : '';
+			return label ? getName(label, true, label, owned) : '';
 		});
 		ret = strings.join(' ');
 	}
@@ -5339,19 +5344,19 @@ var getName = function(el, recursive, referenced) {
 		ret = el.getAttribute('aria-label');
 	}
 	if (!ret.trim() && query.matches(el, 'presentation')) {
-		return getContent(el, referenced);
+		return getContent(el, referenced, owned);
 	}
 	if (!ret && !recursive && isLabelable(el)) {
 		var strings = getLabelNodes(el).map(function(label) {
-			return getName(label, true, label);
+			return getName(label, true, label, owned);
 		});
 		ret = strings.join(' ');
 	}
 	if (!ret.trim()) {
-		ret = el.getAttribute('placeholder') || '';
+		ret = el.placeholder || '';
 	}
 	if (!ret.trim()) {
-		ret = el.getAttribute('alt') || '';
+		ret = el.alt || '';
 	}
 	if (!ret.trim() && el.matches('abbr,acronym') && el.title) {
 		ret = el.title;
@@ -5361,7 +5366,7 @@ var getName = function(el, recursive, referenced) {
 			if (el.matches(selector)) {
 				var descendant = el.querySelector(constants.nameFromDescendant[selector]);
 				if (descendant) {
-					ret = getName(descendant, true, descendant);
+					ret = getName(descendant, true, descendant, owned);
 				}
 			}
 		}
@@ -5373,7 +5378,7 @@ var getName = function(el, recursive, referenced) {
 			} else if (query.matches(el, 'combobox,listbox')) {
 				var selected = query.querySelector(el, ':selected') || query.querySelector(el, 'option');
 				if (selected) {
-					ret = getName(selected, recursive, referenced);
+					ret = getName(selected, recursive, referenced, owned);
 				}
 			} else if (query.matches(el, 'range')) {
 				ret = '' + (query.getAttribute(el, 'valuetext') || query.getAttribute(el, 'valuenow') || el.value);
@@ -5381,7 +5386,7 @@ var getName = function(el, recursive, referenced) {
 		}
 	}
 	if (!ret.trim() && (recursive || allowNameFromContent(el)) && !query.matches(el, 'menu')) {
-		ret = getContent(el, referenced);
+		ret = getContent(el, referenced, owned);
 	}
 	if (!ret.trim()) {
 		for (var selector in constants.nameDefaults) {
@@ -5405,12 +5410,13 @@ var getNameTrimmed = function(el) {
 
 var getDescription = function(el) {
 	var ret = '';
+	var owned = [];
 
 	if (el.matches('[aria-describedby]')) {
 		var ids = el.getAttribute('aria-describedby').split(/\s+/);
 		var strings = ids.map(function(id) {
 			var label = document.getElementById(id);
-			return label ? getName(label, true, label) : '';
+			return label ? getName(label, true, label, owned) : '';
 		});
 		ret = strings.join(' ');
 	} else if (el.title) {
