@@ -16,7 +16,7 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = {
-	'aria-api (0.2.6)': function(el) {
+	'aria-api (0.2.7)': function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
@@ -24,7 +24,7 @@ var implementations = {
 		};
 	},
 	'accdc (2.20)': accdc.calcNames,
-	'axe (3.1.2)': function(el) {
+	'axe (3.2.2)': function(el) {
 		return {
 			name: ex(function(el) {
 				axe._tree = axe.utils.getFlattenedTree(document.body);
