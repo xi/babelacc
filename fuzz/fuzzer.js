@@ -13,13 +13,14 @@ var run = function(corpus, oracle, covPath, onFingerprint, onReport, done) {
 	var fingerprints = [];
 	var queue = [];
 	var count = 0;
+	var batchSize = 10;
 
 	corpus.forEach(function(item) {
 		queue.push(item);
 	});
 
 	var step = function() {
-		if (queue.length) {
+		for (var i = 0; i < batchSize && queue.length; i++) {
 			var item = queue.shift();
 			var report = oracle(item);
 			var fingerprint = getFingerprint(covPath);
@@ -33,7 +34,9 @@ var run = function(corpus, oracle, covPath, onFingerprint, onReport, done) {
 					onReport(report);
 				}
 			}
+		}
 
+		if (queue.length) {
 			setTimeout(step);
 		} else {
 			done();
