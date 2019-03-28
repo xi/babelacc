@@ -23,7 +23,7 @@ var implementations = {
 			role: ex(ariaApi.getRole, [el]),
 		};
 	},
-	'accdc (2.20)': accdc.calcNames,
+	'accdc (2.22)': accdc.calcNames,
 	'axe (3.2.2)': function(el) {
 		return {
 			name: ex(function(el) {
