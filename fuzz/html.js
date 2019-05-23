@@ -1,7 +1,7 @@
 var constants = require('aria-api/lib/constants');
 
 var attributes = [
-	['role',             Array.prototype.concat.apply([], Object.values(constants.subRoles)).filter((v, i, a) => a.indexOf(v) === i)],
+	['role',             Object.keys(constants.roles)],
 	['hidden',           ['']],
 	['aria-hidden',      ['', 'true', 'false']],
 	['aria-label',       ['', '__random__']],
