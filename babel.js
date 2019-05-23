@@ -4703,7 +4703,210 @@ module.exports = {
 	closest: query.closest,
 };
 
-},{"./lib/name.js":9,"./lib/query.js":10}],8:[function(require,module,exports){
+},{"./lib/name.js":11,"./lib/query.js":12}],8:[function(require,module,exports){
+var attrs = require('./attrs');
+
+var _getOwner = function(node) {
+	if (node.nodeType === node.ELEMENT_NODE && node.id) {
+		var owner = document.querySelector('[aria-owns~="' + node.id + '"]');
+		if (owner) {
+			return owner;
+		}
+	}
+};
+
+var _getParentNode = function(node) {
+	return _getOwner(node) || node.parentNode;
+};
+
+var detectLoop = function(node) {
+	var tmp = _getParentNode(node);
+	while (tmp) {
+		if (tmp === node) {
+			return true;
+		}
+		tmp = _getParentNode(tmp);
+	}
+};
+
+var getOwner = function(node) {
+	if (node.nodeType === node.ELEMENT_NODE && node.id) {
+		var owner = document.querySelector('[aria-owns~="' + node.id + '"]');
+		if (owner && !detectLoop(node)) {
+			return owner;
+		}
+	}
+};
+
+var getParentNode = function(node) {
+	return getOwner(node) || node.parentNode;
+};
+
+var isHidden = function(node) {
+	return node.nodeType === node.ELEMENT_NODE && attrs.getAttribute(node, 'hidden');
+};
+
+var getChildNodes = function(node) {
+	var childNodes = [];
+
+	for (var i = 0; i < node.childNodes.length; i++) {
+		var child = node.childNodes[i];
+		if (!getOwner(child) && !isHidden(child)) {
+			childNodes.push(child);
+		}
+	}
+
+	if (node.nodeType === node.ELEMENT_NODE) {
+		var owns = attrs.getAttribute(node, 'owns') || [];
+		for (var i = 0; i < owns.length; i++) {
+			var child = document.getElementById(owns[i]);
+			// double check with getOwner for consistency
+			if (child && getOwner(child) === node && !isHidden(child)) {
+				childNodes.push(child);
+			}
+		}
+	}
+
+	return childNodes;
+};
+
+var walk = function(root, fn) {
+	fn(root);
+	getChildNodes(root).forEach(function(child) {
+		walk(child, fn);
+	});
+};
+
+var searchUp = function(node, test) {
+	var candidate = getParentNode(node);
+	if (candidate) {
+		if (test(candidate)) {
+			return candidate;
+		} else {
+			return searchUp(candidate, test);
+		}
+	}
+};
+
+module.exports = {
+	'getParentNode': getParentNode,
+	'getChildNodes': getChildNodes,
+	'walk': walk,
+	'searchUp': searchUp,
+};
+
+},{"./attrs":9}],9:[function(require,module,exports){
+var constants = require('./constants.js');
+
+// candidates can be passed for performance optimization
+var getRole = function(el, candidates) {
+	if (el.hasAttribute('role')) {
+		return el.getAttribute('role');
+	}
+	for (var role in constants.roles) {
+		var selector = (constants.roles[role].selectors || []).join(',');
+		if (selector && (!candidates || candidates.indexOf(role) !== -1) && el.matches(selector)) {
+			return role;
+		}
+	}
+
+	if (!candidates ||
+			candidates.indexOf('banner') !== -1 ||
+			candidates.indexOf('contentinfo') !== -1) {
+		var scoped = el.matches(constants.scoped);
+
+		if (el.matches('header') && !scoped) {
+			return 'banner';
+		}
+		if (el.matches('footer') && !scoped) {
+			return 'contentinfo';
+		}
+	}
+};
+
+var hasRole = function(el, roles) {
+	var candidates = [].concat.apply([], roles.map(function(role) {
+		return (constants.roles[role] || {}).subRoles || [role];
+	}));
+	actual = getRole(el, candidates);
+	return candidates.indexOf(actual) !== -1;
+};
+
+var getAttribute = function(el, key) {
+	if (constants.attributeStrongMapping.hasOwnProperty(key)) {
+		var value = el[constants.attributeStrongMapping[key]];
+		if (value) {
+			return value;
+		}
+	}
+	if (key === 'readonly' && el.contentEditable) {
+		return false;
+	} else if (key === 'invalid' && el.checkValidity) {
+		return !el.checkValidity();
+	} else if (key === 'hidden') {
+		var style = window.getComputedStyle(el);
+		if (style.display === 'none' || style.visibility === 'hidden') {
+			return true;
+		}
+	}
+
+	var type = constants.attributes[key];
+	var raw = el.getAttribute('aria-' + key);
+
+	if (raw) {
+		if (type === 'bool') {
+			return raw === 'true';
+		} else if (type === 'tristate') {
+			return raw === 'true' ? true : raw === 'false' ? false : 'mixed';
+		} else if (type === 'bool-undefined') {
+			return raw === 'true' ? true : raw === 'false' ? false : undefined;
+		} else if (type === 'id-list') {
+			return raw.split(/\s+/);
+		} else if (type === 'integer') {
+			return parseInt(raw);
+		} else if (type === 'number') {
+			return parseFloat(raw);
+		} else if (type === 'token-list') {
+			return raw.split(/\s+/);
+		} else {
+			return raw;
+		}
+	}
+
+	// TODO
+	// autocomplete
+	// contextmenu -> aria-haspopup
+	// indeterminate -> aria-checked="mixed"
+	// list -> aria-controls
+
+	if (key === 'level') {
+		for (var i = 1; i <= 6; i++) {
+			if (el.tagName.toLowerCase() === 'h' + i) {
+				return i;
+			}
+		}
+	} else if (constants.attributeWeakMapping.hasOwnProperty(key)) {
+		return el[constants.attributeWeakMapping[key]];
+	}
+
+	var role = getRole(el);
+	var defaults = (constants.roles[role] || {}).defaults;
+	if (defaults && defaults.hasOwnProperty(key)) {
+		return defaults[key];
+	}
+
+	if (type === 'bool' || type === 'tristate') {
+		return false;
+	}
+};
+
+module.exports = {
+	getRole: getRole,
+	hasRole: hasRole,
+	getAttribute: getAttribute,
+};
+
+},{"./constants.js":10}],10:[function(require,module,exports){
 exports.attributes = {
 	// widget
 	'autocomplete': 'token',
@@ -4764,7 +4967,6 @@ exports.attributes = {
 
 exports.attributeStrongMapping = {
 	'disabled': 'disabled',
-	'hidden': 'hidden',
 	'placeholder': 'placeholder',
 	'readonly': 'readOnly',
 	'required': 'required',
@@ -4779,202 +4981,447 @@ exports.attributeWeakMapping = {
 	'selected': 'selected',
 };
 
-// https://www.w3.org/TR/html-aria/#docconformance
-exports.extraSelectors = {
-	article: ['article'],
-	button: [
-		'button',
-		'input[type="button"]',
-		'input[type="image"]',
-		'input[type="reset"]',
-		'input[type="submit"]',
-		'summary',
-	],
-	cell: ['td'],
-	checkbox: ['input[type="checkbox"]'],
-	combobox: [
+// https://www.w3.org/TR/html-aam-1.0/#html-element-role-mappings
+// https://www.w3.org/TR/wai-aria/roles
+exports.roles = {
+	alert: {
+		childRoles: ['alertdialog'],
+		defaults: {
+			'live': 'assertive',
+			'atomic': true,
+		},
+	},
+	article: {
+		selectors: ['article'],
+	},
+	button: {
+		selectors: [
+			'button',
+			'input[type="button"]',
+			'input[type="image"]',
+			'input[type="reset"]',
+			'input[type="submit"]',
+			'summary',
+		],
+		nameFromContents: true,
+	},
+	cell: {
+		selectors: ['td'],
+		childRoles: ['gridcell', 'rowheader'],
+	},
+	checkbox: {
+		selectors: ['input[type="checkbox"]'],
+		childRoles: ['menuitemcheckbox', 'switch'],
+		nameFromContents: true,
+		defaults: {
+			'checked': 'false',
+		},
+	},
+	columnheader: {
+		selectors: ['th[scope="col"]'],
+		nameFromContents: true,
+	},
+	combobox: {
+		selectors: [
 		'input:not([type])[list]',
-		'input[type="email"][list]',
-		'input[type="search"][list]',
-		'input[type="tel"][list]',
-		'input[type="text"][list]',
-		'input[type="url"][list]',
-		'select:not([size]):not([multiple])',
-		'select[size="0"]:not([multiple])',
-		'select[size="1"]:not([multiple])',
-	],
-	complementary: ['aside'],
-	definition: ['dd'],
-	dialog: ['dialog'],
-	document: ['body'],
-	figure: ['figure'],
-	form: ['form[aria-label]', 'form[aria-labelledby]'],
-	group: ['details', 'optgroup'],
-	heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-	img: ['img:not([alt=""])', 'graphics-symbol'],
-	link: ['a[href]', 'area[href]', 'link[href]'],
-	list: ['dl', 'ol', 'ul'],
-	listbox: [
-		'select[multiple]',
-		'select[size]:not([size="0"]):not([size="1"])',
-	],
-	listitem: ['dt', 'ul > li', 'ol > li'],
-	main: ['main'],
-	math: ['math'],
-	menuitemcheckbox: ['menuitem[type="checkbox"]'],
-	menuitem: ['menuitem[type="command"]'],
-	menuitemradio: ['menuitem[type="radio"]'],
-	menu: ['menu[type="context"]'],
-	navigation: ['nav'],
-	option: ['option'],
-	progressbar: ['progress'],
-	radio: ['input[type="radio"]'],
-	region: ['section[aria-label]', 'section[aria-labelledby]', 'section[title]'],
-	rowgroup: ['tbody', 'thead', 'tfoot'],
-	row: ['tr'],
-	searchbox: ['input[type="search"]:not([list])'],
-	separator: ['hr'],
-	slider: ['input[type="range"]'],
-	spinbutton: ['input[type="number"]'],
-	status: ['output'],
-	table: ['table'],
-	term: ['dfn', 'dt'],
-	textbox: [
-		'input:not([type]):not([list])',
-		'input[type="email"]:not([list])',
-		'input[type="tel"]:not([list])',
-		'input[type="text"]:not([list])',
-		'input[type="url"]:not([list])',
-		'textarea',
-	],
-
-	// if scope is missing, it is calculated automatically
-	rowheader: ['th[scope="row"]'],
-	columnheader: ['th[scope="col"]'],
+			'input[type="email"][list]',
+			'input[type="search"][list]',
+			'input[type="tel"][list]',
+			'input[type="text"][list]',
+			'input[type="url"][list]',
+			'select:not([size]):not([multiple])',
+			'select[size="0"]:not([multiple])',
+			'select[size="1"]:not([multiple])',
+		],
+		defaults: {
+			'expanded': false,
+			'haspopup': 'listbox',
+		},
+	},
+	command: {
+		childRoles: ['button', 'link', 'menuitem'],
+	},
+	complementary: {
+		selectors: ['aside'],
+	},
+	composite: {
+		childRoles: ['grid', 'select', 'spinbutton', 'tablist'],
+	},
+	definition: {
+		selectors: ['dd'],
+	},
+	dialog: {
+		selectors: ['dialog'],
+		childRoles: ['alertdialog'],
+	},
+	'doc-backlink': {
+		nameFromContents: true,
+	},
+	'doc-biblioref': {
+		nameFromContents: true,
+	},
+	'doc-glossref': {
+		nameFromContents: true,
+	},
+	'doc-noteref': {
+		nameFromContents: true,
+	},
+	document: {
+		selectors: ['body'],
+		childRoles: ['article', 'graphics-document'],
+	},
+	figure: {
+		selectors: ['figure'],
+	},
+	form: {
+		selectors: ['form[aria-label]', 'form[aria-labelledby]', 'form[title]'],
+	},
+	grid: {
+		childRoles: ['treegrid'],
+	},
+	gridcell: {
+		childRoles: ['columnheader', 'rowheader'],
+		nameFromContents: true,
+	},
+	group: {
+		selectors: ['details', 'optgroup'],
+		childRoles: ['row', 'select', 'toolbar', 'graphics-object'],
+	},
+	heading: {
+		selectors: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+		nameFromContents: true,
+		defaults: {
+			'level': 2,
+		},
+	},
+	img: {
+		selectors: ['img:not([alt=""])', 'graphics-symbol'],
+		childRoles: ['doc-cover'],
+	},
+	input: {
+		childRoles: ['checkbox', 'option', 'radio', 'slider', 'spinbutton', 'textbox'],
+	},
+	landmark: {
+		childRoles: [
+			'banner',
+			'complementary',
+			'contentinfo',
+			'doc-acknowledgments',
+			'doc-afterword',
+			'doc-appendix',
+			'doc-bibliography',
+			'doc-chapter',
+			'doc-conclusion',
+			'doc-credits',
+			'doc-endnotes',
+			'doc-epilogue',
+			'doc-errata',
+			'doc-foreword',
+			'doc-glossary',
+			'doc-introduction',
+			'doc-part',
+			'doc-preface',
+			'doc-prologue',
+			'form',
+			'main',
+			'navigation',
+			'region',
+			'search',
+		],
+	},
+	link: {
+		selectors: ['a[href]', 'area[href]', 'link[href]'],
+		childRoles: ['doc-backlink', 'doc-biblioref', 'doc-glossref', 'doc-noteref'],
+		nameFromContents: true,
+	},
+	list: {
+		selectors: ['dl', 'ol', 'ul'],
+		childRoles: ['directory', 'feed'],
+	},
+	listbox: {
+		selectors: [
+			'select[multiple]',
+			'select[size]:not([size="0"]):not([size="1"])',
+		],
+		defaults: {
+			'orientation': 'vertical',
+		},
+	},
+	listitem: {
+		selectors: ['dt', 'ul > li', 'ol > li'],
+		childRoles: ['doc-biblioentry', 'doc-endnote', 'treeitem'],
+	},
+	log: {
+		defaults: {
+			'live': 'polite',
+		},
+	},
+	main: {
+		selectors: ['main'],
+	},
+	math: {
+		selectors: ['math'],
+	},
+	menu: {
+		selectors: ['menu[type="context"]'],
+		childRoles: ['menubar'],
+		defaults: {
+			'orientation': 'vertical',
+		},
+	},
+	menubar: {
+		defaults: {
+			'orientation': 'horizontal',
+		},
+	},
+	menuitem: {
+		selectors: ['menuitem[type="command"]'],
+		childRoles: ['menuitemcheckbox'],
+		nameFromContents: true,
+	},
+	menuitemcheckbox: {
+		selectors: ['menuitem[type="checkbox"]'],
+		childRoles: ['menuitemradio'],
+		nameFromContents: true,
+		defaults: {
+			'checked': 'false',
+		},
+	},
+	menuitemradio: {
+		selectors: ['menuitem[type="radio"]'],
+		nameFromContents: true,
+		defaults: {
+			'checked': 'false',
+		},
+	},
+	navigation: {
+		selectors: ['nav'],
+		childRoles: ['doc-index', 'doc-pagelist', 'doc-toc'],
+	},
+	note: {
+		childRoles: ['doc-notice', 'doc-tip'],
+	},
+	option: {
+		selectors: ['option'],
+		childRoles: ['treeitem'],
+		nameFromContents: true,
+		defaults: {
+			'selected': 'false',
+		},
+	},
+	progressbar: {
+		selectors: ['progress'],
+	},
+	radio: {
+		selectors: ['input[type="radio"]'],
+		childRoles: ['menuitemradio'],
+		nameFromContents: true,
+		defaults: {
+			'checked': 'false',
+		},
+	},
+	range: {
+		childRoles: ['progressbar', 'scrollbar', 'slider', 'spinbutton'],
+	},
+	region: {
+		selectors: ['section[aria-label]', 'section[aria-labelledby]', 'section[title]'],
+	},
+	roletype: {
+		childRoles: ['structure', 'widget', 'window'],
+	},
+	row: {
+		selectors: ['tr'],
+		nameFromContents: true,
+	},
+	rowheader: {
+		selectors: ['th[scope="row"]'],
+		nameFromContents: true,
+	},
+	rowgroup: {
+		selectors: ['tbody', 'thead', 'tfoot'],
+		nameFromContents: true,
+	},
+	scrollbar: {
+		defaults: {
+			'orientation': 'vertical',
+			'valuemin': 0,
+			'valuemax': 100,
+			// FIXME: halfway between actual valuemin and valuemax
+			'valuenow': 50,
+		},
+	},
+	searchbox: {
+		selectors: ['input[type="search"]:not([list])'],
+	},
+	section: {
+		childRoles: [
+			'alert',
+			'cell',
+			'definition',
+			'doc-abstract',
+			'doc-colophon',
+			'doc-credit',
+			'doc-dedication',
+			'doc-epigraph',
+			'doc-example',
+			'doc-footnote',
+			'doc-qna',
+			'figure',
+			'group',
+			'img',
+			'landmark',
+			'list',
+			'listitem',
+			'log',
+			'marquee',
+			'math',
+			'note',
+			'status',
+			'table',
+			'tabpanel',
+			'term',
+			'tooltip',
+		],
+	},
+	sectionhead: {
+		childRoles: [
+			'columnheader',
+			'doc-subtitle',
+			'heading',
+			'rowheader',
+			'tab',
+		],
+		nameFromContents: true,
+	},
+	select: {
+		childRoles: ['combobox', 'listbox', 'menu', 'radiogroup', 'tree'],
+	},
+	separator: {
+		selectors: ['hr'],
+		childRoles: ['doc-pagebreak'],
+		defaults: {
+			'orientation': 'horizontal',
+			'valuemin': 0,
+			'valuemax': 100,
+			'valuenow': 50,
+		},
+	},
+	slider: {
+		selectors: ['input[type="range"]'],
+		defaults: {
+			'orientation': 'horizontal',
+			'valuemin': 0,
+			'valuemax': 100,
+			// FIXME: halfway between actual valuemin and valuemax
+			'valuenow': 50,
+		},
+	},
+	spinbutton: {
+		selectors: ['input[type="number"]'],
+		defaults: {
+			// FIXME: no valuemin/valuemax
+			'valuenow': 0,
+		},
+	},
+	status: {
+		selectors: ['output'],
+		childRoles: ['timer'],
+		defaults: {
+			'live': 'polite',
+			'atomic': true,
+		},
+	},
+	switch: {
+		nameFromContents: true,
+		defaults: {
+			'checked': false,
+		},
+	},
+	structure: {
+		childRoles: [
+			'application',
+			'document',
+			'none',
+			'presentation',
+			'rowgroup',
+			'section',
+			'sectionhead',
+			'separator',
+		],
+	},
+	tab: {
+		nameFromContents: true,
+		defaults: {
+			'selected': false,
+		},
+	},
+	table: {
+		selectors: ['table'],
+		childRoles: ['grid'],
+	},
+	tablist: {
+		defaults: {
+			'orientation': 'horizontal',
+		},
+	},
+	term: {
+		selectors: ['dfn', 'dt'],
+	},
+	textbox: {
+		selectors: [
+			'input:not([type]):not([list])',
+			'input[type="email"]:not([list])',
+			'input[type="tel"]:not([list])',
+			'input[type="text"]:not([list])',
+			'input[type="url"]:not([list])',
+			'textarea',
+		],
+		childRoles: ['searchbox'],
+	},
+	toolbar: {
+		defaults: {
+			'orientation': 'horizontal',
+		},
+	},
+	tooltip: {
+		nameFromContents: true,
+	},
+	tree: {
+		childRoles: ['treegrid'],
+		defaults: {
+			'orientation': 'vertical',
+		},
+	},
+	treeitem: {
+		nameFromContents: true,
+	},
+	widget: {
+		childRoles: [
+			'command',
+			'composite',
+			'gridcell',
+			'input',
+			'range',
+			'row',
+			'separator',
+			'tab',
+		],
+	},
+	window: {
+		childRoles: ['dialog'],
+	},
 };
 
 exports.scoped = [
-	'article *', 'aside *', 'main *', 'nav *', 'section *',
+	'main *',
+	// https://www.w3.org/TR/html/dom.html#sectioning-content-2
+	'article *', 'aside *', 'nav *', 'section *',
+	// https://www.w3.org/TR/html/sections.html#sectioning-roots
+	'blockquote *', 'details *', 'dialog *', 'fieldset *', 'figure *', 'td *',
 ].join(',');
 
-// https://www.w3.org/TR/wai-aria/roles
-var subRoles = {
-	cell: ['gridcell', 'rowheader'],
-	command: ['button', 'link', 'menuitem'],
-	composite: ['grid', 'select', 'spinbutton', 'tablist'],
-	img: ['doc-cover'],
-	input: ['checkbox', 'option', 'radio', 'slider', 'spinbutton', 'textbox'],
-	landmark: [
-		'banner',
-		'complementary',
-		'contentinfo',
-		'doc-acknowledgments',
-		'doc-afterword',
-		'doc-appendix',
-		'doc-bibliography',
-		'doc-chapter',
-		'doc-conclusion',
-		'doc-credits',
-		'doc-endnotes',
-		'doc-epilogue',
-		'doc-errata',
-		'doc-foreword',
-		'doc-glossary',
-		'doc-introduction',
-		'doc-part',
-		'doc-preface',
-		'doc-prologue',
-		'form',
-		'main',
-		'navigation',
-		'region',
-		'search',
-	],
-	range: ['progressbar', 'scrollbar', 'slider', 'spinbutton'],
-	roletype: ['structure', 'widget', 'window'],
-	section: [
-		'alert',
-		'cell',
-		'definition',
-		'doc-abstract',
-		'doc-colophon',
-		'doc-credit',
-		'doc-dedication',
-		'doc-epigraph',
-		'doc-example',
-		'doc-footnote',
-		'doc-qna',
-		'figure',
-		'group',
-		'img',
-		'landmark',
-		'list',
-		'listitem',
-		'log',
-		'marquee',
-		'math',
-		'note',
-		'status',
-		'table',
-		'tabpanel',
-		'term',
-		'tooltip',
-	],
-	sectionhead: [
-		'columnheader',
-		'doc-subtitle',
-		'heading',
-		'rowheader',
-		'tab',
-	],
-	select: ['combobox', 'listbox', 'menu', 'radiogroup', 'tree'],
-	separator: ['doc-pagebreak'],
-	structure: [
-		'application',
-		'document',
-		'none',
-		'presentation',
-		'rowgroup',
-		'section',
-		'sectionhead',
-		'separator',
-	],
-	table: ['grid'],
-	textbox: ['searchbox'],
-	widget: [
-		'command',
-		'composite',
-		'gridcell',
-		'input',
-		'range',
-		'row',
-		'separator',
-		'tab',
-	],
-	window: ['dialog'],
-	alert: ['alertdialog'],
-	checkbox: ['menuitemcheckbox', 'switch'],
-	dialog: ['alertdialog'],
-	gridcell: ['columnheader', 'rowheader'],
-	menuitem: ['menuitemcheckbox'],
-	menuitemcheckbox: ['menuitemradio'],
-	option: ['treeitem'],
-	radio: ['menuitemradio'],
-	status: ['timer'],
-	grid: ['treegrid'],
-	menu: ['menubar'],
-	tree: ['treegrid'],
-	document: ['article', 'graphics-document'],
-	group: ['row', 'select', 'toolbar', 'graphics-object'],
-	link: ['doc-backlink', 'doc-biblioref', 'doc-glossref', 'doc-noteref'],
-	list: ['directory', 'feed'],
-	listitem: ['doc-biblioentry', 'doc-endnote', 'treeitem'],
-	navigation: ['doc-index', 'doc-pagelist', 'doc-toc'],
-	note: ['doc-notice', 'doc-tip'],
-};
-
 var getSubRoles = function(role) {
-	var children = subRoles[role] || [];
+	var children = (exports.roles[role] || {}).childRoles || [];
 	var descendents = children.map(getSubRoles);
 
 	var result = [role];
@@ -4990,38 +5437,13 @@ var getSubRoles = function(role) {
 	return result;
 };
 
-exports.subRoles = {};
-for (var role in subRoles) {
-	exports.subRoles[role] = getSubRoles(role);
+for (var role in exports.roles) {
+	exports.roles[role].subRoles = getSubRoles(role);
 }
-exports.subRoles['none'] = ['none', 'presentation'];
-exports.subRoles['presentation'] = ['presentation', 'none'];
-
-exports.nameFromContents = [
-	'button',
-	'checkbox',
-	'columnheader',
-	'doc-backlink',
-	'doc-biblioref',
-	'doc-glossref',
-	'doc-noteref',
-	'gridcell',
-	'heading',
-	'link',
-	'menuitem',
-	'menuitemcheckbox',
-	'menuitemradio',
-	'option',
-	'radio',
-	'row',
-	'rowgroup',
-	'rowheader',
-	'sectionhead',
-	'tab',
-	'tooltip',
-	'treeitem',
-	'switch',
-];
+exports.roles['none'] = exports.roles['none'] || {};
+exports.roles['none'].subRoles = ['none', 'presentation'];
+exports.roles['presentation'] = exports.roles['presentation'] || {};
+exports.roles['presentation'].subRoles = ['presentation', 'none'];
 
 exports.nameFromDescendant = {
 	'figure': 'figcaption',
@@ -5046,10 +5468,10 @@ exports.labelable = [
 	'textarea',
 ];
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 var constants = require('./constants.js');
+var atree = require('./atree.js');
 var query = require('./query.js');
-var util = require('./util.js');
 
 var getPseudoContent = function(node, selector) {
 	var styles = window.getComputedStyle(node, selector);
@@ -5069,24 +5491,8 @@ var getPseudoContent = function(node, selector) {
 	}
 };
 
-var getContent = function(root, referenced, owned) {
-	var children = [];
-
-	for (var i = 0; i < root.childNodes.length; i++) {
-		var node = root.childNodes[i];
-		if (!node.id || !document.querySelector('[aria-owns~="' + node.id + '"]')) {
-			children.push(node);
-		}
-	}
-
-	var owns = query.getAttribute(root, 'owns') || [];
-	for (var i = 0; i < owns.length; i++) {
-		var child = document.getElementById(owns[i]);
-		if (child && child !== root && owned.indexOf(child.id) === -1) {
-			children.push(child);
-			owned.push(child.id);
-		}
-	}
+var getContent = function(root, visited) {
+	var children = atree.getChildNodes(root);
 
 	var ret = '';
 	for (var i = 0; i < children.length; i++) {
@@ -5099,9 +5505,9 @@ var getContent = function(root, referenced, owned) {
 			} else if (window.getComputedStyle(node).display.substr(0, 6) === 'inline' &&
 					node.tagName.toLowerCase() !== 'input' &&
 					node.tagName.toLowerCase() !== 'img') {  // https://github.com/w3c/accname/issues/3
-				ret += getName(node, true, referenced, owned);
+				ret += getName(node, true, visited);
 			} else {
-				ret += ' ' + getName(node, true, referenced, owned) + ' ';
+				ret += ' ' + getName(node, true, visited) + ' ';
 			}
 		}
 	}
@@ -5111,7 +5517,7 @@ var getContent = function(root, referenced, owned) {
 
 var allowNameFromContent = function(el) {
 	var role = query.getRole(el);
-	return role && constants.nameFromContents.indexOf(role) !== -1;
+	return (constants.roles[role] || {}).nameFromContents;
 };
 
 var isLabelable = function(el) {
@@ -5123,15 +5529,13 @@ var isLabelable = function(el) {
 var getLabelNodes = function(element) {
 	var labels = [];
 	var labelable = constants.labelable.join(',');
-	util.walkDOM(document.body, function(node) {
-		if (node.tagName && node.tagName.toLowerCase() === 'label') {
-			if (node.getAttribute('for')) {
-				if (element.id && node.getAttribute('for') === element.id) {
-					labels.push(node);
-				}
-			} else if (node.querySelector(labelable) === element) {
+	document.querySelectorAll('label').forEach(function(node) {
+		if (node.getAttribute('for')) {
+			if (element.id && node.getAttribute('for') === element.id) {
 				labels.push(node);
 			}
+		} else if (node.querySelector(labelable) === element) {
+			labels.push(node);
 		}
 	});
 	return labels;
@@ -5143,34 +5547,41 @@ var isInLabelForOtherWidget = function(el) {
 	return label && ownLabels.indexOf(label) === -1;
 };
 
-var getName = function(el, recursive, referenced, owned) {
+var getName = function(el, recursive, visited, directReference) {
 	var ret = '';
-	var owned = owned || [];
+
+	visited = visited || [];
+	if (visited.includes(el)) {
+		if (!directReference) {
+			return '';
+		}
+	} else {
+		visited.push(el);
+	}
 
 	// A
-	if (query.getAttribute(el, 'hidden', referenced)) {
-		return '';
-	}
+	// handled in atree
 
 	// B
 	if (!recursive && el.matches('[aria-labelledby]')) {
 		var ids = el.getAttribute('aria-labelledby').split(/\s+/);
 		var strings = ids.map(function(id) {
 			var label = document.getElementById(id);
-			return label ? getName(label, true, label, owned) : '';
+			return label ? getName(label, true, visited, true) : '';
 		});
 		ret = strings.join(' ');
 	}
 
 	// C
 	if (!ret.trim() && el.matches('[aria-label]')) {
+		// FIXME: may skip to 2E
 		ret = el.getAttribute('aria-label');
 	}
 
 	// D
 	if (!ret.trim() && !recursive && isLabelable(el)) {
 		var strings = getLabelNodes(el).map(function(label) {
-			return getName(label, true, label, owned);
+			return getName(label, true, visited);
 		});
 		ret = strings.join(' ');
 	}
@@ -5188,7 +5599,7 @@ var getName = function(el, recursive, referenced, owned) {
 			if (el.matches(selector)) {
 				var descendant = el.querySelector(constants.nameFromDescendant[selector]);
 				if (descendant) {
-					ret = getName(descendant, true, descendant, owned);
+					ret = getName(descendant, true, visited);
 				}
 			}
 		}
@@ -5202,7 +5613,7 @@ var getName = function(el, recursive, referenced, owned) {
 			} else if (query.matches(el, 'combobox,listbox')) {
 				var selected = query.querySelector(el, ':selected') || query.querySelector(el, 'option');
 				if (selected) {
-					ret = getName(selected, recursive, referenced, owned);
+					ret = getName(selected, recursive, visited);
 				} else {
 					ret = el.value || '';
 				}
@@ -5215,18 +5626,9 @@ var getName = function(el, recursive, referenced, owned) {
 	// F
 	// FIXME: menu is not mentioned in the spec
 	if (!ret.trim() && (recursive || allowNameFromContent(el) || el.closest('label')) && !query.matches(el, 'menu')) {
-		ret = getContent(el, referenced, owned);
+		ret = getContent(el, visited);
 	}
 
-	// TODO: G
-	// TODO: H
-
-	// FIXME: not mentioned in the spec
-	if (!ret.trim() && query.matches(el, 'presentation')) {
-		return getContent(el, referenced, owned);
-	}
-
-	// FIXME: not mentioned in the spec
 	if (!ret.trim()) {
 		for (var selector in constants.nameDefaults) {
 			if (el.matches(selector)) {
@@ -5235,8 +5637,12 @@ var getName = function(el, recursive, referenced, owned) {
 		}
 	}
 
+	// G/H
+	// handled in getContent
+
 	// I
-	if (!ret.trim()) {
+	// FIXME: presentation not mentioned in the spec
+	if (!ret.trim() && !query.matches(el, 'presentation')) {
 		ret = el.title || '';
 	}
 
@@ -5251,13 +5657,12 @@ var getNameTrimmed = function(el) {
 
 var getDescription = function(el) {
 	var ret = '';
-	var owned = [];
 
 	if (el.matches('[aria-describedby]')) {
 		var ids = el.getAttribute('aria-describedby').split(/\s+/);
 		var strings = ids.map(function(id) {
 			var label = document.getElementById(id);
-			return label ? getName(label, true, label, owned) : '';
+			return label ? getName(label, true) : '';
 		});
 		ret = strings.join(' ');
 	} else if (el.title) {
@@ -5280,134 +5685,31 @@ module.exports = {
 	getDescription: getDescription,
 };
 
-},{"./constants.js":8,"./query.js":10,"./util.js":11}],10:[function(require,module,exports){
-var constants = require('./constants.js');
-var util = require('./util.js');
+},{"./atree.js":8,"./constants.js":10,"./query.js":12}],12:[function(require,module,exports){
+var attrs = require('./attrs.js');
+var atree = require('./atree.js');
 
-var getSubRoles = function(roles) {
-	return [].concat.apply([], roles.map(function(role) {
-		return constants.subRoles[role] || [role];
-	}));
-};
-
-// candidates can be passed for performance optimization
-var _getRole = function(el, candidates) {
-	if (el.hasAttribute('role')) {
-		return el.getAttribute('role');
-	}
-	for (var role in constants.extraSelectors) {
-		var selector = constants.extraSelectors[role].join(',');
-		if ((!candidates || candidates.indexOf(role) !== -1) && el.matches(selector)) {
-			return role;
-		}
-	}
-
-	if (!candidates ||
-			candidates.indexOf('banner') !== -1 ||
-			candidates.indexOf('contentinfo') !== -1) {
-		var scoped = el.matches(constants.scoped);
-
-		if (el.matches('header') && !scoped) {
-			return 'banner';
-		}
-		if (el.matches('footer') && !scoped) {
-			return 'contentinfo';
-		}
-	}
-};
-
-var getAttribute = function(el, key, _hiddenRoot) {
-	if (key === 'hidden' && el === _hiddenRoot) {  // used for name calculation
-		return false;
-	}
-
-	if (constants.attributeStrongMapping.hasOwnProperty(key)) {
-		var value = el[constants.attributeStrongMapping[key]];
-		if (value) {
-			return value;
-		}
-	}
-	if (key === 'readonly' && el.contentEditable) {
-		return false;
-	} else if (key === 'invalid' && el.checkValidity) {
-		return !el.checkValidity();
-	} else if (key === 'hidden') {
-		var style = window.getComputedStyle(el);
-		if (style.display === 'none' || style.visibility === 'hidden') {
-			return true;
-		}
-	}
-
-	var type = constants.attributes[key];
-	var raw = el.getAttribute('aria-' + key);
-
-	if (raw) {
-		if (type === 'bool') {
-			return raw === 'true';
-		} else if (type === 'tristate') {
-			return raw === 'true' ? true : raw === 'false' ? false : 'mixed';
-		} else if (type === 'bool-undefined') {
-			return raw === 'true' ? true : raw === 'false' ? false : undefined;
-		} else if (type === 'id-list') {
-			return raw.split(/\s+/);
-		} else if (type === 'integer') {
-			return parseInt(raw);
-		} else if (type === 'number') {
-			return parseFloat(raw);
-		} else if (type === 'token-list') {
-			return raw.split(/\s+/);
-		} else {
-			return raw;
-		}
-	}
-
-	// TODO
-	// autocomplete
-	// contextmenu -> aria-haspopup
-	// indeterminate -> aria-checked="mixed"
-	// list -> aria-controls
-
-	if (key === 'level') {
-		for (var i = 1; i <= 6; i++) {
-			if (el.tagName.toLowerCase() === 'h' + i) {
-				return i;
-			}
-		}
-	} else if (key === 'hidden') {
-		if (el.clientHeight === 0) {  // rough check for performance
-			return el.parentNode && getAttribute(el.parentNode, 'hidden', _hiddenRoot);
-		}
-	} else if (constants.attributeWeakMapping.hasOwnProperty(key)) {
-		return el[constants.attributeWeakMapping[key]];
-	}
-
-	if (type === 'bool' || type === 'tristate') {
-		return false;
-	}
-};
 
 var matches = function(el, selector) {
 	var actual;
 
 	if (selector.substr(0, 1) === ':') {
 		var attr = selector.substr(1);
-		return getAttribute(el, attr);
+		return attrs.getAttribute(el, attr);
 	} else if (selector.substr(0, 1) === '[') {
 		var match = /\[([a-z]+)="(.*)"\]/.exec(selector);
-		actual = getAttribute(el, match[1]);
+		actual = attrs.getAttribute(el, match[1]);
 		var rawValue = match[2];
 		return actual.toString() == rawValue;
 	} else {
-		var candidates = getSubRoles(selector.split(','));
-		actual = _getRole(el, candidates);
-		return candidates.indexOf(actual) !== -1;
+		return attrs.hasRole(el, selector.split(','));
 	}
 };
 
 var _querySelector = function(all) {
 	return function(root, role) {
 		var results = [];
-		util.walkDOM(root, function(node) {
+		atree.walk(root, function(node) {
 			if (node.nodeType === node.ELEMENT_NODE) {
 				// FIXME: skip hidden elements
 				if (matches(node, role)) {
@@ -5423,53 +5725,25 @@ var _querySelector = function(all) {
 };
 
 var closest = function(el, selector) {
-	return util.searchUp(el, function(candidate) {
-		return matches(candidate, selector);
+	return atree.searchUp(el, function(candidate) {
+		if (candidate.nodeType === candidate.ELEMENT_NODE) {
+			return matches(candidate, selector);
+		}
 	});
 };
 
 module.exports = {
 	getRole: function(el) {
-		return _getRole(el);
+		return attrs.getRole(el);
 	},
-	getAttribute: getAttribute,
+	getAttribute: attrs.getAttribute,
 	matches: matches,
 	querySelector: _querySelector(),
 	querySelectorAll: _querySelector(true),
 	closest: closest,
 };
 
-},{"./constants.js":8,"./util.js":11}],11:[function(require,module,exports){
-var walkDOM = function(root, fn) {
-	if (fn(root) === false) {
-		return false;
-	}
-	var node = root.firstChild;
-	while (node) {
-		if (walkDOM(node, fn) === false) {
-			return false;
-		}
-		node = node.nextSibling;
-	}
-};
-
-var searchUp = function(el, test) {
-	var candidate = el.parentElement;
-	if (candidate) {
-		if (test(candidate)) {
-			return candidate;
-		} else {
-			return searchUp(candidate, test);
-		}
-	}
-};
-
-module.exports = {
-	walkDOM: walkDOM,
-	searchUp: searchUp,
-};
-
-},{}],12:[function(require,module,exports){
+},{"./atree.js":8,"./attrs.js":9}],13:[function(require,module,exports){
 /*! aXe v3.2.2
  * Copyright (c) 2019 Deque Systems, Inc.
  *
@@ -20768,8 +21042,8 @@ module.exports = {
     }()
   });
 })(typeof window === 'object' ? window : this);
-},{}],13:[function(require,module,exports){
-window.getAccNameVersion = "2.22";
+},{}],14:[function(require,module,exports){
+window.getAccNameVersion = "2.26";
 
 /*!
 CalcNames: The AccName Computation Prototype, compute the Name and Description property values for a DOM node
@@ -20782,11 +21056,14 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
 */
 
 // AccName Computation Prototype
-window.getAccName = calcNames = function(
+window.getAccName = window.calcNames = function(
   node,
   fnc,
-  preventVisualARIASelfCSSRef
+  preventVisualARIASelfCSSRef,
+  overrides
 ) {
+  overrides = overrides || {};
+  var docO = overrides.document || document;
   var props = { name: "", desc: "", error: "" };
   try {
     if (!node || node.nodeType !== 1) {
@@ -20806,8 +21083,13 @@ window.getAccName = calcNames = function(
       skip,
       nodesToIgnoreValues,
       skipAbort,
-      ownedBy
+      ownedBy,
+      skipTo
     ) {
+      skipTo = skipTo || {};
+      skipTo.tag = skipTo.tag || false;
+      skipTo.role = skipTo.role || false;
+      skipTo.go = skipTo.go || false;
       var fullResult = {
         name: "",
         title: ""
@@ -20817,6 +21099,7 @@ window.getAccName = calcNames = function(
   ARIA Role Exception Rule Set 1.1
   The following Role Exception Rule Set is based on the following ARIA Working Group discussion involving all relevant browser venders.
   https://lists.w3.org/Archives/Public/public-aria/2017Jun/0057.html
+Plus roles extended for the Role Parity project.
   */
       var isException = function(node, refNode) {
         if (
@@ -20855,8 +21138,9 @@ window.getAccName = calcNames = function(
         }
         // Otherwise process list2 to identify roles to ignore processing name from content.
         else if (
-          inList(node, list2) ||
-          (node === rootNode && !inList(node, list1))
+          (inList(node, list2) ||
+            (node === rootNode && !inList(node, list1))) &&
+          !skipTo.go
         ) {
           return true;
         } else {
@@ -20880,7 +21164,7 @@ window.getAccName = calcNames = function(
           }
           if (node && node === parent) {
             return true;
-          } else if (!node || node === ownedBy.top || node === document.body) {
+          } else if (!node || node === ownedBy.top || node === docO.body) {
             return false;
           }
         }
@@ -20894,16 +21178,16 @@ window.getAccName = calcNames = function(
       };
 
       if (ownedBy.ref) {
-        if (isParentHidden(refNode, document.body, true, true)) {
+        if (isParentHidden(refNode, docO.body, true, true)) {
           // If referenced via aria-labelledby or aria-describedby, do not return a name or description if a parent node is hidden.
           return fullResult;
-        } else if (isHidden(refNode, document.body)) {
+        } else if (isHidden(refNode, docO.body)) {
           // Otherwise, if aria-labelledby or aria-describedby reference a node that is explicitly hidden, then process all children regardless of their individual hidden states.
           var ignoreHidden = true;
         }
       }
 
-      if (nodes.indexOf(refNode) === -1) {
+      if (!skipTo.tag && !skipTo.role && nodes.indexOf(refNode) === -1) {
         // Store the before and after pseudo element 'content' values for the top level DOM node
         // Note: If the pseudo element includes block level styling, a space will be added, otherwise inline is asumed and no spacing is added.
         cssOP = getCSSText(refNode, null);
@@ -20938,11 +21222,13 @@ window.getAccName = calcNames = function(
           node && node.nodeType === 1 && isBlockLevelElement(node)
             ? true
             : false;
+        var currentNode = node;
         var fResult = fn(node) || {};
         if (fResult.name && fResult.name.length) {
           res.name += fResult.name;
         }
-        if (!isException(node, ownedBy.top, ownedBy)) {
+        if (!fResult.skip && !isException(node, ownedBy.top)) {
+          if (skipTo.go) skipTo.go = false;
           node = node.firstChild;
           while (node) {
             res.name += walkDOM(node, fn, refNode).name;
@@ -20950,12 +21236,16 @@ window.getAccName = calcNames = function(
           }
         }
         res.name += fResult.owns || "";
-        if (rootNode === refNode && !trim(res.name) && trim(fResult.title)) {
+        if (
+          rootNode === currentNode &&
+          !trim(res.name) &&
+          trim(fResult.title)
+        ) {
           res.name = addSpacing(fResult.title);
-        } else if (rootNode === refNode && trim(fResult.title)) {
+        } else if (rootNode === currentNode && trim(fResult.title)) {
           res.title = addSpacing(fResult.title);
         }
-        if (rootNode === refNode && trim(fResult.desc)) {
+        if (rootNode === currentNode && trim(fResult.desc)) {
           res.title = addSpacing(fResult.desc);
         }
         if (nodeIsBlock || fResult.isWidget) {
@@ -20974,7 +21264,8 @@ window.getAccName = calcNames = function(
           var result = {
             name: "",
             title: "",
-            owns: ""
+            owns: "",
+            skip: false
           };
           var isEmbeddedNode =
             node &&
@@ -20999,7 +21290,7 @@ window.getAccName = calcNames = function(
             return result;
           }
 
-          if (nodes.indexOf(node) === -1) {
+          if (!skipTo.tag && !skipTo.role && nodes.indexOf(node) === -1) {
             nodes.push(node);
           }
 
@@ -21014,7 +21305,7 @@ window.getAccName = calcNames = function(
           };
 
           var parent = refNode === node ? node : node.parentNode;
-          if (nodes.indexOf(parent) === -1) {
+          if (!skipTo.tag && !skipTo.role && nodes.indexOf(parent) === -1) {
             nodes.push(parent);
             // Store the before and after pseudo element 'content' values for the current node container element
             // Note: If the pseudo element includes block level styling, a space will be added, otherwise inline is asumed and no spacing is added.
@@ -21039,12 +21330,25 @@ window.getAccName = calcNames = function(
 
           // Process standard DOM element node
           if (node.nodeType === 1) {
-            var aLabelledby = node.getAttribute("aria-labelledby") || "";
-            var aDescribedby = node.getAttribute("aria-describedby") || "";
-            var aLabel = node.getAttribute("aria-label") || "";
-            var nTitle = node.getAttribute("title") || "";
             var nTag = node.nodeName.toLowerCase();
             var nRole = getRole(node);
+            var aLabelledby =
+              (!skipTo.tag &&
+                !skipTo.role &&
+                node.getAttribute("aria-labelledby")) ||
+              "";
+            var aDescribedby =
+              (!skipTo.tag &&
+                !skipTo.role &&
+                node.getAttribute("aria-describedby")) ||
+              "";
+            var aLabel =
+              (!skipTo.tag &&
+                !skipTo.role &&
+                node.getAttribute("aria-label")) ||
+              "";
+            var nTitle =
+              (!skipTo.tag && !skipTo.role && node.getAttribute("title")) || "";
 
             var isNativeFormField = nativeFormFields.indexOf(nTag) !== -1;
             var isNativeButton = ["input"].indexOf(nTag) !== -1;
@@ -21063,8 +21367,11 @@ window.getAccName = calcNames = function(
             result.isWidget = isNativeFormField || isWidgetRole;
 
             var hasName = false;
+            var hasDesc = false;
             var aOwns = node.getAttribute("aria-owns") || "";
             var isSeparatChildFormField =
+              !skipTo.tag &&
+              !skipTo.role &&
               !isEmbeddedNode &&
               ((node !== refNode &&
                 (isNativeFormField || isSimulatedFormField)) ||
@@ -21075,57 +21382,311 @@ window.getAccName = calcNames = function(
                 ? true
                 : false;
 
-            if (!stop && node === refNode) {
-              // Check for non-empty value of aria-labelledby if current node equals reference node, follow each ID ref, then stop and process no deeper.
-              if (aLabelledby) {
-                ids = aLabelledby.split(/\s+/);
-                parts = [];
-                for (i = 0; i < ids.length; i++) {
-                  element = document.getElementById(ids[i]);
-                  // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
-                  parts.push(
-                    walk(element, true, skip, [node], element === refNode, {
-                      ref: ownedBy,
-                      top: element
-                    }).name
-                  );
-                }
-                // Check for blank value, since whitespace chars alone are not valid as a name
-                name = trim(parts.join(" "));
-
-                if (trim(name)) {
-                  hasName = true;
-                  // Abort further recursion if name is valid.
-                  skip = true;
-                }
+            // Check for non-empty value of aria-describedby if current node equals reference node, follow each ID ref, then stop and process no deeper.
+            if (
+              !stop &&
+              node === refNode &&
+              !skipTo.tag &&
+              !skipTo.role &&
+              aDescribedby
+            ) {
+              var desc = "";
+              ids = aDescribedby.split(/\s+/);
+              parts = [];
+              for (i = 0; i < ids.length; i++) {
+                element = docO.getElementById(ids[i]);
+                // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
+                parts.push(
+                  walk(element, true, false, [node], false, {
+                    ref: ownedBy,
+                    top: element
+                  }).name
+                );
               }
+              // Check for blank value, since whitespace chars alone are not valid as a name
+              desc = trim(parts.join(" "));
 
-              // Check for non-empty value of aria-describedby if current node equals reference node, follow each ID ref, then stop and process no deeper.
-              if (aDescribedby) {
-                var desc = "";
-                ids = aDescribedby.split(/\s+/);
-                parts = [];
-                for (i = 0; i < ids.length; i++) {
-                  element = document.getElementById(ids[i]);
-                  // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
-                  parts.push(
-                    walk(element, true, false, [node], false, {
-                      ref: ownedBy,
-                      top: element
-                    }).name
-                  );
-                }
-                // Check for blank value, since whitespace chars alone are not valid as a name
-                desc = trim(parts.join(" "));
+              if (trim(desc)) {
+                result.desc = desc;
+                hasDesc = true;
+              }
+            }
 
-                if (trim(desc)) {
-                  result.desc = desc;
+            // Check for non-empty value of aria-labelledby on current node, follow each ID ref, then stop and process no deeper.
+            if (!stop && !skipTo.tag && !skipTo.role && aLabelledby) {
+              ids = aLabelledby.split(/\s+/);
+              parts = [];
+              for (i = 0; i < ids.length; i++) {
+                element = docO.getElementById(ids[i]);
+                // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
+                parts.push(
+                  walk(element, true, skip, [node], element === refNode, {
+                    ref: ownedBy,
+                    top: element
+                  }).name
+                );
+              }
+              // Check for blank value, since whitespace chars alone are not valid as a name
+              name = trim(parts.join(" "));
+
+              if (trim(name)) {
+                hasName = true;
+                // Abort further recursion if name is valid.
+                result.skip = true;
+              }
+            }
+
+            // Otherwise, if current node has a non-empty aria-label then set as name and process no deeper within the branch.
+            if (
+              !skipTo.tag &&
+              !skipTo.role &&
+              !hasName &&
+              trim(aLabel) &&
+              !isSeparatChildFormField
+            ) {
+              name = aLabel;
+
+              // Check for blank value, since whitespace chars alone are not valid as a name
+              if (trim(name)) {
+                hasName = true;
+                if (node === refNode) {
+                  // If name is non-empty and both the current and refObject nodes match, then don't process any deeper within the branch.
+                  skip = true;
                 }
               }
             }
 
+            var rolePresentation =
+              !skipTo.tag &&
+              !skipTo.role &&
+              !hasName &&
+              nRole &&
+              presentationRoles.indexOf(nRole) !== -1 &&
+              !isFocusable(node) &&
+              !hasGlobalAttr(node)
+                ? true
+                : false;
+
+            // Otherwise, if the current node is not a nested widget control within the parent ref obj, but is instead a native markup element that includes a host-defined labelling mechanism, then set the name and description accordingly if present.
+            if (!isSeparatChildFormField) {
+              // Otherwise, if name is still empty and the current node matches the ref node and is a standard form field with a non-empty associated label element, process label with same naming computation algorithm.
+              if (
+                !skipTo.tag &&
+                !skipTo.role &&
+                !hasName &&
+                node === refNode &&
+                isNativeFormField
+              ) {
+                // Logic modified to match issue
+                // https://github.com/WhatSock/w3c-alternative-text-computation/issues/12 */
+                var labels = docO.querySelectorAll("label");
+                var implicitLabel = getParent(node, "label") || false;
+                var explicitLabel =
+                  node.id &&
+                  docO.querySelectorAll('label[for="' + node.id + '"]').length
+                    ? docO.querySelector('label[for="' + node.id + '"]')
+                    : false;
+                var implicitI = 0;
+                var explicitI = 0;
+                for (i = 0; i < labels.length; i++) {
+                  if (labels[i] === implicitLabel) {
+                    implicitI = i;
+                  } else if (labels[i] === explicitLabel) {
+                    explicitI = i;
+                  }
+                }
+                var isImplicitFirst =
+                  implicitLabel &&
+                  implicitLabel.nodeType === 1 &&
+                  explicitLabel &&
+                  explicitLabel.nodeType === 1 &&
+                  implicitI < explicitI
+                    ? true
+                    : false;
+
+                if (
+                  explicitLabel &&
+                  !isParentHidden(explicitLabel, docO.body, true)
+                ) {
+                  var eLblName = trim(
+                    walk(explicitLabel, true, skip, [node], false, {
+                      ref: ownedBy,
+                      top: explicitLabel
+                    }).name
+                  );
+                }
+                if (
+                  implicitLabel &&
+                  implicitLabel !== explicitLabel &&
+                  !isParentHidden(implicitLabel, docO.body, true)
+                ) {
+                  var iLblName = trim(
+                    walk(implicitLabel, true, skip, [node], false, {
+                      ref: ownedBy,
+                      top: implicitLabel
+                    }).name
+                  );
+                }
+
+                if (iLblName && eLblName && isImplicitFirst) {
+                  name = iLblName + " " + eLblName;
+                } else if (eLblName && iLblName) {
+                  name = eLblName + " " + iLblName;
+                } else if (eLblName) {
+                  name = eLblName;
+                } else if (iLblName) {
+                  name = iLblName;
+                }
+
+                if (trim(name)) {
+                  hasName = true;
+                }
+              }
+
+              // Process native form field buttons in accordance with the HTML AAM
+              // https://w3c.github.io/html-aam/#accessible-name-and-description-computation
+              var btnType =
+                (!skipTo.tag &&
+                  !skipTo.role &&
+                  isNativeButton &&
+                  node.getAttribute("type")) ||
+                false;
+              var btnValue =
+                (!skipTo.tag &&
+                  !skipTo.role &&
+                  btnType &&
+                  trim(node.getAttribute("value"))) ||
+                false;
+
+              var nAlt = rolePresentation ? "" : trim(node.getAttribute("alt"));
+
+              // Otherwise, if name is still empty and current node is a standard non-presentational img or image button with a non-empty alt attribute, set alt attribute value as the accessible name.
+              if (
+                !skipTo.tag &&
+                !skipTo.role &&
+                !hasName &&
+                !rolePresentation &&
+                (nTag === "img" || btnType === "image") &&
+                nAlt
+              ) {
+                // Check for blank value, since whitespace chars alone are not valid as a name
+                name = trim(nAlt);
+                if (trim(name)) {
+                  hasName = true;
+                }
+              }
+
+              if (
+                !skipTo.tag &&
+                !skipTo.role &&
+                !hasName &&
+                node === refNode &&
+                btnType &&
+                ["button", "image", "submit", "reset"].indexOf(btnType) !== -1
+              ) {
+                if (btnValue) {
+                  name = btnValue;
+                } else {
+                  switch (btnType) {
+                    case "submit":
+                    case "image":
+                      name = "Submit Query";
+                      break;
+                    case "reset":
+                      name = "Reset";
+                      break;
+                    default:
+                      name = "";
+                  }
+                }
+                if (trim(name)) {
+                  hasName = true;
+                }
+              }
+
+              if (
+                !skipTo.tag &&
+                !skipTo.role &&
+                hasName &&
+                node === refNode &&
+                btnType &&
+                ["button", "submit", "reset"].indexOf(btnType) !== -1 &&
+                btnValue &&
+                btnValue !== name &&
+                !result.desc
+              ) {
+                result.desc = btnValue;
+                hasDesc = true;
+              }
+
+              var isFieldset =
+                !skipTo.tag &&
+                !skipTo.role &&
+                !hasName &&
+                node === rootNode &&
+                (nRole === "group" || (!nRole && nTag === "fieldset"));
+
+              // Otherwise, if name is still empty and the current node matches the root node and is a standard fieldset element with a non-empty associated legend element, process legend with same naming computation algorithm.
+              // Plus do the same for role="group" with embedded role="legend", or a combination of these.
+              if (isFieldset) {
+                name = trim(
+                  walk(
+                    node,
+                    stop,
+                    false,
+                    [],
+                    false,
+                    {
+                      ref: ownedBy,
+                      top: node
+                    },
+                    {
+                      tag: "legend",
+                      role: "legend",
+                      go: true
+                    }
+                  ).name
+                );
+                if (trim(name)) {
+                  hasName = true;
+                }
+                skip = true;
+              }
+
+              // Otherwise, if name is still empty and the root node and the current node are the same and node is an svg element, then parse the content of the title element to set the name and the desc element to set the description.
+              if (!skipTo.tag && !skipTo.role && nTag === "svg") {
+                var svgT = node.querySelector("title") || false;
+                var svgD =
+                  (node === rootNode && node.querySelector("desc")) || false;
+                if (!hasName && svgT) {
+                  name = trim(
+                    walk(svgT, true, false, [], false, {
+                      ref: ownedBy,
+                      top: svgT
+                    }).name
+                  );
+                  if (trim(name)) {
+                    hasName = true;
+                  }
+                }
+                if (!hasDesc && svgD) {
+                  var dE = trim(
+                    walk(svgD, true, false, [], false, {
+                      ref: ownedBy,
+                      top: svgD
+                    }).name
+                  );
+                  if (trim(dE)) {
+                    result.desc = dE;
+                    hasDesc = true;
+                  }
+                }
+                result.skip = true;
+              }
+            }
+
             // Otherwise, if the current node is a nested widget control within the parent ref obj, then add only its value and process no deeper within the branch.
-            if (isSeparatChildFormField) {
+            if (!skipTo.tag && !skipTo.role && isSeparatChildFormField) {
               // Prevent the referencing node from having its value included in the case of form control labels that contain the element with focus.
               if (
                 !(
@@ -21173,167 +21734,42 @@ window.getAccName = calcNames = function(
               }
             }
 
-            // Otherwise, if current node has a non-empty aria-label then set as name and process no deeper within the branch.
-            if (!hasName && trim(aLabel) && !isSeparatChildFormField) {
-              name = aLabel;
-
-              // Check for blank value, since whitespace chars alone are not valid as a name
-              if (trim(name)) {
-                hasName = true;
-                if (node === refNode) {
-                  // If name is non-empty and both the current and refObject nodes match, then don't process any deeper within the branch.
-                  skip = true;
-                }
-              }
-            }
-
-            // Otherwise, if name is still empty and the current node matches the ref node and is a standard form field with a non-empty associated label element, process label with same naming computation algorithm.
-            if (!hasName && node === refNode && isNativeFormField) {
-              // Logic modified to match issue
-              // https://github.com/WhatSock/w3c-alternative-text-computation/issues/12 */
-              var labels = document.querySelectorAll("label");
-              var implicitLabel = getParent(node, "label") || false;
-              var explicitLabel =
-                node.id &&
-                document.querySelectorAll('label[for="' + node.id + '"]').length
-                  ? document.querySelector('label[for="' + node.id + '"]')
-                  : false;
-              var implicitI = 0;
-              var explicitI = 0;
-              for (i = 0; i < labels.length; i++) {
-                if (labels[i] === implicitLabel) {
-                  implicitI = i;
-                } else if (labels[i] === explicitLabel) {
-                  explicitI = i;
-                }
-              }
-              var isImplicitFirst =
-                implicitLabel &&
-                implicitLabel.nodeType === 1 &&
-                explicitLabel &&
-                explicitLabel.nodeType === 1 &&
-                implicitI < explicitI
-                  ? true
-                  : false;
-
-              if (explicitLabel) {
-                var eLblName = trim(
-                  walk(explicitLabel, true, skip, [node], false, {
-                    ref: ownedBy,
-                    top: explicitLabel
-                  }).name
-                );
-              }
-              if (implicitLabel && implicitLabel !== explicitLabel) {
-                var iLblName = trim(
-                  walk(implicitLabel, true, skip, [node], false, {
-                    ref: ownedBy,
-                    top: implicitLabel
-                  }).name
-                );
-              }
-
-              if (iLblName && eLblName && isImplicitFirst) {
-                name = iLblName + " " + eLblName;
-              } else if (eLblName && iLblName) {
-                name = eLblName + " " + iLblName;
-              } else if (eLblName) {
-                name = eLblName;
-              } else if (iLblName) {
-                name = iLblName;
-              }
-
-              if (trim(name)) {
-                hasName = true;
-              }
-            }
-
-            // Process native form field buttons in accordance with the HTML AAM
-            // https://w3c.github.io/html-aam/#accessible-name-and-description-computation
-            var btnType =
-              (isNativeButton && node.getAttribute("type")) || false;
-            var btnValue =
-              (btnType && trim(node.getAttribute("value"))) || false;
-
-            var rolePresentation =
-              !hasName &&
-              nRole &&
-              presentationRoles.indexOf(nRole) !== -1 &&
-              !isFocusable(node) &&
-              !hasGlobalAttr(node)
-                ? true
-                : false;
-            var nAlt = rolePresentation ? "" : trim(node.getAttribute("alt"));
-
-            // Otherwise, if name is still empty and current node is a standard non-presentational img or image button with a non-empty alt attribute, set alt attribute value as the accessible name.
+            // Otherwise, if current node is the same as rootNode and is non-presentational and includes a non-empty title attribute, store title attribute value as the accessible name if name is still empty, or the description if not.
+            // Processing for this is handled within the walkDOM function.
             if (
-              !hasName &&
+              !skipTo.tag &&
+              !skipTo.role &&
               !rolePresentation &&
-              (nTag === "img" || btnType === "image") &&
-              nAlt
-            ) {
-              // Check for blank value, since whitespace chars alone are not valid as a name
-              name = trim(nAlt);
-              if (trim(name)) {
-                hasName = true;
-              }
-            }
-
-            if (
-              !hasName &&
-              node === refNode &&
-              btnType &&
-              ["button", "image", "submit", "reset"].indexOf(btnType) !== -1
-            ) {
-              if (btnValue) {
-                name = btnValue;
-              } else {
-                switch (btnType) {
-                  case "submit":
-                  case "image":
-                    name = "Submit Query";
-                    break;
-                  case "reset":
-                    name = "Reset";
-                    break;
-                  default:
-                    name = "";
-                }
-              }
-              if (trim(name)) {
-                hasName = true;
-              }
-            }
-
-            if (
-              hasName &&
-              node === refNode &&
-              btnType &&
-              ["button", "submit", "reset"].indexOf(btnType) !== -1 &&
-              btnValue &&
-              btnValue !== name &&
-              !result.desc
-            ) {
-              result.desc = btnValue;
-            }
-
-            // Otherwise, if current node is the same as rootNode and is non-presentational and includes a non-empty title attribute and is not a separate embedded form field, store title attribute value as the accessible name if name is still empty, or the description if not.
-            if (
-              node === rootNode &&
-              !rolePresentation &&
-              trim(nTitle) &&
-              !isSeparatChildFormField
+              trim(nTitle)
             ) {
               result.title = trim(nTitle);
             }
 
+            var isSkipTo =
+              (skipTo.role && skipTo.role === nRole) ||
+              (!nRole && skipTo.tag && skipTo.tag === nTag);
+
+            // Process custom tag and role searches such as fieldset directing AccName to the first legend.
+            if (isSkipTo) {
+              name = trim(
+                walk(node, stop, false, [], false, {
+                  ref: ownedBy,
+                  top: node
+                }).name
+              );
+              if (trim(name)) {
+                hasName = true;
+                skip = true;
+              }
+            }
+
             // Check for non-empty value of aria-owns, follow each ID ref, then process with same naming computation.
             // Also abort aria-owns processing if contained on an element that does not support child elements.
-            if (aOwns && !isNativeFormField && nTag !== "img") {
+            if (!isSkipTo && aOwns && !isNativeFormField && nTag !== "img") {
               ids = aOwns.split(/\s+/);
               parts = [];
               for (i = 0; i < ids.length; i++) {
-                element = document.getElementById(ids[i]);
+                element = docO.getElementById(ids[i]);
                 // Abort processing if the referenced node has already been traversed
                 if (element && owns.indexOf(ids[i]) === -1) {
                   owns.push(ids[i]);
@@ -21343,7 +21779,7 @@ window.getAccName = calcNames = function(
                     node: node,
                     target: element
                   };
-                  if (!isParentHidden(element, document.body, true)) {
+                  if (!isParentHidden(element, docO.body, true)) {
                     parts.push(walk(element, true, skip, [], false, oBy).name);
                   }
                 }
@@ -21354,7 +21790,7 @@ window.getAccName = calcNames = function(
           }
 
           // Otherwise, process text node
-          else if (node.nodeType === 3) {
+          else if (!skipTo.tag && !skipTo.role && node.nodeType === 3) {
             name = node.data;
           }
 
@@ -21397,6 +21833,7 @@ window.getAccName = calcNames = function(
           inList(list1) ||
           inList(list2) ||
           inList(list3) ||
+          inList(list4) ||
           presentationRoles.indexOf(role) !== -1
         ) {
           return role;
@@ -21470,6 +21907,7 @@ window.getAccName = calcNames = function(
     };
     // Never include name from content when current node matches list2
     // The rowgroup role was added to prevent 'name from content' in accordance with relevant ARIA 1.1 spec changes.
+    // The fieldset element and group role was added to account for implicit mappings where name from content is not supported.
     var list2 = {
       roles: [
         "application",
@@ -21508,7 +21946,8 @@ window.getAccName = calcNames = function(
         "tree",
         "treegrid",
         "separator",
-        "rowgroup"
+        "rowgroup",
+        "group"
       ],
       tags: [
         "article",
@@ -21533,7 +21972,8 @@ window.getAccName = calcNames = function(
         "section",
         "thead",
         "tbody",
-        "tfoot"
+        "tfoot",
+        "fieldset"
       ]
     };
     // As an override of list2, conditionally include name from content if current node is focusable, or if the current node matches list3 while the referenced parent node (root node) matches list1.
@@ -21543,13 +21983,18 @@ window.getAccName = calcNames = function(
         "definition",
         "directory",
         "list",
-        "group",
         "note",
         "status",
         "table",
         "contentinfo"
       ],
       tags: ["dl", "ul", "ol", "dd", "details", "output", "table"]
+    };
+    // Subsequent roles added as part of the Role Parity project for ARIA 1.2.
+    // Tracks roles that don't specifically belong within the prior process lists.
+    var list4 = {
+      roles: ["legend"],
+      tags: ["legend"]
     };
 
     var nativeFormFields = ["button", "input", "select", "textarea"];
@@ -21576,10 +22021,12 @@ window.getAccName = calcNames = function(
 
     var hasGlobalAttr = function(node) {
       var globalPropsAndStates = [
+        "labelledby",
+        "label",
+        "describedby",
         "busy",
         "controls",
         "current",
-        "describedby",
         "details",
         "disabled",
         "dropeffect",
@@ -21602,25 +22049,27 @@ window.getAccName = calcNames = function(
       return false;
     };
 
-    var isHidden = function(node, refNode) {
-      var hidden = function(node) {
-        if (!node || node.nodeType !== 1 || node === refNode) {
+    var isHidden =
+      overrides.isHidden ||
+      function(node, refNode) {
+        var hidden = function(node) {
+          if (!node || node.nodeType !== 1 || node === refNode) {
+            return false;
+          }
+          if (node.getAttribute("aria-hidden") === "true") {
+            return true;
+          }
+          if (node.getAttribute("hidden")) {
+            return true;
+          }
+          var style = getStyleObject(node);
+          if (style["display"] === "none" || style["visibility"] === "hidden") {
+            return true;
+          }
           return false;
-        }
-        if (node.getAttribute("aria-hidden") === "true") {
-          return true;
-        }
-        if (node.getAttribute("hidden")) {
-          return true;
-        }
-        var style = getStyleObject(node);
-        if (style["display"] === "none" || style["visibility"] === "hidden") {
-          return true;
-        }
-        return false;
+        };
+        return hidden(node);
       };
-      return hidden(node);
-    };
 
     var isParentHidden = function(node, refNode, skipOwned, skipCurrent) {
       while (node && node !== refNode) {
@@ -21632,15 +22081,17 @@ window.getAccName = calcNames = function(
       return false;
     };
 
-    var getStyleObject = function(node) {
-      var style = {};
-      if (document.defaultView && document.defaultView.getComputedStyle) {
-        style = document.defaultView.getComputedStyle(node, "");
-      } else if (node.currentStyle) {
-        style = node.currentStyle;
-      }
-      return style;
-    };
+    var getStyleObject =
+      overrides.getStyleObject ||
+      function(node) {
+        var style = {};
+        if (docO.defaultView && docO.defaultView.getComputedStyle) {
+          style = docO.defaultView.getComputedStyle(node, "");
+        } else if (node.currentStyle) {
+          style = node.currentStyle;
+        }
+        return style;
+      };
 
     var cleanCSSText = function(node, text) {
       var s = text;
@@ -21829,19 +22280,21 @@ window.getAccName = calcNames = function(
       return parts.join(" ");
     };
 
-    var getPseudoElStyleObj = function(node, position) {
-      var styleObj = {};
-      for (var prop in blockStyles) {
-        styleObj[prop] = document.defaultView
+    var getPseudoElStyleObj =
+      overrides.getPseudoElStyleObj ||
+      function(node, position) {
+        var styleObj = {};
+        for (var prop in blockStyles) {
+          styleObj[prop] = docO.defaultView
+            .getComputedStyle(node, position)
+            .getPropertyValue(prop);
+        }
+        styleObj["content"] = docO.defaultView
           .getComputedStyle(node, position)
-          .getPropertyValue(prop);
-      }
-      styleObj["content"] = document.defaultView
-        .getComputedStyle(node, position)
-        .getPropertyValue("content")
-        .replace(/^"|\\|"$/g, "");
-      return styleObj;
-    };
+          .getPropertyValue("content")
+          .replace(/^"|\\|"$/g, "");
+        return styleObj;
+      };
 
     var getText = function(node, position) {
       if (!position && node.nodeType === 1) {
@@ -21862,30 +22315,40 @@ window.getAccName = calcNames = function(
       return text;
     };
 
-    var getCSSText = function(node, refNode) {
-      if (
-        (node && node.nodeType !== 1) ||
-        node === refNode ||
-        ["input", "select", "textarea", "img", "iframe"].indexOf(
-          node.nodeName.toLowerCase()
-        ) !== -1
-      ) {
-        return { before: "", after: "" };
-      }
-      if (document.defaultView && document.defaultView.getComputedStyle) {
-        return {
-          before: cleanCSSText(node, getText(node, ":before")),
-          after: cleanCSSText(node, getText(node, ":after"))
-        };
-      } else {
-        return { before: "", after: "" };
-      }
-    };
+    var getCSSText =
+      overrides.getCSSText ||
+      function(node, refNode) {
+        if (
+          (node && node.nodeType !== 1) ||
+          node === refNode ||
+          ["input", "select", "textarea", "img", "iframe"].indexOf(
+            node.nodeName.toLowerCase()
+          ) !== -1
+        ) {
+          return { before: "", after: "" };
+        }
+        if (docO.defaultView && docO.defaultView.getComputedStyle) {
+          return {
+            before: cleanCSSText(node, getText(node, ":before")),
+            after: cleanCSSText(node, getText(node, ":after"))
+          };
+        } else {
+          return { before: "", after: "" };
+        }
+      };
 
-    var getParent = function(node, nTag) {
+    var getParent = function(node, nTag, nRole, noRole) {
+      var noRole = noRole ? true : false;
       while (node) {
         node = node.parentNode;
-        if (node && node.nodeName && node.nodeName.toLowerCase() === nTag) {
+        if (
+          node &&
+          ((nRole && getRole(node) === nRole) ||
+            (nTag &&
+              node.nodeName &&
+              node.nodeName.toLowerCase() === nTag &&
+              (!noRole || getRole(node).length < 1)))
+        ) {
           return node;
         }
       }
@@ -21931,7 +22394,7 @@ window.getAccName = calcNames = function(
       return str.replace(/^\s+|\s+$/g, "");
     };
 
-    if (isParentHidden(node, document.body, true)) {
+    if (isParentHidden(node, docO.body, true)) {
       return props;
     }
 
@@ -21965,8 +22428,8 @@ window.getAccName = calcNames = function(
 
 // Customize returned string for testable statements
 
-window.getAccNameMsg = getNames = function(node) {
-  var props = calcNames(node);
+window.getAccNameMsg = window.getNames = function(node, overrides) {
+  var props = window.getAccName(node, null, false, overrides);
   if (props.error) {
     return (
       props.error +
@@ -21991,12 +22454,12 @@ window.getAccNameMsg = getNames = function(node) {
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
-    getNames: getNames,
-    calcNames: calcNames
+    getNames: window.getNames,
+    calcNames: window.calcNames
   };
 }
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (global){
 global.goog = {
 	provide: function() {},
@@ -22021,7 +22484,7 @@ require('accessibility-developer-tools/src/js/Properties');
 module.exports = global.axs;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"accessibility-developer-tools/src/js/AccessibilityUtils":1,"accessibility-developer-tools/src/js/BrowserUtils":2,"accessibility-developer-tools/src/js/Color":3,"accessibility-developer-tools/src/js/Constants":4,"accessibility-developer-tools/src/js/DOMUtils":5,"accessibility-developer-tools/src/js/Properties":6}],15:[function(require,module,exports){
+},{"accessibility-developer-tools/src/js/AccessibilityUtils":1,"accessibility-developer-tools/src/js/BrowserUtils":2,"accessibility-developer-tools/src/js/Color":3,"accessibility-developer-tools/src/js/Constants":4,"accessibility-developer-tools/src/js/DOMUtils":5,"accessibility-developer-tools/src/js/Properties":6}],16:[function(require,module,exports){
 var ariaApi = require('aria-api');
 var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
@@ -22040,14 +22503,14 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = {
-	'aria-api (0.2.7)': function(el) {
+	'aria-api (0.3.0)': function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
 			role: ex(ariaApi.getRole, [el]),
 		};
 	},
-	'accdc (2.22)': accdc.calcNames,
+	'accdc (2.26)': accdc.calcNames,
 	'axe (3.2.2)': function(el) {
 		return {
 			name: ex(function(el) {
@@ -22122,4 +22585,4 @@ try {
 	});
 }
 
-},{"./axs":14,"aria-api":7,"axe-core":12,"w3c-alternative-text-computation":13}]},{},[15]);
+},{"./axs":15,"aria-api":7,"axe-core":13,"w3c-alternative-text-computation":14}]},{},[16]);

@@ -16,14 +16,14 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = {
-	'aria-api (0.2.7)': function(el) {
+	'aria-api (0.3.0)': function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
 			role: ex(ariaApi.getRole, [el]),
 		};
 	},
-	'accdc (2.22)': accdc.calcNames,
+	'accdc (2.26)': accdc.calcNames,
 	'axe (3.2.2)': function(el) {
 		return {
 			name: ex(function(el) {
