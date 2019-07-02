@@ -21043,7 +21043,7 @@ module.exports = {
   });
 })(typeof window === 'object' ? window : this);
 },{}],14:[function(require,module,exports){
-window.getAccNameVersion = "2.26";
+window.getAccNameVersion = "2.27";
 
 /*!
 CalcNames: The AccName Computation Prototype, compute the Name and Description property values for a DOM node
@@ -21590,10 +21590,10 @@ Plus roles extended for the Role Parity project.
                   switch (btnType) {
                     case "submit":
                     case "image":
-                      name = "Submit Query";
+                      name = "submit";
                       break;
                     case "reset":
-                      name = "Reset";
+                      name = "reset";
                       break;
                     default:
                       name = "";
@@ -22510,7 +22510,7 @@ var implementations = {
 			role: ex(ariaApi.getRole, [el]),
 		};
 	},
-	'accdc (2.26)': accdc.calcNames,
+	'accdc (2.27)': accdc.calcNames,
 	'axe (3.2.2)': function(el) {
 		return {
 			name: ex(function(el) {
