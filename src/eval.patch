@@ -1,9 +1,0 @@
-@@ -7015,7 +7015,7 @@
-           };
-         };
-         _globals = function() {
--          return this || (0, eval)('this');
-+          return this || {};
-         }();
-         if (typeof module !== 'undefined' && module.exports) {
-           module.exports = doT;

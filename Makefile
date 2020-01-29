@@ -1,8 +1,7 @@
 all: babel.js fuzz.js
 
-babel.js: src/babel.js src/axs.js src/eval.patch
+babel.js: src/babel.js src/axs.js
 	browserify $< -o $@
-	patch $@ src/eval.patch
 
 fuzz.js: fuzz/index.js fuzz/*.js node_modules/aria-api/instrumented.js node_modules/aria-api/lib/name-inst.js
 	browserify $< -o $@

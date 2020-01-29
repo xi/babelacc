@@ -24,7 +24,7 @@ var implementations = {
 		};
 	},
 	'accdc (2.27)': accdc.calcNames,
-	'axe (3.2.2)': function(el) {
+	'axe (3.4.3)': function(el) {
 		return {
 			name: ex(function(el) {
 				axe._tree = axe.utils.getFlattenedTree(document.body);
