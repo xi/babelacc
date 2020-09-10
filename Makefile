@@ -11,3 +11,7 @@ node_modules/aria-api/instrumented.js: node_modules/aria-api/index.js
 
 node_modules/aria-api/lib/name-inst.js: node_modules/aria-api/lib/name.js
 	npx nyc instrument $< > $@
+
+.PHONY: clean
+clean:
+	rm -f babel.js fuzz.js node_modules/aria-api/instrumented.js node_modules/aria-api/lib/name-inst.js
