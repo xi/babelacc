@@ -10,7 +10,7 @@ node_modules/aria-api/instrumented.js: node_modules/aria-api/index.js
 	cat $< | sed 's/name\.js/name-inst\.js/' > $@
 
 node_modules/aria-api/lib/name-inst.js: node_modules/aria-api/lib/name.js
-	npx nyc instrument $< > $@
+	npx nyc instrument $< | sed 's/path="[^"]*\/node_modules/path="node_modules/' > $@
 
 .PHONY: clean
 clean:
