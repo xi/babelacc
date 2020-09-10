@@ -24,14 +24,12 @@ var implementations = {
 		};
 	},
 	'accdc (2.49)': accdc.calcNames,
-	'axe (3.4.3)': function(el) {
+	'axe (4.0.2)': function(el) {
+		axe._tree = axe.utils.getFlattenedTree(document.body);
 		return {
-			name: ex(function(el) {
-				axe._tree = axe.utils.getFlattenedTree(document.body);
-				return axe.commons.text.accessibleText(el);
-			}, [el]),
+			name: ex(axe.commons.text.accessibleText, [el]),
 			desc: '-',
-			role: el.getAttribute('role') || ex(axe.commons.aria.implicitRole, [el]),
+			role: ex(axe.commons.aria.getRole, [el]),
 		};
 	},
 	'axs (2.12.0)': function(el) {
