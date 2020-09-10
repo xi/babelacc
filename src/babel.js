@@ -16,7 +16,7 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = {
-	'aria-api (0.3.0)': function(el) {
+	'aria-api (0.4.0)': function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
