@@ -27,7 +27,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'accdc (2.49)',
+	name: 'accdc (2.50)',
 	url: 'https://github.com/accdc/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {
