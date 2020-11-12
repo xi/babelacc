@@ -2,6 +2,8 @@ var ariaApi = require('aria-api');
 var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
 var axs = require('./axs');
+var domTestingLibrary = require('@testing-library/dom');
+var domAccessibilityApi = require('dom-accessibility-api');
 
 var form = document.querySelector('#ba-form');
 var preview = document.querySelector('#ba-preview');
@@ -29,6 +31,16 @@ var implementations = [{
 	name: 'accdc (2.49)',
 	url: 'https://github.com/accdc/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
+}, {
+	name: 'dom-testing-library (7.26.6)',
+	url: 'https://github.com/testing-library/dom-testing-library',
+	fn: function(el) {
+		return {
+			name: domAccessibilityApi.computeAccessibleName(el),
+			desc: domAccessibilityApi.computeAccessibleDescription(el),
+			role: Object.keys(domTestingLibrary.getRoles(el)).join(' '),
+		};
+	},
 }, {
 	name: 'axe (4.0.2)',
 	url: 'https://github.com/dequelabs/axe-core',
