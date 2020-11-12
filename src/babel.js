@@ -32,7 +32,7 @@ var implementations = [{
 	fn: accdc.calcNames,
 }, {
 	name: 'dom-accessibility-api (0.5.4)',
-	url: 'https://github.com/testing-library/dom-testing-library',
+	url: 'https://github.com/eps1lon/dom-accessibility-api/',
 	fn: function(el) {
 		return {
 			name: domAccessibilityApi.computeAccessibleName(el),
