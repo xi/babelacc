@@ -15,16 +15,21 @@ var ex = function(fn, args, _this) {
 	}
 };
 
-var implementations = {
-	'aria-api (0.4.0)': function(el) {
+var implementations = [{
+	name: 'aria-api (0.4.0)',
+	fn: function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
 			desc: ex(ariaApi.getDescription, [el]),
 			role: ex(ariaApi.getRole, [el]),
 		};
 	},
-	'accdc (2.49)': accdc.calcNames,
-	'axe (4.0.2)': function(el) {
+}, {
+	name: 'accdc (2.49)',
+	fn: accdc.calcNames,
+}, {
+	name: 'axe (4.0.2)',
+	fn: function(el) {
 		axe._tree = axe.utils.getFlattenedTree(document.body);
 		return {
 			name: ex(axe.commons.text.accessibleText, [el]),
@@ -32,7 +37,9 @@ var implementations = {
 			role: ex(axe.commons.aria.getRole, [el]),
 		};
 	},
-	'axs (2.12.0)': function(el) {
+}, {
+	name: 'axs (2.12.0)',
+	fn: function(el) {
 		return {
 			name: ex(axs.properties.findTextAlternatives, [el, {}]),
 			desc: '-',
@@ -41,10 +48,10 @@ var implementations = {
 				if (roles) {
 					return roles.roles.map(x => x.name).join(' ');
 				}
-			})
+			}),
 		};
 	},
-};
+}];
 
 var createTd = function(text) {
 	var td = document.createElement('td');
@@ -56,13 +63,13 @@ var run = function(html) {
 	preview.innerHTML = html;
 	results.innerHTML = '';
 
-	return Promise.all(Object.keys(implementations).map(function(key) {
-		var p = implementations[key](preview.querySelector('#test') || preview.children[0] || preview);
+	return Promise.all(implementations.map(function(impl) {
+		var p = impl.fn(preview.querySelector('#test') || preview.children[0] || preview);
 
 		return Promise.resolve(p).then(function(result) {
 			var tr = document.createElement('tr');
 
-			tr.appendChild(createTd(key));
+			tr.appendChild(createTd(impl.name));
 			tr.appendChild(createTd(result.name));
 			tr.appendChild(createTd(result.desc));
 			tr.appendChild(createTd(result.role));
