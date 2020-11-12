@@ -17,6 +17,7 @@ var ex = function(fn, args, _this) {
 
 var implementations = [{
 	name: 'aria-api (0.4.0)',
+	url: 'https://github.com/xi/aria-api',
 	fn: function(el) {
 		return {
 			name: ex(ariaApi.getName, [el]),
@@ -26,9 +27,11 @@ var implementations = [{
 	},
 }, {
 	name: 'accdc (2.49)',
+	url: 'https://github.com/accdc/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {
 	name: 'axe (4.0.2)',
+	url: 'https://github.com/dequelabs/axe-core',
 	fn: function(el) {
 		axe._tree = axe.utils.getFlattenedTree(document.body);
 		return {
@@ -39,6 +42,7 @@ var implementations = [{
 	},
 }, {
 	name: 'axs (2.12.0)',
+	url: 'https://github.com/GoogleChrome/accessibility-developer-tools',
 	fn: function(el) {
 		return {
 			name: ex(axs.properties.findTextAlternatives, [el, {}]),
@@ -53,9 +57,16 @@ var implementations = [{
 	},
 }];
 
-var createTd = function(text) {
+var createTd = function(text, url) {
 	var td = document.createElement('td');
-	td.textContent = text;
+	if (url) {
+		var a = document.createElement('a');
+		a.href = url;
+		a.textContent = text;
+		td.append(a);
+	} else {
+		td.textContent = text;
+	}
 	return td;
 };
 
@@ -69,7 +80,7 @@ var run = function(html) {
 		return Promise.resolve(p).then(function(result) {
 			var tr = document.createElement('tr');
 
-			tr.appendChild(createTd(impl.name));
+			tr.appendChild(createTd(impl.name, impl.url));
 			tr.appendChild(createTd(result.name));
 			tr.appendChild(createTd(result.desc));
 			tr.appendChild(createTd(result.role));
