@@ -429,6 +429,10 @@ var getAttribute = function(el, key) {
 	} else if (key === 'invalid' && el.checkValidity) {
 		return !el.checkValidity();
 	} else if (key === 'hidden') {
+		// workaround for chromium
+		if (el.matches('noscript')) {
+			return true;
+		}
 		var style = window.getComputedStyle(el);
 		if (style.display === 'none' || style.visibility === 'hidden') {
 			return true;
@@ -1154,7 +1158,6 @@ http://www.w3.org/TR/accname-aam-1.1/
 Authored by Bryan Garaventa, plus refactoring contrabutions by Tobias Bengfort
 https://github.com/whatsock/w3c-alternative-text-computation
 Distributed under the terms of the Open Source Initiative OSI - MIT License
-11:33 AM Thursday, May 7, 2020
 */
 
 (function() {
@@ -1163,7 +1166,7 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
     window[nameSpace] = {};
     nameSpace = window[nameSpace];
   }
-  nameSpace.getAccNameVersion = "2.49";
+  nameSpace.getAccNameVersion = "2.55";
   // AccName Computation Prototype
   nameSpace.getAccName = nameSpace.calcNames = function(
     node,
@@ -1181,7 +1184,7 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
         return props;
       }
       var rootNode = node;
-
+      var rootRole = trim(node.getAttribute("role") || "");
       // Track nodes to prevent duplicate node reference parsing.
       var nodes = [];
       // Track aria-owns references to prevent duplicate parsing.
@@ -1223,9 +1226,10 @@ Plus roles extended for the Role Parity project.
             return false;
           }
 
+          var role = getRole(node);
+          var tag = node.nodeName.toLowerCase();
+
           var inList = function(node, list) {
-            var role = getRole(node);
-            var tag = node.nodeName.toLowerCase();
             return (
               (role && list.roles.indexOf(role) >= 0) ||
               (!role && list.tags.indexOf(tag) >= 0)
@@ -1249,12 +1253,21 @@ Plus roles extended for the Role Parity project.
             }
           }
           // Otherwise process list2 to identify roles to ignore processing name from content.
-          else
+          else {
             return !!(
               (inList(node, list2) ||
                 (node === rootNode && !inList(node, list1))) &&
+              !(
+                !role &&
+                ["section"].indexOf(tag) !== -1 &&
+                !(
+                  node.getAttribute("aria-labelledby") ||
+                  node.getAttribute("aria-label")
+                )
+              ) &&
               !skipTo.go
             );
+          }
         };
 
         var inParent = function(node, parent) {
@@ -1467,6 +1480,10 @@ Plus roles extended for the Role Parity project.
                   !skipTo.role &&
                   node.getAttribute("aria-describedby")) ||
                 "";
+              var aDescription =
+                !skipTo.tag &&
+                !skipTo.role &&
+                node.getAttribute("aria-description");
               var aLabel =
                 (!skipTo.tag &&
                   !skipTo.role &&
@@ -1507,30 +1524,33 @@ Plus roles extended for the Role Parity project.
                     ownedBy[node.id].target === node))
               );
 
-              // Check for non-empty value of aria-describedby if current node equals reference node, follow each ID ref, then stop and process no deeper.
+              // Check for non-empty value of aria-describedby/description if current node equals reference node, follow each ID ref, then stop and process no deeper.
               if (
                 !stop &&
                 node === refNode &&
                 !skipTo.tag &&
                 !skipTo.role &&
-                aDescribedby
+                (aDescribedby || aDescription)
               ) {
-                var desc;
-                ids = aDescribedby.split(/\s+/);
-                parts = [];
-                for (i = 0; i < ids.length; i++) {
-                  element = docO.getElementById(ids[i]);
-                  // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
-                  parts.push(
-                    walk(element, true, false, [node], false, {
-                      ref: ownedBy,
-                      top: element
-                    }).name
-                  );
+                if (aDescribedby) {
+                  var desc;
+                  ids = aDescribedby.split(/\s+/);
+                  parts = [];
+                  for (i = 0; i < ids.length; i++) {
+                    element = docO.getElementById(ids[i]);
+                    // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
+                    parts.push(
+                      walk(element, true, false, [node], false, {
+                        ref: ownedBy,
+                        top: element
+                      }).name
+                    );
+                  }
+                  // Check for blank value, since whitespace chars alone are not valid as a name
+                  desc = trim(parts.join(" "));
+                } else {
+                  desc = trim(aDescription);
                 }
-                // Check for blank value, since whitespace chars alone are not valid as a name
-                desc = trim(parts.join(" "));
-
                 if (trim(desc)) {
                   result.desc = desc;
                   hasDesc = true;
@@ -1589,6 +1609,7 @@ Plus roles extended for the Role Parity project.
                 !skipTo.tag &&
                 !skipTo.role &&
                 !hasName &&
+                nTag !== "iframe" &&
                 nRole &&
                 presentationRoles.indexOf(nRole) !== -1 &&
                 !isFocusable(node) &&
@@ -1640,7 +1661,7 @@ Plus roles extended for the Role Parity project.
                   (!skipTo.tag &&
                     !skipTo.role &&
                     isNativeButton &&
-                    node.getAttribute("type")) ||
+                    (node.getAttribute("type") || "").toLowerCase()) ||
                   false;
                 var btnValue =
                   (!skipTo.tag &&
@@ -1660,7 +1681,7 @@ Plus roles extended for the Role Parity project.
                   !skipTo.role &&
                   !hasName &&
                   !rolePresentation &&
-                  (nTag === "img" || btnType === "image") &&
+                  (nRole === "img" || nTag === "img" || btnType === "image") &&
                   (nAlt || trim(nTitle))
                 ) {
                   // Check for blank value, since whitespace chars alone are not valid as a name
@@ -1818,10 +1839,9 @@ Plus roles extended for the Role Parity project.
                   !skipTo.tag &&
                   !skipTo.role &&
                   !hasName &&
-                  node === rootNode &&
                   (nRole === "figure" || (!nRole && nTag === "figure"));
 
-                // Otherwise, if name is still empty and the current node matches the root node and is a standard figure element with a non-empty associated figcaption element as the first or last child node, process caption with same naming computation algorithm.
+                // Otherwise, if name is still empty and is a standard figure element with a non-empty associated figcaption element as the first or last child node, process caption with same naming computation algorithm.
                 // Plus do the same for role="figure" with embedded role="caption", or a combination of these.
                 if (isFigure) {
                   fChild =
@@ -1839,7 +1859,6 @@ Plus roles extended for the Role Parity project.
                   if (trim(name)) {
                     hasName = true;
                   }
-                  skip = true;
                 }
 
                 // Otherwise, if name is still empty and the root node and the current node are the same and node is an svg element, then parse the content of the title element to set the name and the desc element to set the description.
@@ -1937,10 +1956,14 @@ Plus roles extended for the Role Parity project.
                 !rolePresentation &&
                 trim(nTitle)
               ) {
-                result.title = trim(nTitle);
+                if (!(name && aDescription === " ")) {
+                  result.title = trim(nTitle);
+                }
               }
 
-              var nType = isNativeFormField && trim(node.getAttribute("type"));
+              var nType =
+                isNativeFormField &&
+                trim(node.getAttribute("type") || "").toLowerCase();
               if (!nType) nType = "text";
               var placeholder =
                 !skipTo.tag &&
@@ -2089,7 +2112,10 @@ Plus roles extended for the Role Parity project.
       };
 
       var getRole = function(node) {
-        var role = node && node.getAttribute ? node.getAttribute("role") : "";
+        var role =
+          node && node.getAttribute
+            ? (node.getAttribute("role") || "").toLowerCase()
+            : "";
         if (!trim(role)) {
           return "";
         }
@@ -2122,11 +2148,11 @@ Plus roles extended for the Role Parity project.
         }
         return (
           ["button", "input", "select", "textarea"].indexOf(nodeName) !== -1 &&
-          node.getAttribute("type") !== "hidden"
+          (node.getAttribute("type") || "").toLowerCase() !== "hidden"
         );
       };
 
-      // ARIA Role Exception Rule Set 1.1
+      // ARIA Role Exception Rule Set 1.2
       // The following Role Exception Rule Set is based on the following ARIA Working Group discussion involving all relevant browser venders.
       // https://lists.w3.org/Archives/Public/public-aria/2017Jun/0057.html
 
@@ -2229,6 +2255,7 @@ Plus roles extended for the Role Parity project.
           "form",
           "header",
           "hr",
+          "iframe",
           "img",
           "textarea",
           "input",
@@ -2661,13 +2688,6 @@ Plus roles extended for the Role Parity project.
         return false;
       };
 
-      var trim = function(str) {
-        if (typeof str !== "string") {
-          return "";
-        }
-        return str.replace(/^\s+|\s+$/g, "");
-      };
-
       if (
         isParentHidden(
           node,
@@ -2690,6 +2710,8 @@ Plus roles extended for the Role Parity project.
         accDesc = "";
       }
 
+      props.hasUpperCase =
+        rootRole && rootRole !== rootRole.toLowerCase() ? true : false;
       props.name = accName;
       props.desc = accDesc;
 
@@ -2707,6 +2729,13 @@ Plus roles extended for the Role Parity project.
     } else {
       return props;
     }
+  };
+
+  var trim = function(str) {
+    if (typeof str !== "string") {
+      return "";
+    }
+    return str.replace(/^\s+|\s+$/g, "");
   };
 
   // Customize returned string for testable statements
