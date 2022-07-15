@@ -293,7 +293,7 @@ var attrs = require('./attrs');
 
 var _getOwner = function(node) {
 	if (node.nodeType === node.ELEMENT_NODE && node.id) {
-		var owner = document.querySelector('[aria-owns~="' + node.id + '"]');
+		var owner = document.querySelector('[aria-owns~="' + CSS.escape(node.id) + '"]');
 		if (owner) {
 			return owner;
 		}
@@ -316,7 +316,7 @@ var detectLoop = function(node) {
 
 var getOwner = function(node) {
 	if (node.nodeType === node.ELEMENT_NODE && node.id) {
-		var owner = document.querySelector('[aria-owns~="' + node.id + '"]');
+		var owner = document.querySelector('[aria-owns~="' + CSS.escape(node.id) + '"]');
 		if (owner && !detectLoop(node)) {
 			return owner;
 		}
@@ -498,62 +498,56 @@ module.exports = {
 };
 
 },{"./constants.js":7}],7:[function(require,module,exports){
+// https://www.w3.org/TR/wai-aria/#state_prop_def
 exports.attributes = {
-	// widget
-	'autocomplete': 'token',
-	'checked': 'tristate',
-	'current': 'token',
-	'disabled': 'bool',
-	'expanded': 'bool-undefined',
-	'haspopup': 'token',
-	'hidden': 'bool',  // !
-	'invalid': 'token',
-	'keyshortcuts': 'string',
-	'label': 'string',
-	'level': 'int',
-	'modal': 'bool',
-	'multiline': 'bool',
-	'multiselectable': 'bool',
-	'orientation': 'token',
-	'placeholder': 'string',
-	'pressed': 'tristate',
-	'readonly': 'bool',
-	'required': 'bool',
-	'roledescription': 'string',
-	'selected': 'bool-undefined',
-	'valuemax': 'number',
-	'valuemin': 'number',
-	'valuenow': 'number',
-	'valuetext': 'string',
-
-	// live
-	'atomic': 'bool',
-	'busy': 'bool',
-	'live': 'token',
-	'relevant': 'token-list',
-
-	// dragndrop
-	'dropeffect': 'token-list',
-	'grabbed': 'bool-undefined',
-
-	// relationship
 	'activedescendant': 'id',
+	'atomic': 'bool',
+	'autocomplete': 'token',
+	'busy': 'bool',
+	'checked': 'tristate',
 	'colcount': 'int',
 	'colindex': 'int',
 	'colspan': 'int',
 	'controls': 'id-list',
+	'current': 'token',
 	'describedby': 'id-list',
 	'details': 'id',
+	'disabled': 'bool',
+	'dropeffect': 'token-list',
 	'errormessage': 'id',
+	'expanded': 'bool-undefined',
 	'flowto': 'id-list',
+	'grabbed': 'bool-undefined',
+	'haspopup': 'token',
+	'hidden': 'bool-undefined',
+	'invalid': 'token',
+	'keyshortcuts': 'string',
+	'label': 'string',
 	'labelledby': 'id-list',
+	'level': 'int',
+	'live': 'token',
+	'modal': 'bool',
+	'multiline': 'bool',
+	'multiselectable': 'bool',
+	'orientation': 'token',
 	'owns': 'id-list',
+	'placeholder': 'string',
 	'posinset': 'int',
+	'pressed': 'tristate',
+	'readonly': 'bool',
+	'relevant': 'token-list',
+	'required': 'bool',
+	'roledescription': 'string',
 	'rowcount': 'int',
 	'rowindex': 'int',
 	'rowspan': 'int',
+	'selected': 'bool-undefined',
 	'setsize': 'int',
 	'sort': 'token',
+	'valuemax': 'number',
+	'valuemin': 'number',
+	'valuenow': 'number',
+	'valuetext': 'string',
 };
 
 exports.attributeStrongMapping = {
@@ -599,6 +593,7 @@ exports.roles = {
 	cell: {
 		selectors: ['td'],
 		childRoles: ['gridcell', 'rowheader'],
+		nameFromContents: true,
 	},
 	checkbox: {
 		selectors: ['input[type="checkbox"]'],
@@ -824,12 +819,12 @@ exports.roles = {
 		selectors: ['tr'],
 		nameFromContents: true,
 	},
-	rowheader: {
-		selectors: ['th[scope="row"]'],
-		nameFromContents: true,
-	},
 	rowgroup: {
 		selectors: ['tbody', 'thead', 'tfoot'],
+		nameFromContents: true,
+	},
+	rowheader: {
+		selectors: ['th[scope="row"]'],
 		nameFromContents: true,
 	},
 	scrollbar: {
@@ -888,13 +883,11 @@ exports.roles = {
 		childRoles: ['combobox', 'listbox', 'menu', 'radiogroup', 'tree'],
 	},
 	separator: {
+		// assume not focussable because <hr> is not
 		selectors: ['hr'],
 		childRoles: ['doc-pagebreak'],
 		defaults: {
 			'orientation': 'horizontal',
-			'valuemin': 0,
-			'valuemax': 100,
-			'valuenow': 50,
 		},
 	},
 	slider: {
@@ -922,12 +915,6 @@ exports.roles = {
 			'atomic': true,
 		},
 	},
-	switch: {
-		nameFromContents: true,
-		defaults: {
-			'checked': false,
-		},
-	},
 	structure: {
 		childRoles: [
 			'application',
@@ -939,6 +926,12 @@ exports.roles = {
 			'sectionhead',
 			'separator',
 		],
+	},
+	switch: {
+		nameFromContents: true,
+		defaults: {
+			'checked': false,
+		},
 	},
 	tab: {
 		nameFromContents: true,
@@ -994,7 +987,6 @@ exports.roles = {
 			'input',
 			'range',
 			'row',
-			'separator',
 			'tab',
 		],
 	},
@@ -1150,12 +1142,12 @@ module.exports = {
 };
 
 },{"./atree.js":5,"./attrs.js":6}],10:[function(require,module,exports){
-/*!
+/*@license
 CalcNames: The AccName Computation Prototype, compute the Name and Description property values for a DOM node
 Returns an object with 'name' and 'desc' properties.
 Functionality mirrors the steps within the W3C Accessible Name and Description computation algorithm.
-http://www.w3.org/TR/accname-aam-1.1/
-Authored by Bryan Garaventa, plus refactoring contrabutions by Tobias Bengfort
+https://w3c.github.io/accname/
+Author: Bryan Garaventa
 https://github.com/whatsock/w3c-alternative-text-computation
 Distributed under the terms of the Open Source Initiative OSI - MIT License
 */
@@ -1166,7 +1158,7 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
     window[nameSpace] = {};
     nameSpace = window[nameSpace];
   }
-  nameSpace.getAccNameVersion = "2.55";
+  nameSpace.getAccNameVersion = "2.59";
   // AccName Computation Prototype
   nameSpace.getAccName = nameSpace.calcNames = function(
     node,
@@ -1186,7 +1178,11 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
       var rootNode = node;
       var rootRole = trim(node.getAttribute("role") || "");
       // Track nodes to prevent duplicate node reference parsing.
-      var nodes = [];
+      // Separating Name and Description to prevent duplicate node references from suppressing one or the other from being fully computed.
+      var nodes = {
+        name: [],
+        desc: []
+      };
       // Track aria-owns references to prevent duplicate parsing.
       var owns = [];
 
@@ -1299,7 +1295,12 @@ Plus roles extended for the Role Parity project.
           after: ""
         };
 
-        if (!skipTo.tag && !skipTo.role && nodes.indexOf(refNode) === -1) {
+        if (
+          !skipTo.tag &&
+          !skipTo.role &&
+          nodes[!ownedBy.computingDesc ? "name" : "desc"].indexOf(refNode) ===
+            -1
+        ) {
           // Store the before and after pseudo element 'content' values for the top level DOM node
           // Note: If the pseudo element includes block level styling, a space will be added, otherwise inline is asumed and no spacing is added.
           cssOP = getCSSText(refNode, null);
@@ -1425,8 +1426,13 @@ Plus roles extended for the Role Parity project.
               return result;
             }
 
-            if (!skipTo.tag && !skipTo.role && nodes.indexOf(node) === -1) {
-              nodes.push(node);
+            if (
+              !skipTo.tag &&
+              !skipTo.role &&
+              nodes[!ownedBy.computingDesc ? "name" : "desc"].indexOf(node) ===
+                -1
+            ) {
+              nodes[!ownedBy.computingDesc ? "name" : "desc"].push(node);
             } else {
               // Abort if this node has already been processed.
               return result;
@@ -1443,8 +1449,14 @@ Plus roles extended for the Role Parity project.
             };
 
             var parent = refNode === node ? node : node.parentNode;
-            if (!skipTo.tag && !skipTo.role && nodes.indexOf(parent) === -1) {
-              nodes.push(parent);
+            if (
+              !skipTo.tag &&
+              !skipTo.role &&
+              nodes[!ownedBy.computingDesc ? "name" : "desc"].indexOf(
+                parent
+              ) === -1
+            ) {
+              nodes[!ownedBy.computingDesc ? "name" : "desc"].push(parent);
               // Store the before and after pseudo element 'content' values for the current node container element
               // Note: If the pseudo element includes block level styling, a space will be added, otherwise inline is asumed and no spacing is added.
               cssO = getCSSText(parent, refNode);
@@ -1493,6 +1505,17 @@ Plus roles extended for the Role Parity project.
                 (!skipTo.tag && !skipTo.role && node.getAttribute("title")) ||
                 "";
 
+              // Added to prevent name on generic elements.
+              // https://www.w3.org/TR/wai-aria-1.2/#generic
+              var isGeneric =
+                node === rootNode &&
+                !nRole &&
+                genericElements.indexOf(nTag) !== -1;
+              if (isGeneric) {
+                // Abort since an implicitly generic rootNode cannot have a name
+                return result;
+              }
+
               var isNativeFormField = nativeFormFields.indexOf(nTag) !== -1;
               var isNativeButton = ["input"].indexOf(nTag) !== -1;
               var isRangeWidgetRole = rangeWidgetRoles.indexOf(nRole) !== -1;
@@ -1524,39 +1547,6 @@ Plus roles extended for the Role Parity project.
                     ownedBy[node.id].target === node))
               );
 
-              // Check for non-empty value of aria-describedby/description if current node equals reference node, follow each ID ref, then stop and process no deeper.
-              if (
-                !stop &&
-                node === refNode &&
-                !skipTo.tag &&
-                !skipTo.role &&
-                (aDescribedby || aDescription)
-              ) {
-                if (aDescribedby) {
-                  var desc;
-                  ids = aDescribedby.split(/\s+/);
-                  parts = [];
-                  for (i = 0; i < ids.length; i++) {
-                    element = docO.getElementById(ids[i]);
-                    // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
-                    parts.push(
-                      walk(element, true, false, [node], false, {
-                        ref: ownedBy,
-                        top: element
-                      }).name
-                    );
-                  }
-                  // Check for blank value, since whitespace chars alone are not valid as a name
-                  desc = trim(parts.join(" "));
-                } else {
-                  desc = trim(aDescription);
-                }
-                if (trim(desc)) {
-                  result.desc = desc;
-                  hasDesc = true;
-                }
-              }
-
               // Check for non-empty value of aria-labelledby on current node, follow each ID ref, then stop and process no deeper.
               if (!stop && !skipTo.tag && !skipTo.role && aLabelledby) {
                 ids = aLabelledby.split(/\s+/);
@@ -1580,6 +1570,40 @@ Plus roles extended for the Role Parity project.
                   hasLabel = true;
                   // Abort further recursion if name is valid.
                   result.skip = true;
+                }
+              }
+
+              // Check for non-empty value of aria-describedby/description if current node equals reference node, follow each ID ref, then stop and process no deeper.
+              if (
+                !stop &&
+                node === refNode &&
+                !skipTo.tag &&
+                !skipTo.role &&
+                (aDescribedby || aDescription)
+              ) {
+                if (aDescribedby) {
+                  var desc;
+                  ids = aDescribedby.split(/\s+/);
+                  parts = [];
+                  for (i = 0; i < ids.length; i++) {
+                    element = docO.getElementById(ids[i]);
+                    // Also prevent the current form field from having its value included in the naming computation if nested as a child of label
+                    parts.push(
+                      walk(element, true, false, [node], false, {
+                        ref: ownedBy,
+                        top: element,
+                        computingDesc: true
+                      }).name
+                    );
+                  }
+                  // Check for blank value, since whitespace chars alone are not valid as a name
+                  desc = trim(parts.join(" "));
+                } else {
+                  desc = trim(aDescription);
+                }
+                if (trim(desc)) {
+                  result.desc = desc;
+                  hasDesc = true;
                 }
               }
 
@@ -1833,32 +1857,6 @@ Plus roles extended for the Role Parity project.
                     hasName = true;
                   }
                   skip = true;
-                }
-
-                var isFigure =
-                  !skipTo.tag &&
-                  !skipTo.role &&
-                  !hasName &&
-                  (nRole === "figure" || (!nRole && nTag === "figure"));
-
-                // Otherwise, if name is still empty and is a standard figure element with a non-empty associated figcaption element as the first or last child node, process caption with same naming computation algorithm.
-                // Plus do the same for role="figure" with embedded role="caption", or a combination of these.
-                if (isFigure) {
-                  fChild =
-                    firstChild(node, ["figcaption"], ["caption"]) ||
-                    lastChild(node, ["figcaption"], ["caption"]) ||
-                    false;
-                  if (fChild) {
-                    name = trim(
-                      walk(fChild, stop, false, [], false, {
-                        ref: ownedBy,
-                        top: fChild
-                      }).name
-                    );
-                  }
-                  if (trim(name)) {
-                    hasName = true;
-                  }
                 }
 
                 // Otherwise, if name is still empty and the root node and the current node are the same and node is an svg element, then parse the content of the title element to set the name and the desc element to set the description.
@@ -2291,6 +2289,7 @@ Plus roles extended for the Role Parity project.
         tags: ["legend", "caption", "figcaption"]
       };
 
+      var genericElements = ["div", "span"];
       var nativeFormFields = ["button", "input", "select", "textarea"];
       var rangeWidgetRoles = ["scrollbar", "slider", "spinbutton"];
       var editWidgetRoles = ["searchbox", "textbox"];
@@ -2705,10 +2704,10 @@ Plus roles extended for the Role Parity project.
       var accName = trim(accProps.name.replace(/\s+/g, " "));
       var accDesc = trim(accProps.title.replace(/\s+/g, " "));
 
-      if (accName === accDesc) {
-        // If both Name and Description properties match, then clear the Description property value.
-        accDesc = "";
-      }
+      // if (accName === accDesc) {
+      // If both Name and Description properties match, then clear the Description property value. (Ideal but not in the spec so commented out.)
+      // accDesc = "";
+      // }
 
       props.hasUpperCase =
         rootRole && rootRole !== rootRole.toLowerCase() ? true : false;
@@ -2716,7 +2715,10 @@ Plus roles extended for the Role Parity project.
       props.desc = accDesc;
 
       // Clear track variables
-      nodes = [];
+      nodes = {
+        name: [],
+        desc: []
+      };
       owns = [];
     } catch (e) {
       props.error = e;
