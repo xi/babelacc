@@ -17,7 +17,7 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = [{
-	name: 'aria-api (0.4.1)',
+	name: 'aria-api (0.4.2)',
 	url: 'https://github.com/xi/aria-api',
 	fn: function(el) {
 		return {
@@ -27,11 +27,11 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'accdc (2.55)',
+	name: 'accdc (2.59)',
 	url: 'https://github.com/accdc/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {
-	name: 'dom-accessibility-api (0.5.6)',
+	name: 'dom-accessibility-api (0.5.14)',
 	url: 'https://github.com/eps1lon/dom-accessibility-api/',
 	fn: function(el) {
 		return {
@@ -41,7 +41,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'axe (4.2.3)',
+	name: 'axe (4.4.3)',
 	url: 'https://github.com/dequelabs/axe-core',
 	fn: function(el) {
 		axe._tree = axe.utils.getFlattenedTree(document.body);
