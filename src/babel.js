@@ -17,7 +17,7 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = [{
-	name: 'aria-api (0.4.2)',
+	name: 'aria-api (0.4.3)',
 	url: 'https://github.com/xi/aria-api',
 	fn: function(el) {
 		return {
@@ -27,7 +27,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'accdc (2.59)',
+	name: 'accdc (2.61)',
 	url: 'https://github.com/accdc/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {

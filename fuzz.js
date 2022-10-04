@@ -305,12 +305,12 @@ var _getParentNode = function(node) {
 };
 
 var detectLoop = function(node) {
-	var tmp = _getParentNode(node);
-	while (tmp) {
-		if (tmp === node) {
+	var seen = [node]
+	while ((node = _getParentNode(node))) {
+		if (seen.includes(node)) {
 			return true;
 		}
-		tmp = _getParentNode(tmp);
+		seen.push(node)
 	}
 };
 
@@ -431,6 +431,9 @@ var getAttribute = function(el, key) {
 	} else if (key === 'hidden') {
 		// workaround for chromium
 		if (el.matches('noscript')) {
+			return true;
+		}
+		if (el.matches('details:not([open]) :not(summary)')) {
 			return true;
 		}
 		var style = window.getComputedStyle(el);
@@ -1158,7 +1161,7 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
     window[nameSpace] = {};
     nameSpace = window[nameSpace];
   }
-  nameSpace.getAccNameVersion = "2.59";
+  nameSpace.getAccNameVersion = "2.61";
   // AccName Computation Prototype
   nameSpace.getAccName = nameSpace.calcNames = function(
     node,
@@ -1513,6 +1516,16 @@ Plus roles extended for the Role Parity project.
                 genericElements.indexOf(nTag) !== -1;
               if (isGeneric) {
                 // Abort since an implicitly generic rootNode cannot have a name
+                return result;
+              }
+
+              // Added to prevent name on roles that do not support a name.
+              // https://www.w3.org/TR/wai-aria-1.2/#namefromprohibited
+              var isProhibited =
+                node === rootNode &&
+                (nameProhibitedRoles.indexOf(nRole) !== -1 ||
+                  (!nRole && nameProhibitedElements.indexOf(nTag) !== -1));
+              if (isProhibited) {
                 return result;
               }
 
@@ -2285,11 +2298,66 @@ Plus roles extended for the Role Parity project.
       // Subsequent roles added as part of the Role Parity project for ARIA 1.2.
       // Tracks roles that don't specifically belong within the prior process lists.
       var list4 = {
-        roles: ["legend", "caption"],
-        tags: ["legend", "caption", "figcaption"]
+        roles: [
+          "legend",
+          "caption",
+          "code",
+          "deletion",
+          "emphasis",
+          "generic",
+          "insertion",
+          "paragraph",
+          "strong",
+          "subscript",
+          "superscript"
+        ],
+        tags: [
+          "legend",
+          "caption",
+          "figcaption",
+          "code",
+          "del",
+          "em",
+          "div",
+          "span",
+          "ins",
+          "p",
+          "strong",
+          "sub",
+          "sup"
+        ]
       };
 
       var genericElements = ["div", "span"];
+      var nameProhibitedRoles = [
+        "caption",
+        "code",
+        "deletion",
+        "emphasis",
+        "generic",
+        "insertion",
+        "none",
+        "paragraph",
+        "presentation",
+        "strong",
+        "subscript",
+        "superscript"
+      ];
+      var nameProhibitedElements = [
+        "caption",
+        "figcaption",
+        "code",
+        "del",
+        "em",
+        "div",
+        "span",
+        "ins",
+        "p",
+        "strong",
+        "sub",
+        "sup"
+      ];
+
       var nativeFormFields = ["button", "input", "select", "textarea"];
       var rangeWidgetRoles = ["scrollbar", "slider", "spinbutton"];
       var editWidgetRoles = ["searchbox", "textbox"];
@@ -2401,10 +2469,7 @@ Plus roles extended for the Role Parity project.
             s = s.replace(m[i], b);
           }
         }
-        s = s
-          .replace(/url\((.*?)\)\s+\/|url\((.*?)\)/g, "")
-          .replace(/^\s+|\s+$/g, "")
-          .replace(/\"/g, "");
+        s = s.replace(/url\((.*?)\)\s+\/|url\((.*?)\)/g, "").replace(/\"/g, "");
         return s;
       };
 
