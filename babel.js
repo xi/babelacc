@@ -5117,7 +5117,7 @@ var getAttribute = function(el, key) {
 		if (el.matches('noscript')) {
 			return true;
 		}
-		if (el.matches('details:not([open]) :not(summary)')) {
+		if (el.matches('details:not([open]) > :not(summary)')) {
 			return true;
 		}
 		var style = window.getComputedStyle(el);
@@ -5482,6 +5482,9 @@ exports.roles = {
 			'selected': 'false',
 		},
 	},
+	presentation: {
+		selectors: ['img[alt=""]'],
+	},
 	progressbar: {
 		selectors: ['progress'],
 	},
@@ -5734,17 +5737,6 @@ exports.nameDefaults = {
 	'summary': 'Details',
 };
 
-exports.labelable = [
-	'button',
-	'input:not([type="hidden"])',
-	'keygen',
-	'meter',
-	'output',
-	'progress',
-	'select',
-	'textarea',
-];
-
 },{}],13:[function(require,module,exports){
 var constants = require('./constants.js');
 var atree = require('./atree.js');
@@ -5797,14 +5789,9 @@ var allowNameFromContent = function(el) {
 	return (constants.roles[role] || {}).nameFromContents;
 };
 
-var isLabelable = function(el) {
-	var selector = constants.labelable.join(',');
-	return el.matches(selector);
-};
-
 var isInLabelForOtherWidget = function(el) {
 	var label = el.parentElement.closest('label');
-	return label && !Array.prototype.includes.call(el.labels, label);
+	return label && (!el.labels || !Array.prototype.includes.call(el.labels, label));
 };
 
 var getName = function(el, recursive, visited, directReference) {
@@ -5839,7 +5826,7 @@ var getName = function(el, recursive, visited, directReference) {
 	}
 
 	// D
-	if (!ret.trim() && !recursive && isLabelable(el)) {
+	if (!ret.trim() && !recursive && el.labels) {
 		var strings = Array.prototype.map.call(el.labels, function(label) {
 			return getName(label, true, visited);
 		});
@@ -5902,8 +5889,14 @@ var getName = function(el, recursive, visited, directReference) {
 
 	// I
 	// FIXME: presentation not mentioned in the spec
-	if (!ret.trim() && !query.matches(el, 'presentation')) {
+	if (!ret.trim() && (directReference || !query.matches(el, 'presentation'))) {
 		ret = el.title || '';
+	}
+
+	// FIXME: not exactly sure about this, but it reduces the number of failing
+	// WPT tests. Whitespace is hard.
+	if (!ret.trim()) {
+		ret = ' ';
 	}
 
 	var before = getPseudoContent(el, ':before');
@@ -6011,8 +6004,8 @@ module.exports = {
 
 },{"./atree.js":10,"./attrs.js":11}],15:[function(require,module,exports){
 (function (process,setImmediate){(function (){
-/*! axe v4.4.3
- * Copyright (c) 2022 Deque Systems, Inc.
+/*! axe v4.6.2
+ * Copyright (c) 2023 Deque Systems, Inc.
  *
  * Your use of this Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6035,7 +6028,7 @@ module.exports = {
     }, _typeof(obj);
   }
   var axe = axe || {};
-  axe.version = '4.4.3';
+  axe.version = '4.6.2';
   if (typeof define === 'function' && define.amd) {
     define('axe-core', [], function() {
       return axe;
@@ -6062,7 +6055,10 @@ module.exports = {
   SupportError.prototype = Object.create(Error.prototype);
   SupportError.prototype.constructor = SupportError;
   'use strict';
-  var _excluded = [ 'node' ], _excluded2 = [ 'node' ], _excluded3 = [ 'variant' ], _excluded4 = [ 'matches' ], _excluded5 = [ 'chromium' ], _excluded6 = [ 'noImplicit' ], _excluded7 = [ 'noPresentational' ], _excluded8 = [ 'nodes' ], _excluded9 = [ 'node' ], _excluded10 = [ 'relatedNodes' ], _excluded11 = [ 'environmentData' ], _excluded12 = [ 'environmentData' ], _excluded13 = [ 'node' ], _excluded14 = [ 'environmentData' ], _excluded15 = [ 'environmentData' ], _excluded16 = [ 'environmentData' ];
+  var _excluded = [ 'node' ], _excluded2 = [ 'variant' ], _excluded3 = [ 'matches' ], _excluded4 = [ 'chromium' ], _excluded5 = [ 'noImplicit' ], _excluded6 = [ 'noPresentational' ], _excluded7 = [ 'node' ], _excluded8 = [ 'nodes' ], _excluded9 = [ 'node' ], _excluded10 = [ 'relatedNodes' ], _excluded11 = [ 'environmentData' ], _excluded12 = [ 'environmentData' ], _excluded13 = [ 'node' ], _excluded14 = [ 'environmentData' ], _excluded15 = [ 'environmentData' ], _excluded16 = [ 'environmentData' ];
+  function _toArray(arr) {
+    return _arrayWithHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableRest();
+  }
   function _defineProperty(obj, key, value) {
     if (key in obj) {
       Object.defineProperty(obj, key, {
@@ -6095,7 +6091,7 @@ module.exports = {
     }
   }
   function _setPrototypeOf(o, p) {
-    _setPrototypeOf = Object.setPrototypeOf || function _setPrototypeOf(o, p) {
+    _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
       o.__proto__ = p;
       return o;
     };
@@ -6146,7 +6142,7 @@ module.exports = {
     }
   }
   function _getPrototypeOf(o) {
-    _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) {
+    _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
       return o.__proto__ || Object.getPrototypeOf(o);
     };
     return _getPrototypeOf(o);
@@ -6204,6 +6200,20 @@ module.exports = {
       return _arrayLikeToArray(arr);
     }
   }
+  function _extends() {
+    _extends = Object.assign ? Object.assign.bind() : function(target) {
+      for (var i = 1; i < arguments.length; i++) {
+        var source = arguments[i];
+        for (var key in source) {
+          if (Object.prototype.hasOwnProperty.call(source, key)) {
+            target[key] = source[key];
+          }
+        }
+      }
+      return target;
+    };
+    return _extends.apply(this, arguments);
+  }
   function _slicedToArray(arr, i) {
     return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
   }
@@ -6246,20 +6256,6 @@ module.exports = {
     if (Array.isArray(arr)) {
       return arr;
     }
-  }
-  function _extends() {
-    _extends = Object.assign || function(target) {
-      for (var i = 1; i < arguments.length; i++) {
-        var source = arguments[i];
-        for (var key in source) {
-          if (Object.prototype.hasOwnProperty.call(source, key)) {
-            target[key] = source[key];
-          }
-        }
-      }
-      return target;
-    };
-    return _extends.apply(this, arguments);
   }
   function _classCallCheck(instance, Constructor) {
     if (!(instance instanceof Constructor)) {
@@ -6393,19 +6389,14 @@ module.exports = {
         value: true
       });
     };
-    var __commonJS = function __commonJS(callback, module) {
+    var __commonJS = function __commonJS(cb, mod) {
       return function() {
-        if (!module) {
-          module = {
-            exports: {}
-          };
-          callback(module.exports, module);
-        }
-        return module.exports;
+        return mod || cb((mod = {
+          exports: {}
+        }).exports, mod), mod.exports;
       };
     };
     var __export = function __export(target, all) {
-      __markAsModule(target);
       for (var name in all) {
         __defProp(target, name, {
           get: all[name],
@@ -6414,8 +6405,7 @@ module.exports = {
       }
     };
     var __exportStar = function __exportStar(target, module, desc) {
-      __markAsModule(target);
-      if (_typeof(module) === 'object' || typeof module === 'function') {
+      if (module && _typeof(module) === 'object' || typeof module === 'function') {
         var _iterator = _createForOfIteratorHelper(__getOwnPropNames(module)), _step;
         try {
           var _loop = function _loop() {
@@ -6441,13 +6431,15 @@ module.exports = {
       return target;
     };
     var __toModule = function __toModule(module) {
-      if (module && module.__esModule) {
-        return module;
-      }
-      return __exportStar(__defProp(__create(__getProtoOf(module)), 'default', {
+      return __exportStar(__markAsModule(__defProp(module != null ? __create(__getProtoOf(module)) : {}, 'default', module && module.__esModule && 'default' in module ? {
+        get: function get() {
+          return module['default'];
+        },
+        enumerable: true
+      } : {
         value: module,
         enumerable: true
-      }), module);
+      })), module);
     };
     var require_utils = __commonJS(function(exports) {
       'use strict';
@@ -6706,15 +6698,15 @@ module.exports = {
           var selector = {
             type: 'ruleSet'
           };
-          var rule3 = parseRule();
-          if (!rule3) {
+          var rule = parseRule();
+          if (!rule) {
             return null;
           }
           var currentRule = selector;
-          while (rule3) {
-            rule3.type = 'rule';
-            currentRule.rule = rule3;
-            currentRule = rule3;
+          while (rule) {
+            rule.type = 'rule';
+            currentRule.rule = rule;
+            currentRule = rule;
             skipWhitespace();
             chr = str.charAt(pos);
             if (pos >= l || chr === ',' || chr === ')') {
@@ -6724,36 +6716,36 @@ module.exports = {
               var op = chr;
               pos++;
               skipWhitespace();
-              rule3 = parseRule();
-              if (!rule3) {
+              rule = parseRule();
+              if (!rule) {
                 throw Error('Rule expected after "' + op + '".');
               }
-              rule3.nestingOperator = op;
+              rule.nestingOperator = op;
             } else {
-              rule3 = parseRule();
-              if (rule3) {
-                rule3.nestingOperator = null;
+              rule = parseRule();
+              if (rule) {
+                rule.nestingOperator = null;
               }
             }
           }
           return selector;
         }
         function parseRule() {
-          var rule3 = null;
+          var rule = null;
           while (pos < l) {
             chr = str.charAt(pos);
             if (chr === '*') {
               pos++;
-              (rule3 = rule3 || {}).tagName = '*';
+              (rule = rule || {}).tagName = '*';
             } else if (utils_1.isIdentStart(chr) || chr === '\\') {
-              (rule3 = rule3 || {}).tagName = getIdent();
+              (rule = rule || {}).tagName = getIdent();
             } else if (chr === '.') {
               pos++;
-              rule3 = rule3 || {};
-              (rule3.classNames = rule3.classNames || []).push(getIdent());
+              rule = rule || {};
+              (rule.classNames = rule.classNames || []).push(getIdent());
             } else if (chr === '#') {
               pos++;
-              (rule3 = rule3 || {}).id = getIdent();
+              (rule = rule || {}).id = getIdent();
             } else if (chr === '[') {
               pos++;
               skipWhitespace();
@@ -6810,8 +6802,8 @@ module.exports = {
                 pos++;
                 attr.value = attrValue;
               }
-              rule3 = rule3 || {};
-              (rule3.attrs = rule3.attrs || []).push(attr);
+              rule = rule || {};
+              (rule.attrs = rule.attrs || []).push(attr);
             } else if (chr === ':') {
               pos++;
               var pseudoName = getIdent();
@@ -6857,13 +6849,13 @@ module.exports = {
                 pos++;
                 pseudo.value = value;
               }
-              rule3 = rule3 || {};
-              (rule3.pseudos = rule3.pseudos || []).push(pseudo);
+              rule = rule || {};
+              (rule.pseudos = rule.pseudos || []).push(pseudo);
             } else {
               break;
             }
           }
-          return rule3;
+          return rule;
         }
         return parse2();
       }
@@ -7404,11 +7396,11 @@ module.exports = {
       } else {
         mixin = require_mixin();
         generate = function() {
-          var cache21 = [];
+          var cache2 = [];
           return function(length) {
             var args, i = 0;
-            if (cache21[length]) {
-              return cache21[length];
+            if (cache2[length]) {
+              return cache2[length];
             }
             args = [];
             while (length--) {
@@ -7538,7 +7530,7 @@ module.exports = {
       var isPlainFunction = require_is5();
       var assign = require_assign();
       var normalizeOpts = require_normalize_options();
-      var contains6 = require_contains();
+      var contains3 = require_contains();
       var d = module.exports = function(dscr, value) {
         var c, e, w, options, desc;
         if (arguments.length < 2 || typeof dscr !== 'string') {
@@ -7549,9 +7541,9 @@ module.exports = {
           options = arguments[2];
         }
         if (isValue(dscr)) {
-          c = contains6.call(dscr, 'c');
-          e = contains6.call(dscr, 'e');
-          w = contains6.call(dscr, 'w');
+          c = contains3.call(dscr, 'c');
+          e = contains3.call(dscr, 'e');
+          w = contains3.call(dscr, 'w');
         } else {
           c = w = true;
           e = false;
@@ -7586,8 +7578,8 @@ module.exports = {
           set = void 0;
         }
         if (isValue(dscr)) {
-          c = contains6.call(dscr, 'c');
-          e = contains6.call(dscr, 'e');
+          c = contains3.call(dscr, 'c');
+          e = contains3.call(dscr, 'e');
         } else {
           c = true;
           e = false;
@@ -8227,7 +8219,7 @@ module.exports = {
       var _on = ee.on;
       var emit = ee.emit;
       module.exports = function(original, length, options) {
-        var cache21 = create(null), conf, memLength, _get, set, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve;
+        var cache2 = create(null), conf, memLength, _get, set, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve;
         if (length !== false) {
           memLength = length;
         } else if (isNaN(original.length)) {
@@ -8253,11 +8245,11 @@ module.exports = {
             }
             id = _get(args);
             if (id !== null) {
-              if (hasOwnProperty.call(cache21, id)) {
+              if (hasOwnProperty.call(cache2, id)) {
                 if (getListeners) {
                   conf.emit('get', id, args, this);
                 }
-                return cache21[id];
+                return cache2[id];
               }
             }
             if (args.length === 1) {
@@ -8271,10 +8263,10 @@ module.exports = {
                 throw customError('Circular invocation', 'CIRCULAR_INVOCATION');
               }
               id = set(args);
-            } else if (hasOwnProperty.call(cache21, id)) {
+            } else if (hasOwnProperty.call(cache2, id)) {
               throw customError('Circular invocation', 'CIRCULAR_INVOCATION');
             }
-            cache21[id] = result;
+            cache2[id] = result;
             if (setListeners) {
               conf.emit('set', id, null, result);
             }
@@ -8283,21 +8275,21 @@ module.exports = {
         } else if (length === 0) {
           memoized = function memoized() {
             var result;
-            if (hasOwnProperty.call(cache21, 'data')) {
+            if (hasOwnProperty.call(cache2, 'data')) {
               if (getListeners) {
                 conf.emit('get', 'data', arguments, this);
               }
-              return cache21.data;
+              return cache2.data;
             }
             if (arguments.length) {
               result = apply.call(original, this, arguments);
             } else {
               result = call.call(original, this);
             }
-            if (hasOwnProperty.call(cache21, 'data')) {
+            if (hasOwnProperty.call(cache2, 'data')) {
               throw customError('Circular invocation', 'CIRCULAR_INVOCATION');
             }
-            cache21.data = result;
+            cache2.data = result;
             if (setListeners) {
               conf.emit('set', 'data', null, result);
             }
@@ -8310,21 +8302,21 @@ module.exports = {
               args = resolve(arguments);
             }
             id = String(args[0]);
-            if (hasOwnProperty.call(cache21, id)) {
+            if (hasOwnProperty.call(cache2, id)) {
               if (getListeners) {
                 conf.emit('get', id, args, this);
               }
-              return cache21[id];
+              return cache2[id];
             }
             if (args.length === 1) {
               result = call.call(original, this, args[0]);
             } else {
               result = apply.call(original, this, args);
             }
-            if (hasOwnProperty.call(cache21, id)) {
+            if (hasOwnProperty.call(cache2, id)) {
               throw customError('Circular invocation', 'CIRCULAR_INVOCATION');
             }
-            cache21[id] = result;
+            cache2[id] = result;
             if (setListeners) {
               conf.emit('set', id, null, result);
             }
@@ -8345,28 +8337,28 @@ module.exports = {
             return String(args[0]);
           },
           has: function has(id) {
-            return hasOwnProperty.call(cache21, id);
+            return hasOwnProperty.call(cache2, id);
           },
           delete: function _delete(id) {
             var result;
-            if (!hasOwnProperty.call(cache21, id)) {
+            if (!hasOwnProperty.call(cache2, id)) {
               return;
             }
             if (del) {
               del(id);
             }
-            result = cache21[id];
-            delete cache21[id];
+            result = cache2[id];
+            delete cache2[id];
             if (deleteListeners) {
               conf.emit('delete', id, result);
             }
           },
           clear: function clear() {
-            var oldCache = cache21;
+            var oldCache = cache2;
             if (_clear) {
               _clear();
             }
-            cache21 = create(null);
+            cache2 = create(null);
             conf.emit('clear', oldCache);
           },
           on: function on(type, listener) {
@@ -8411,7 +8403,7 @@ module.exports = {
         extGet = defineLength(function() {
           var id, args = arguments;
           if (length === 0) {
-            return cache21.data;
+            return cache2.data;
           }
           if (resolve) {
             args = resolve(args);
@@ -8421,7 +8413,7 @@ module.exports = {
           } else {
             id = String(args[0]);
           }
-          return cache21[id];
+          return cache2[id];
         });
         extHas = defineLength(function() {
           var id, args = arguments;
@@ -8456,7 +8448,7 @@ module.exports = {
       var callable = require_valid_callable();
       var forEach = require_for_each();
       var extensions = require_registered_extensions();
-      var configure5 = require_configure_map();
+      var configure4 = require_configure_map();
       var resolveLength = require_resolve_length();
       module.exports = function self2(fn) {
         var options, length, conf;
@@ -8469,7 +8461,7 @@ module.exports = {
           return fn;
         }
         length = resolveLength(options.length, fn.length, options.async && extensions.async);
-        conf = configure5(fn, length, options);
+        conf = configure4(fn, length, options);
         forEach(extensions, function(extFn, name) {
           if (options[name]) {
             extFn(options[name], conf, options);
@@ -8572,7 +8564,7 @@ module.exports = {
       var indexOf = require_e_index_of();
       var create = Object.create;
       module.exports = function() {
-        var lastId = 0, map = [], cache21 = create(null);
+        var lastId = 0, map = [], cache2 = create(null);
         return {
           get: function get(args) {
             var index = 0, set = map, i, length = args.length;
@@ -8620,11 +8612,11 @@ module.exports = {
               }
               set[1][i] = ++lastId;
             }
-            cache21[lastId] = args;
+            cache2[lastId] = args;
             return lastId;
           },
           delete: function _delete(id) {
-            var index = 0, set = map, i, args = cache21[id], length = args.length, path = [];
+            var index = 0, set = map, i, args = cache2[id], length = args.length, path = [];
             if (length === 0) {
               delete set[length];
             } else if (set = set[length]) {
@@ -8651,11 +8643,11 @@ module.exports = {
                 set[1].splice(i, 1);
               }
             }
-            delete cache21[id];
+            delete cache2[id];
           },
           clear: function clear() {
             map = [];
-            cache21 = create(null);
+            cache2 = create(null);
           }
         };
       };
@@ -8664,27 +8656,27 @@ module.exports = {
       'use strict';
       var indexOf = require_e_index_of();
       module.exports = function() {
-        var lastId = 0, argsMap = [], cache21 = [];
+        var lastId = 0, argsMap = [], cache2 = [];
         return {
           get: function get(args) {
             var index = indexOf.call(argsMap, args[0]);
-            return index === -1 ? null : cache21[index];
+            return index === -1 ? null : cache2[index];
           },
           set: function set(args) {
             argsMap.push(args[0]);
-            cache21.push(++lastId);
+            cache2.push(++lastId);
             return lastId;
           },
           delete: function _delete(id) {
-            var index = indexOf.call(cache21, id);
+            var index = indexOf.call(cache2, id);
             if (index !== -1) {
               argsMap.splice(index, 1);
-              cache21.splice(index, 1);
+              cache2.splice(index, 1);
             }
           },
           clear: function clear() {
             argsMap = [];
-            cache21 = [];
+            cache2 = [];
           }
         };
       };
@@ -8694,7 +8686,7 @@ module.exports = {
       var indexOf = require_e_index_of();
       var create = Object.create;
       module.exports = function(length) {
-        var lastId = 0, map = [ [], [] ], cache21 = create(null);
+        var lastId = 0, map = [ [], [] ], cache2 = create(null);
         return {
           get: function get(args) {
             var index = 0, set = map, i;
@@ -8728,11 +8720,11 @@ module.exports = {
               i = set[0].push(args[index]) - 1;
             }
             set[1][i] = ++lastId;
-            cache21[lastId] = args;
+            cache2[lastId] = args;
             return lastId;
           },
           delete: function _delete(id) {
-            var index = 0, set = map, i, path = [], args = cache21[id];
+            var index = 0, set = map, i, path = [], args = cache2[id];
             while (index < length - 1) {
               i = indexOf.call(set[0], args[index]);
               if (i === -1) {
@@ -8755,11 +8747,11 @@ module.exports = {
               set[0].splice(i, 1);
               set[1].splice(i, 1);
             }
-            delete cache21[id];
+            delete cache2[id];
           },
           clear: function clear() {
             map = [ [], [] ];
-            cache21 = create(null);
+            cache2 = create(null);
           }
         };
       };
@@ -8787,19 +8779,19 @@ module.exports = {
         return fn;
       };
       var byObserver = function byObserver(Observer) {
-        var node = document.createTextNode(''), queue4, currentQueue, i = 0;
+        var node = document.createTextNode(''), queue2, currentQueue, i = 0;
         new Observer(function() {
           var callback;
-          if (!queue4) {
+          if (!queue2) {
             if (!currentQueue) {
               return;
             }
-            queue4 = currentQueue;
+            queue2 = currentQueue;
           } else if (currentQueue) {
-            queue4 = currentQueue.concat(queue4);
+            queue2 = currentQueue.concat(queue2);
           }
-          currentQueue = queue4;
-          queue4 = null;
+          currentQueue = queue2;
+          queue2 = null;
           if (typeof currentQueue === 'function') {
             callback = currentQueue;
             currentQueue = null;
@@ -8819,15 +8811,15 @@ module.exports = {
         });
         return function(fn) {
           ensureCallable(fn);
-          if (queue4) {
-            if (typeof queue4 === 'function') {
-              queue4 = [ queue4, fn ];
+          if (queue2) {
+            if (typeof queue2 === 'function') {
+              queue2 = [ queue2, fn ];
             } else {
-              queue4.push(fn);
+              queue2.push(fn);
             }
             return;
           }
-          queue4 = fn;
+          queue2 = fn;
           node.data = i = ++i % 2;
         };
       };
@@ -8872,7 +8864,7 @@ module.exports = {
       var apply = Function.prototype.apply;
       var create = Object.create;
       require_registered_extensions().async = function(tbi, conf) {
-        var waiting = create(null), cache21 = create(null), base = conf.memoized, original = conf.original, currentCallback, currentContext, currentArgs;
+        var waiting = create(null), cache2 = create(null), base = conf.memoized, original = conf.original, currentCallback, currentContext, currentArgs;
         conf.memoized = defineLength(function(arg) {
           var args = arguments, last = args[args.length - 1];
           if (typeof last === 'function') {
@@ -8885,7 +8877,7 @@ module.exports = {
           mixin(conf.memoized, base);
         } catch (ignore) {}
         conf.on('get', function(id) {
-          var cb, context5, args;
+          var cb, context, args;
           if (!currentCallback) {
             return;
           }
@@ -8899,20 +8891,20 @@ module.exports = {
             return;
           }
           cb = currentCallback;
-          context5 = currentContext;
+          context = currentContext;
           args = currentArgs;
           currentCallback = currentContext = currentArgs = null;
           nextTick(function() {
             var data2;
-            if (hasOwnProperty.call(cache21, id)) {
-              data2 = cache21[id];
-              conf.emit('getasync', id, args, context5);
+            if (hasOwnProperty.call(cache2, id)) {
+              data2 = cache2[id];
+              conf.emit('getasync', id, args, context);
               apply.call(cb, data2.context, data2.args);
             } else {
               currentCallback = cb;
-              currentContext = context5;
+              currentContext = context;
               currentArgs = args;
-              base.apply(context5, args);
+              base.apply(context, args);
             }
           });
         });
@@ -8939,7 +8931,7 @@ module.exports = {
               if (err2) {
                 conf['delete'](id);
               } else {
-                cache21[id] = {
+                cache2[id] = {
                   context: this,
                   args: args2
                 };
@@ -8986,16 +8978,16 @@ module.exports = {
           if (hasOwnProperty.call(waiting, id)) {
             return;
           }
-          if (!cache21[id]) {
+          if (!cache2[id]) {
             return;
           }
-          result = cache21[id];
-          delete cache21[id];
+          result = cache2[id];
+          delete cache2[id];
           conf.emit('deleteasync', id, slice.call(result.args, 1));
         });
         conf.on('clear', function() {
-          var oldCache = cache21;
-          cache21 = create(null);
+          var oldCache = cache2;
+          cache2 = create(null);
           conf.emit('clearasync', objectMap(oldCache, function(data2) {
             return slice.call(data2.args, 1);
           }));
@@ -9089,7 +9081,7 @@ module.exports = {
       var create = Object.create;
       var supportedModes = primitiveSet('then', 'then:finally', 'done', 'done:finally');
       require_registered_extensions().promise = function(mode, conf) {
-        var waiting = create(null), cache21 = create(null), promises = create(null);
+        var waiting = create(null), cache2 = create(null), promises = create(null);
         if (mode === true) {
           mode = null;
         } else {
@@ -9101,7 +9093,7 @@ module.exports = {
         conf.on('set', function(id, ignore, promise) {
           var isFailed = false;
           if (!isPromise(promise)) {
-            cache21[id] = promise;
+            cache2[id] = promise;
             conf.emit('setasync', id, 1);
             return;
           }
@@ -9116,7 +9108,7 @@ module.exports = {
               return;
             }
             delete waiting[id];
-            cache21[id] = result;
+            cache2[id] = result;
             conf.emit('setasync', id, count);
           };
           var onFailure = function onFailure() {
@@ -9158,7 +9150,7 @@ module.exports = {
             promise['finally'](onFailure);
           }
         });
-        conf.on('get', function(id, args, context5) {
+        conf.on('get', function(id, args, context) {
           var promise;
           if (waiting[id]) {
             ++waiting[id];
@@ -9166,7 +9158,7 @@ module.exports = {
           }
           promise = promises[id];
           var emit = function emit() {
-            conf.emit('getasync', id, args, context5);
+            conf.emit('getasync', id, args, context);
           };
           if (isPromise(promise)) {
             if (typeof promise.done === 'function') {
@@ -9186,16 +9178,16 @@ module.exports = {
             delete waiting[id];
             return;
           }
-          if (!hasOwnProperty.call(cache21, id)) {
+          if (!hasOwnProperty.call(cache2, id)) {
             return;
           }
-          var result = cache21[id];
-          delete cache21[id];
+          var result = cache2[id];
+          delete cache2[id];
           conf.emit('deleteasync', id, [ result ]);
         });
         conf.on('clear', function() {
-          var oldCache = cache21;
-          cache21 = create(null);
+          var oldCache = cache2;
+          cache2 = create(null);
           waiting = create(null);
           promises = create(null);
           conf.emit('clearasync', objectMap(oldCache, function(data2) {
@@ -9217,8 +9209,8 @@ module.exports = {
           conf.on('deleteasync', del = function del(id, resultArray) {
             apply.call(dispose, null, resultArray);
           });
-          conf.on('clearasync', function(cache21) {
-            forEach(cache21, function(result, id) {
+          conf.on('clearasync', function(cache2) {
+            forEach(cache2, function(result, id) {
               del(id, result);
             });
           });
@@ -9227,8 +9219,8 @@ module.exports = {
         conf.on('delete', del = function del(id, result) {
           dispose(result);
         });
-        conf.on('clear', function(cache21) {
-          forEach(cache21, function(result, id) {
+        conf.on('clear', function(cache2) {
+          forEach(cache2, function(result, id) {
             del(id, result);
           });
         });
@@ -9312,7 +9304,7 @@ module.exports = {
           if (preFetchAge) {
             preFetchTimeouts = {};
             preFetchAge = (1 - preFetchAge) * maxAge;
-            conf.on('get' + postfix, function(id, args, context5) {
+            conf.on('get' + postfix, function(id, args, context) {
               if (!preFetchTimeouts[id]) {
                 preFetchTimeouts[id] = 'nextTick';
                 nextTick(function() {
@@ -9326,7 +9318,7 @@ module.exports = {
                     args = aFrom(args);
                     args.push(noop3);
                   }
-                  result = conf.memoized.apply(context5, args);
+                  result = conf.memoized.apply(context, args);
                   if (options.promise) {
                     if (isPromise(result)) {
                       if (typeof result.done === 'function') {
@@ -9363,27 +9355,27 @@ module.exports = {
       var create = Object.create;
       var hasOwnProperty2 = Object.prototype.hasOwnProperty;
       module.exports = function(limit) {
-        var size = 0, base = 1, queue4 = create(null), map = create(null), index = 0, del;
+        var size = 0, base = 1, queue2 = create(null), map = create(null), index = 0, del;
         limit = toPosInt(limit);
         return {
           hit: function hit(id) {
             var oldIndex = map[id], nuIndex = ++index;
-            queue4[nuIndex] = id;
+            queue2[nuIndex] = id;
             map[id] = nuIndex;
             if (!oldIndex) {
               ++size;
               if (size <= limit) {
                 return;
               }
-              id = queue4[base];
+              id = queue2[base];
               del(id);
               return id;
             }
-            delete queue4[oldIndex];
+            delete queue2[oldIndex];
             if (base !== oldIndex) {
               return;
             }
-            while (!hasOwnProperty2.call(queue4, ++base)) {
+            while (!hasOwnProperty2.call(queue2, ++base)) {
               continue;
             }
           },
@@ -9392,7 +9384,7 @@ module.exports = {
             if (!oldIndex) {
               return;
             }
-            delete queue4[oldIndex];
+            delete queue2[oldIndex];
             delete map[id];
             --size;
             if (base !== oldIndex) {
@@ -9403,14 +9395,14 @@ module.exports = {
               base = 1;
               return;
             }
-            while (!hasOwnProperty2.call(queue4, ++base)) {
+            while (!hasOwnProperty2.call(queue2, ++base)) {
               continue;
             }
           },
           clear: function clear() {
             size = 0;
             base = 1;
-            queue4 = create(null);
+            queue2 = create(null);
             map = create(null);
             index = 0;
           }
@@ -9423,23 +9415,23 @@ module.exports = {
       var lruQueue = require_lru_queue();
       var extensions = require_registered_extensions();
       extensions.max = function(max, conf, options) {
-        var postfix, queue4, hit;
+        var postfix, queue2, hit;
         max = toPosInteger(max);
         if (!max) {
           return;
         }
-        queue4 = lruQueue(max);
+        queue2 = lruQueue(max);
         postfix = options.async && extensions.async || options.promise && extensions.promise ? 'async' : '';
         conf.on('set' + postfix, hit = function hit(id) {
-          id = queue4.hit(id);
+          id = queue2.hit(id);
           if (id === void 0) {
             return;
           }
           conf['delete'](id);
         });
         conf.on('get' + postfix, hit);
-        conf.on('delete' + postfix, queue4['delete']);
-        conf.on('clear' + postfix, queue4.clear);
+        conf.on('delete' + postfix, queue2['delete']);
+        conf.on('clear' + postfix, queue2.clear);
       };
     });
     var require_ref_counter = __commonJS(function() {
@@ -9449,20 +9441,20 @@ module.exports = {
       var create = Object.create;
       var defineProperties = Object.defineProperties;
       extensions.refCounter = function(ignore, conf, options) {
-        var cache21, postfix;
-        cache21 = create(null);
+        var cache2, postfix;
+        cache2 = create(null);
         postfix = options.async && extensions.async || options.promise && extensions.promise ? 'async' : '';
         conf.on('set' + postfix, function(id, length) {
-          cache21[id] = length || 1;
+          cache2[id] = length || 1;
         });
         conf.on('get' + postfix, function(id) {
-          ++cache21[id];
+          ++cache2[id];
         });
         conf.on('delete' + postfix, function(id) {
-          delete cache21[id];
+          delete cache2[id];
         });
         conf.on('clear' + postfix, function() {
-          cache21 = {};
+          cache2 = {};
         });
         defineProperties(conf.memoized, {
           deleteRef: d(function() {
@@ -9470,10 +9462,10 @@ module.exports = {
             if (id === null) {
               return null;
             }
-            if (!cache21[id]) {
+            if (!cache2[id]) {
               return null;
             }
-            if (!--cache21[id]) {
+            if (!--cache2[id]) {
               conf['delete'](id);
               return true;
             }
@@ -9484,10 +9476,10 @@ module.exports = {
             if (id === null) {
               return 0;
             }
-            if (!cache21[id]) {
+            if (!cache2[id]) {
               return 0;
             }
-            return cache21[id];
+            return cache2[id];
           })
         });
       };
@@ -9536,12 +9528,6 @@ module.exports = {
           require_ref_counter();
         }
         return plain(fn, options);
-      };
-    });
-    var require_emoji_regex = __commonJS(function(exports, module) {
-      'use strict';
-      module.exports = function() {
-        return /\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62(?:\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDB40\uDC73\uDB40\uDC63\uDB40\uDC74|\uDB40\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F|\uD83D\uDC68(?:\uD83C\uDFFC\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68\uD83C\uDFFB|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFF\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFB-\uDFFE])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFE\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFB-\uDFFD])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFD\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFB\uDFFC])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\u200D(?:\u2764\uFE0F\u200D(?:\uD83D\uDC8B\u200D)?\uD83D\uDC68|(?:\uD83D[\uDC68\uDC69])\u200D(?:\uD83D\uDC66\u200D\uD83D\uDC66|\uD83D\uDC67\u200D(?:\uD83D[\uDC66\uDC67]))|\uD83D\uDC66\u200D\uD83D\uDC66|\uD83D\uDC67\u200D(?:\uD83D[\uDC66\uDC67])|(?:\uD83D[\uDC68\uDC69])\u200D(?:\uD83D[\uDC66\uDC67])|[\u2695\u2696\u2708]\uFE0F|\uD83D[\uDC66\uDC67]|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|(?:\uD83C\uDFFB\u200D[\u2695\u2696\u2708]|\uD83C\uDFFF\u200D[\u2695\u2696\u2708]|\uD83C\uDFFE\u200D[\u2695\u2696\u2708]|\uD83C\uDFFD\u200D[\u2695\u2696\u2708]|\uD83C\uDFFC\u200D[\u2695\u2696\u2708])\uFE0F|\uD83C\uDFFB\u200D(?:\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C[\uDFFB-\uDFFF])|(?:\uD83E\uDDD1\uD83C\uDFFB\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1|\uD83D\uDC69\uD83C\uDFFC\u200D\uD83E\uDD1D\u200D\uD83D\uDC69)\uD83C\uDFFB|\uD83E\uDDD1(?:\uD83C\uDFFF\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1(?:\uD83C[\uDFFB-\uDFFF])|\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1)|(?:\uD83E\uDDD1\uD83C\uDFFE\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1|\uD83D\uDC69\uD83C\uDFFF\u200D\uD83E\uDD1D\u200D(?:\uD83D[\uDC68\uDC69]))(?:\uD83C[\uDFFB-\uDFFE])|(?:\uD83E\uDDD1\uD83C\uDFFC\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1|\uD83D\uDC69\uD83C\uDFFD\u200D\uD83E\uDD1D\u200D\uD83D\uDC69)(?:\uD83C[\uDFFB\uDFFC])|\uD83D\uDC69(?:\uD83C\uDFFE\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFC\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFB\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFC-\uDFFF])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFD\u200D(?:\uD83E\uDD1D\u200D\uD83D\uDC68(?:\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\u200D(?:\u2764\uFE0F\u200D(?:\uD83D\uDC8B\u200D(?:\uD83D[\uDC68\uDC69])|\uD83D[\uDC68\uDC69])|\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C\uDFFF\u200D(?:\uD83C[\uDF3E\uDF73\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD]))|\uD83D\uDC69\u200D\uD83D\uDC69\u200D(?:\uD83D\uDC66\u200D\uD83D\uDC66|\uD83D\uDC67\u200D(?:\uD83D[\uDC66\uDC67]))|(?:\uD83E\uDDD1\uD83C\uDFFD\u200D\uD83E\uDD1D\u200D\uD83E\uDDD1|\uD83D\uDC69\uD83C\uDFFE\u200D\uD83E\uDD1D\u200D\uD83D\uDC69)(?:\uD83C[\uDFFB-\uDFFD])|\uD83D\uDC69\u200D\uD83D\uDC66\u200D\uD83D\uDC66|\uD83D\uDC69\u200D\uD83D\uDC69\u200D(?:\uD83D[\uDC66\uDC67])|(?:\uD83D\uDC41\uFE0F\u200D\uD83D\uDDE8|\uD83D\uDC69(?:\uD83C\uDFFF\u200D[\u2695\u2696\u2708]|\uD83C\uDFFE\u200D[\u2695\u2696\u2708]|\uD83C\uDFFC\u200D[\u2695\u2696\u2708]|\uD83C\uDFFB\u200D[\u2695\u2696\u2708]|\uD83C\uDFFD\u200D[\u2695\u2696\u2708]|\u200D[\u2695\u2696\u2708])|(?:(?:\u26F9|\uD83C[\uDFCB\uDFCC]|\uD83D\uDD75)\uFE0F|\uD83D\uDC6F|\uD83E[\uDD3C\uDDDE\uDDDF])\u200D[\u2640\u2642]|(?:\u26F9|\uD83C[\uDFCB\uDFCC]|\uD83D\uDD75)(?:\uD83C[\uDFFB-\uDFFF])\u200D[\u2640\u2642]|(?:\uD83C[\uDFC3\uDFC4\uDFCA]|\uD83D[\uDC6E\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4-\uDEB6]|\uD83E[\uDD26\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD-\uDDCF\uDDD6-\uDDDD])(?:(?:\uD83C[\uDFFB-\uDFFF])\u200D[\u2640\u2642]|\u200D[\u2640\u2642])|\uD83C\uDFF4\u200D\u2620)\uFE0F|\uD83D\uDC69\u200D\uD83D\uDC67\u200D(?:\uD83D[\uDC66\uDC67])|\uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08|\uD83D\uDC15\u200D\uD83E\uDDBA|\uD83D\uDC69\u200D\uD83D\uDC66|\uD83D\uDC69\u200D\uD83D\uDC67|\uD83C\uDDFD\uD83C\uDDF0|\uD83C\uDDF4\uD83C\uDDF2|\uD83C\uDDF6\uD83C\uDDE6|[#\*0-9]\uFE0F\u20E3|\uD83C\uDDE7(?:\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF])|\uD83C\uDDF9(?:\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF])|\uD83C\uDDEA(?:\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA])|\uD83E\uDDD1(?:\uD83C[\uDFFB-\uDFFF])|\uD83C\uDDF7(?:\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC])|\uD83D\uDC69(?:\uD83C[\uDFFB-\uDFFF])|\uD83C\uDDF2(?:\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF])|\uD83C\uDDE6(?:\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF])|\uD83C\uDDF0(?:\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF])|\uD83C\uDDED(?:\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA])|\uD83C\uDDE9(?:\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF])|\uD83C\uDDFE(?:\uD83C[\uDDEA\uDDF9])|\uD83C\uDDEC(?:\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE])|\uD83C\uDDF8(?:\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF])|\uD83C\uDDEB(?:\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7])|\uD83C\uDDF5(?:\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE])|\uD83C\uDDFB(?:\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA])|\uD83C\uDDF3(?:\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF])|\uD83C\uDDE8(?:\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF5\uDDF7\uDDFA-\uDDFF])|\uD83C\uDDF1(?:\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE])|\uD83C\uDDFF(?:\uD83C[\uDDE6\uDDF2\uDDFC])|\uD83C\uDDFC(?:\uD83C[\uDDEB\uDDF8])|\uD83C\uDDFA(?:\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF])|\uD83C\uDDEE(?:\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9])|\uD83C\uDDEF(?:\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5])|(?:\uD83C[\uDFC3\uDFC4\uDFCA]|\uD83D[\uDC6E\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4-\uDEB6]|\uD83E[\uDD26\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD-\uDDCF\uDDD6-\uDDDD])(?:\uD83C[\uDFFB-\uDFFF])|(?:\u26F9|\uD83C[\uDFCB\uDFCC]|\uD83D\uDD75)(?:\uD83C[\uDFFB-\uDFFF])|(?:[\u261D\u270A-\u270D]|\uD83C[\uDF85\uDFC2\uDFC7]|\uD83D[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC70\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDCAA\uDD74\uDD7A\uDD90\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC]|\uD83E[\uDD0F\uDD18-\uDD1C\uDD1E\uDD1F\uDD30-\uDD36\uDDB5\uDDB6\uDDBB\uDDD2-\uDDD5])(?:\uD83C[\uDFFB-\uDFFF])|(?:[\u231A\u231B\u23E9-\u23EC\u23F0\u23F3\u25FD\u25FE\u2614\u2615\u2648-\u2653\u267F\u2693\u26A1\u26AA\u26AB\u26BD\u26BE\u26C4\u26C5\u26CE\u26D4\u26EA\u26F2\u26F3\u26F5\u26FA\u26FD\u2705\u270A\u270B\u2728\u274C\u274E\u2753-\u2755\u2757\u2795-\u2797\u27B0\u27BF\u2B1B\u2B1C\u2B50\u2B55]|\uD83C[\uDC04\uDCCF\uDD8E\uDD91-\uDD9A\uDDE6-\uDDFF\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF7C\uDF7E-\uDF93\uDFA0-\uDFCA\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF4\uDFF8-\uDFFF]|\uD83D[\uDC00-\uDC3E\uDC40\uDC42-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDD7A\uDD95\uDD96\uDDA4\uDDFB-\uDE4F\uDE80-\uDEC5\uDECC\uDED0-\uDED2\uDED5\uDEEB\uDEEC\uDEF4-\uDEFA\uDFE0-\uDFEB]|\uD83E[\uDD0D-\uDD3A\uDD3C-\uDD45\uDD47-\uDD71\uDD73-\uDD76\uDD7A-\uDDA2\uDDA5-\uDDAA\uDDAE-\uDDCA\uDDCD-\uDDFF\uDE70-\uDE73\uDE78-\uDE7A\uDE80-\uDE82\uDE90-\uDE95])|(?:[#\*0-9\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26C8\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299]|\uD83C[\uDC04\uDCCF\uDD70\uDD71\uDD7E\uDD7F\uDD8E\uDD91-\uDD9A\uDDE6-\uDDFF\uDE01\uDE02\uDE1A\uDE2F\uDE32-\uDE3A\uDE50\uDE51\uDF00-\uDF21\uDF24-\uDF93\uDF96\uDF97\uDF99-\uDF9B\uDF9E-\uDFF0\uDFF3-\uDFF5\uDFF7-\uDFFF]|\uD83D[\uDC00-\uDCFD\uDCFF-\uDD3D\uDD49-\uDD4E\uDD50-\uDD67\uDD6F\uDD70\uDD73-\uDD7A\uDD87\uDD8A-\uDD8D\uDD90\uDD95\uDD96\uDDA4\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA-\uDE4F\uDE80-\uDEC5\uDECB-\uDED2\uDED5\uDEE0-\uDEE5\uDEE9\uDEEB\uDEEC\uDEF0\uDEF3-\uDEFA\uDFE0-\uDFEB]|\uD83E[\uDD0D-\uDD3A\uDD3C-\uDD45\uDD47-\uDD71\uDD73-\uDD76\uDD7A-\uDDA2\uDDA5-\uDDAA\uDDAE-\uDDCA\uDDCD-\uDDFF\uDE70-\uDE73\uDE78-\uDE7A\uDE80-\uDE82\uDE90-\uDE95])\uFE0F|(?:[\u261D\u26F9\u270A-\u270D]|\uD83C[\uDF85\uDFC2-\uDFC4\uDFC7\uDFCA-\uDFCC]|\uD83D[\uDC42\uDC43\uDC46-\uDC50\uDC66-\uDC78\uDC7C\uDC81-\uDC83\uDC85-\uDC87\uDC8F\uDC91\uDCAA\uDD74\uDD75\uDD7A\uDD90\uDD95\uDD96\uDE45-\uDE47\uDE4B-\uDE4F\uDEA3\uDEB4-\uDEB6\uDEC0\uDECC]|\uD83E[\uDD0F\uDD18-\uDD1F\uDD26\uDD30-\uDD39\uDD3C-\uDD3E\uDDB5\uDDB6\uDDB8\uDDB9\uDDBB\uDDCD-\uDDCF\uDDD1-\uDDDD])/g;
       };
     });
     var require_doT = __commonJS(function(exports, module) {
@@ -9744,8 +9730,8 @@ module.exports = {
         var vertxNext = void 0;
         var customSchedulerFn = void 0;
         var asap = function asap2(callback, arg) {
-          queue4[len] = callback;
-          queue4[len + 1] = arg;
+          queue2[len] = callback;
+          queue2[len + 1] = arg;
           len += 2;
           if (len === 2) {
             if (customSchedulerFn) {
@@ -9803,14 +9789,14 @@ module.exports = {
             return globalSetTimeout(flush, 1);
           };
         }
-        var queue4 = new Array(1e3);
+        var queue2 = new Array(1e3);
         function flush() {
           for (var i = 0; i < len; i += 2) {
-            var callback = queue4[i];
-            var arg = queue4[i + 1];
+            var callback = queue2[i];
+            var arg = queue2[i + 1];
             callback(arg);
-            queue4[i] = void 0;
-            queue4[i + 1] = void 0;
+            queue2[i] = void 0;
+            queue2[i + 1] = void 0;
           }
           len = 0;
         }
@@ -10266,7 +10252,7 @@ module.exports = {
       var LN2 = Math.LN2;
       var abs = Math.abs;
       var floor = Math.floor;
-      var log9 = Math.log;
+      var log2 = Math.log;
       var min = Math.min;
       var pow = Math.pow;
       var round = Math.round;
@@ -10422,7 +10408,7 @@ module.exports = {
           s = v < 0;
           v = abs(v);
           if (v >= pow(2, 1 - bias)) {
-            e = min(floor(log9(v) / LN2), 1023);
+            e = min(floor(log2(v) / LN2), 1023);
             f = roundToEven(v / pow(2, e) * pow(2, fbits));
             if (f / pow(2, fbits) >= 2) {
               e = e + 1;
@@ -10630,8 +10616,8 @@ module.exports = {
                   this.buffer._bytes[d] = tmp[i];
                 }
               } else {
-                for (i = 0, s = array.byteOffset, d = byteOffset; i < byteLength; i += 1, s += 1, 
-                d += 1) {
+                for (i = 0, s = array.byteOffset, d = byteOffset; i < byteLength; i += 1, 
+                s += 1, d += 1) {
                   this.buffer._bytes[d] = array.buffer._bytes[s];
                 }
               }
@@ -10903,6 +10889,7 @@ module.exports = {
     } ];
     var constants = {
       helpUrlBase: 'https://dequeuniversity.com/rules/',
+      gridSize: 200,
       results: [],
       resultGroups: [],
       resultGroupMap: {},
@@ -11031,7 +11018,7 @@ module.exports = {
         return extend_meta_data_default;
       },
       filterHtmlAttrs: function filterHtmlAttrs() {
-        return filter_html_attrs_default;
+        return _filterHtmlAttrs;
       },
       finalizeRuleResult: function finalizeRuleResult() {
         return finalize_result_default;
@@ -11115,7 +11102,7 @@ module.exports = {
         return is_html_element_default;
       },
       isNodeInContext: function isNodeInContext() {
-        return is_node_in_context_default;
+        return _isNodeInContext;
       },
       isShadowRoot: function isShadowRoot() {
         return is_shadow_root_default;
@@ -11193,7 +11180,7 @@ module.exports = {
         return rule_should_run_default;
       },
       select: function select() {
-        return select_default;
+        return _select;
       },
       sendCommandToFrame: function sendCommandToFrame() {
         return _sendCommandToFrame;
@@ -11203,6 +11190,9 @@ module.exports = {
       },
       shadowSelect: function shadowSelect() {
         return _shadowSelect;
+      },
+      shadowSelectAll: function shadowSelectAll() {
+        return _shadowSelectAll;
       },
       shouldPreload: function shouldPreload() {
         return _shouldPreload;
@@ -11226,361 +11216,6 @@ module.exports = {
         return _validLangs;
       }
     });
-    var errorTypes = Object.freeze([ 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError' ]);
-    function stringifyMessage(_ref) {
-      var topic = _ref.topic, channelId = _ref.channelId, message = _ref.message, messageId = _ref.messageId, keepalive = _ref.keepalive;
-      var data2 = {
-        channelId: channelId,
-        topic: topic,
-        messageId: messageId,
-        keepalive: !!keepalive,
-        source: getSource()
-      };
-      if (message instanceof Error) {
-        data2.error = {
-          name: message.name,
-          message: message.message,
-          stack: message.stack
-        };
-      } else {
-        data2.payload = message;
-      }
-      return JSON.stringify(data2);
-    }
-    function parseMessage(dataString) {
-      var data2;
-      try {
-        data2 = JSON.parse(dataString);
-      } catch (e) {
-        return;
-      }
-      if (!isRespondableMessage(data2)) {
-        return;
-      }
-      var _data = data2, topic = _data.topic, channelId = _data.channelId, messageId = _data.messageId, keepalive = _data.keepalive;
-      var message = _typeof(data2.error) === 'object' ? buildErrorObject(data2.error) : data2.payload;
-      return {
-        topic: topic,
-        message: message,
-        messageId: messageId,
-        channelId: channelId,
-        keepalive: !!keepalive
-      };
-    }
-    function isRespondableMessage(postedMessage) {
-      return postedMessage !== null && _typeof(postedMessage) === 'object' && typeof postedMessage.channelId === 'string' && postedMessage.source === getSource();
-    }
-    function buildErrorObject(error) {
-      var msg = error.message || 'Unknown error occurred';
-      var errorName = errorTypes.includes(error.name) ? error.name : 'Error';
-      var ErrConstructor = window[errorName] || Error;
-      if (error.stack) {
-        msg += '\n' + error.stack.replace(error.message, '');
-      }
-      return new ErrConstructor(msg);
-    }
-    function getSource() {
-      var application = 'axeAPI';
-      var version = '';
-      if (typeof axe !== 'undefined' && axe._audit && axe._audit.application) {
-        application = axe._audit.application;
-      }
-      if (typeof axe !== 'undefined') {
-        version = axe.version;
-      }
-      return application + '.' + version;
-    }
-    function assert(bool, message) {
-      if (!bool) {
-        throw new Error(message);
-      }
-    }
-    var assert_default = assert;
-    function assertIsParentWindow(win) {
-      assetNotGlobalWindow(win);
-      assert_default(window.parent === win, 'Source of the response must be the parent window.');
-    }
-    function assertIsFrameWindow(win) {
-      assetNotGlobalWindow(win);
-      assert_default(win.parent === window, 'Respondable target must be a frame in the current window');
-    }
-    function assetNotGlobalWindow(win) {
-      assert_default(window !== win, 'Messages can not be sent to the same window.');
-    }
-    var channels = {};
-    function storeReplyHandler(channelId, replyHandler) {
-      var sendToParent = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
-      assert_default(!channels[channelId], 'A replyHandler already exists for this message channel.');
-      channels[channelId] = {
-        replyHandler: replyHandler,
-        sendToParent: sendToParent
-      };
-    }
-    function getReplyHandler(channelId) {
-      return channels[channelId];
-    }
-    function deleteReplyHandler(channelId) {
-      delete channels[channelId];
-    }
-    var uuid;
-    var _rng;
-    var _crypto = window.crypto || window.msCrypto;
-    if (!_rng && _crypto && _crypto.getRandomValues) {
-      var _rnds8 = new Uint8Array(16);
-      _rng = function whatwgRNG() {
-        _crypto.getRandomValues(_rnds8);
-        return _rnds8;
-      };
-    }
-    if (!_rng) {
-      var _rnds = new Array(16);
-      _rng = function _rng() {
-        for (var i = 0, r; i < 16; i++) {
-          if ((i & 3) === 0) {
-            r = Math.random() * 4294967296;
-          }
-          _rnds[i] = r >>> ((i & 3) << 3) & 255;
-        }
-        return _rnds;
-      };
-    }
-    var BufferClass = typeof window.Buffer == 'function' ? window.Buffer : Array;
-    var _byteToHex = [];
-    var _hexToByte = {};
-    for (var i = 0; i < 256; i++) {
-      _byteToHex[i] = (i + 256).toString(16).substr(1);
-      _hexToByte[_byteToHex[i]] = i;
-    }
-    function parse(s, buf, offset) {
-      var i = buf && offset || 0, ii = 0;
-      buf = buf || [];
-      s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
-        if (ii < 16) {
-          buf[i + ii++] = _hexToByte[oct];
-        }
-      });
-      while (ii < 16) {
-        buf[i + ii++] = 0;
-      }
-      return buf;
-    }
-    function unparse(buf, offset) {
-      var i = offset || 0, bth = _byteToHex;
-      return bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]];
-    }
-    var _seedBytes = _rng();
-    var _nodeId = [ _seedBytes[0] | 1, _seedBytes[1], _seedBytes[2], _seedBytes[3], _seedBytes[4], _seedBytes[5] ];
-    var _clockseq = (_seedBytes[6] << 8 | _seedBytes[7]) & 16383;
-    var _lastMSecs = 0;
-    var _lastNSecs = 0;
-    function v1(options, buf, offset) {
-      var i = buf && offset || 0;
-      var b = buf || [];
-      options = options || {};
-      var clockseq = options.clockseq != null ? options.clockseq : _clockseq;
-      var msecs = options.msecs != null ? options.msecs : new Date().getTime();
-      var nsecs = options.nsecs != null ? options.nsecs : _lastNSecs + 1;
-      var dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 1e4;
-      if (dt < 0 && options.clockseq == null) {
-        clockseq = clockseq + 1 & 16383;
-      }
-      if ((dt < 0 || msecs > _lastMSecs) && options.nsecs == null) {
-        nsecs = 0;
-      }
-      if (nsecs >= 1e4) {
-        throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
-      }
-      _lastMSecs = msecs;
-      _lastNSecs = nsecs;
-      _clockseq = clockseq;
-      msecs += 122192928e5;
-      var tl = ((msecs & 268435455) * 1e4 + nsecs) % 4294967296;
-      b[i++] = tl >>> 24 & 255;
-      b[i++] = tl >>> 16 & 255;
-      b[i++] = tl >>> 8 & 255;
-      b[i++] = tl & 255;
-      var tmh = msecs / 4294967296 * 1e4 & 268435455;
-      b[i++] = tmh >>> 8 & 255;
-      b[i++] = tmh & 255;
-      b[i++] = tmh >>> 24 & 15 | 16;
-      b[i++] = tmh >>> 16 & 255;
-      b[i++] = clockseq >>> 8 | 128;
-      b[i++] = clockseq & 255;
-      var node = options.node || _nodeId;
-      for (var n = 0; n < 6; n++) {
-        b[i + n] = node[n];
-      }
-      return buf ? buf : unparse(b);
-    }
-    function v4(options, buf, offset) {
-      var i = buf && offset || 0;
-      if (typeof options == 'string') {
-        buf = options == 'binary' ? new BufferClass(16) : null;
-        options = null;
-      }
-      options = options || {};
-      var rnds = options.random || (options.rng || _rng)();
-      rnds[6] = rnds[6] & 15 | 64;
-      rnds[8] = rnds[8] & 63 | 128;
-      if (buf) {
-        for (var ii = 0; ii < 16; ii++) {
-          buf[i + ii] = rnds[ii];
-        }
-      }
-      return buf || unparse(rnds);
-    }
-    uuid = v4;
-    uuid.v1 = v1;
-    uuid.v4 = v4;
-    uuid.parse = parse;
-    uuid.unparse = unparse;
-    uuid.BufferClass = BufferClass;
-    axe._uuid = v1();
-    var uuid_default = v4;
-    var messageIds = [];
-    function createMessageId() {
-      var uuid5 = ''.concat(v4(), ':').concat(v4());
-      if (messageIds.includes(uuid5)) {
-        return createMessageId();
-      }
-      messageIds.push(uuid5);
-      return uuid5;
-    }
-    function isNewMessage(uuid5) {
-      if (messageIds.includes(uuid5)) {
-        return false;
-      }
-      messageIds.push(uuid5);
-      return true;
-    }
-    function postMessage(win, data2, sendToParent, replyHandler) {
-      if (typeof replyHandler === 'function') {
-        storeReplyHandler(data2.channelId, replyHandler, sendToParent);
-      }
-      sendToParent ? assertIsParentWindow(win) : assertIsFrameWindow(win);
-      if (data2.message instanceof Error && !sendToParent) {
-        axe.log(data2.message);
-        return false;
-      }
-      var dataString = stringifyMessage(_extends({
-        messageId: createMessageId()
-      }, data2));
-      var allowedOrigins = axe._audit.allowedOrigins;
-      if (!allowedOrigins || !allowedOrigins.length) {
-        return false;
-      }
-      allowedOrigins.forEach(function(origin) {
-        try {
-          win.postMessage(dataString, origin);
-        } catch (err2) {
-          if (err2 instanceof win.DOMException) {
-            throw new Error('allowedOrigins value "'.concat(origin, '" is not a valid origin'));
-          }
-          throw err2;
-        }
-      });
-      return true;
-    }
-    function processError(win, error, channelId) {
-      if (!win.parent !== window) {
-        return axe.log(error);
-      }
-      try {
-        postMessage(win, {
-          topic: null,
-          channelId: channelId,
-          message: error,
-          messageId: createMessageId(),
-          keepalive: true
-        }, true);
-      } catch (err2) {
-        return axe.log(err2);
-      }
-    }
-    function createResponder(win, channelId) {
-      var sendToParent = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
-      return function respond(message, keepalive, replyHandler) {
-        var data2 = {
-          channelId: channelId,
-          message: message,
-          keepalive: keepalive
-        };
-        postMessage(win, data2, sendToParent, replyHandler);
-      };
-    }
-    function originIsAllowed(origin) {
-      var allowedOrigins = axe._audit.allowedOrigins;
-      return allowedOrigins && allowedOrigins.includes('*') || allowedOrigins.includes(origin);
-    }
-    function messageHandler(_ref2, topicHandler) {
-      var origin = _ref2.origin, dataString = _ref2.data, win = _ref2.source;
-      try {
-        var data2 = parseMessage(dataString) || {};
-        var channelId = data2.channelId, message = data2.message, messageId = data2.messageId;
-        if (!originIsAllowed(origin) || !isNewMessage(messageId)) {
-          return;
-        }
-        if (message instanceof Error && win.parent !== window) {
-          axe.log(message);
-          return false;
-        }
-        try {
-          if (data2.topic) {
-            var responder = createResponder(win, channelId);
-            assertIsParentWindow(win);
-            topicHandler(data2, responder);
-          } else {
-            callReplyHandler(win, data2);
-          }
-        } catch (error) {
-          processError(win, error, channelId);
-        }
-      } catch (error) {
-        axe.log(error);
-        return false;
-      }
-    }
-    function callReplyHandler(win, data2) {
-      var channelId = data2.channelId, message = data2.message, keepalive = data2.keepalive;
-      var _ref3 = getReplyHandler(channelId) || {}, replyHandler = _ref3.replyHandler, sendToParent = _ref3.sendToParent;
-      if (!replyHandler) {
-        return;
-      }
-      sendToParent ? assertIsParentWindow(win) : assertIsFrameWindow(win);
-      var responder = createResponder(win, channelId, sendToParent);
-      if (!keepalive && channelId) {
-        deleteReplyHandler(channelId);
-      }
-      try {
-        replyHandler(message, keepalive, responder);
-      } catch (error) {
-        axe.log(error);
-        responder(error, keepalive);
-      }
-    }
-    var frameMessenger = {
-      open: function open(topicHandler) {
-        if (typeof window.addEventListener !== 'function') {
-          return;
-        }
-        var handler = function handler(messageEvent) {
-          messageHandler(messageEvent, topicHandler);
-        };
-        window.addEventListener('message', handler, false);
-        return function() {
-          window.removeEventListener('message', handler, false);
-        };
-      },
-      post: function post(win, data2, replyHandler) {
-        if (typeof window.addEventListener !== 'function') {
-          return false;
-        }
-        return postMessage(win, data2, false, replyHandler);
-      }
-    };
-    function setDefaultFrameMessenger(respondable5) {
-      respondable5.updateMessenger(frameMessenger);
-    }
     function aggregate(map, values, initial) {
       values = values.slice();
       if (initial) {
@@ -11608,14 +11243,14 @@ module.exports = {
     }
     function aggregateChecks(nodeResOriginal) {
       var nodeResult = Object.assign({}, nodeResOriginal);
-      anyAllNone(nodeResult, function(check4, type) {
-        var i = typeof check4.result === 'undefined' ? -1 : checkMap.indexOf(check4.result);
-        check4.priority = i !== -1 ? i : constants_default.CANTTELL_PRIO;
+      anyAllNone(nodeResult, function(check, type) {
+        var i = typeof check.result === 'undefined' ? -1 : checkMap.indexOf(check.result);
+        check.priority = i !== -1 ? i : constants_default.CANTTELL_PRIO;
         if (type === 'none') {
-          if (check4.priority === constants_default.PASS_PRIO) {
-            check4.priority = constants_default.FAIL_PRIO;
-          } else if (check4.priority === constants_default.FAIL_PRIO) {
-            check4.priority = constants_default.PASS_PRIO;
+          if (check.priority === constants_default.PASS_PRIO) {
+            check.priority = constants_default.FAIL_PRIO;
+          } else if (check.priority === constants_default.FAIL_PRIO) {
+            check.priority = constants_default.PASS_PRIO;
           }
         }
       });
@@ -11633,11 +11268,11 @@ module.exports = {
       nodeResult.priority = Math.max(priorities.all, priorities.none, priorities.any);
       var impacts = [];
       checkTypes.forEach(function(type) {
-        nodeResult[type] = nodeResult[type].filter(function(check4) {
-          return check4.priority === nodeResult.priority && check4.priority === priorities[type];
+        nodeResult[type] = nodeResult[type].filter(function(check) {
+          return check.priority === nodeResult.priority && check.priority === priorities[type];
         });
-        nodeResult[type].forEach(function(check4) {
-          return impacts.push(check4.impact);
+        nodeResult[type].forEach(function(check) {
+          return impacts.push(check.impact);
         });
       });
       if ([ CANTTELL_PRIO, FAIL_PRIO ].includes(nodeResult.priority)) {
@@ -11655,14 +11290,14 @@ module.exports = {
     }
     var aggregate_checks_default = aggregateChecks;
     function finalizeRuleResult(ruleResult) {
-      var rule3 = axe._audit.rules.find(function(rule4) {
-        return rule4.id === ruleResult.id;
+      var rule = axe._audit.rules.find(function(rule2) {
+        return rule2.id === ruleResult.id;
       });
-      if (rule3 && rule3.impact) {
+      if (rule && rule.impact) {
         ruleResult.nodes.forEach(function(node) {
           [ 'any', 'all', 'none' ].forEach(function(checkType) {
             (node[checkType] || []).forEach(function(checkResult) {
-              checkResult.impact = rule3.impact;
+              checkResult.impact = rule.impact;
             });
           });
         });
@@ -11759,6 +11394,12 @@ module.exports = {
       return areStylesSet(el.parentNode, styles, stopAt);
     }
     var are_styles_set_default = areStylesSet;
+    function assert(bool, message) {
+      if (!bool) {
+        throw new Error(message);
+      }
+    }
+    var assert_default = assert;
     function toArray(thing) {
       return Array.prototype.slice.call(thing);
     }
@@ -11944,8 +11585,8 @@ module.exports = {
         elm: elm,
         doc: doc
       });
-      return stack.map(function(_ref4) {
-        var elm2 = _ref4.elm, doc2 = _ref4.doc;
+      return stack.map(function(_ref) {
+        var elm2 = _ref.elm, doc2 = _ref.doc;
         return generateSelector2(elm2, options, doc2);
       });
     }
@@ -12256,15 +11897,32 @@ module.exports = {
     var _cache = {};
     var cache = {
       set: function set(key, value) {
+        validateKey(key);
         _cache[key] = value;
       },
-      get: function get(key) {
-        return _cache[key];
+      get: function get(key, creator) {
+        validateCreator(creator);
+        if (key in _cache) {
+          return _cache[key];
+        }
+        if (typeof creator === 'function') {
+          var value = creator();
+          assert_default(value !== void 0, 'Cache creator function should not return undefined');
+          this.set(key, value);
+          return _cache[key];
+        }
       },
       clear: function clear() {
         _cache = {};
       }
     };
+    function validateKey(key) {
+      assert_default(typeof key === 'string', 'key must be a string, ' + _typeof(key) + ' given');
+      assert_default(key !== '', 'key must not be empty');
+    }
+    function validateCreator(creator) {
+      assert_default(typeof creator === 'function' || typeof creator === 'undefined', 'creator must be a function or undefined, ' + _typeof(creator) + ' given');
+    }
     var cache_default = cache;
     function getNodeFromTree(vNode, node) {
       var el = node || vNode;
@@ -12279,13 +11937,13 @@ module.exports = {
       }
       return str;
     }
-    function getSource2(element) {
+    function getSource(element) {
       if (!(element !== null && element !== void 0 && element.outerHTML)) {
         return '';
       }
       var source = element.outerHTML;
-      if (!source && typeof XMLSerializer === 'function') {
-        source = new XMLSerializer().serializeToString(element);
+      if (!source && typeof window.XMLSerializer === 'function') {
+        source = new window.XMLSerializer().serializeToString(element);
       }
       return truncate(source || '');
     }
@@ -12316,7 +11974,7 @@ module.exports = {
       this.source = null;
       if (!axe._audit.noHtml) {
         var _this$spec$source;
-        this.source = (_this$spec$source = this.spec.source) !== null && _this$spec$source !== void 0 ? _this$spec$source : getSource2(this._element);
+        this.source = (_this$spec$source = this.spec.source) !== null && _this$spec$source !== void 0 ? _this$spec$source : getSource(this._element);
       }
     }
     DqElement.prototype = {
@@ -12411,8 +12069,8 @@ module.exports = {
       return out;
     }
     var clone_default = clone;
-    var css_selector_parser = __toModule(require_lib());
-    var parser = new css_selector_parser.CssSelectorParser();
+    var import_css_selector_parser = __toModule(require_lib());
+    var parser = new import_css_selector_parser.CssSelectorParser();
     parser.registerSelectorPseudos('not');
     parser.registerSelectorPseudos('is');
     parser.registerNestingOperators('>');
@@ -12429,7 +12087,7 @@ module.exports = {
     function matchesAttributes(vNode, exp) {
       return !exp.attributes || exp.attributes.every(function(att) {
         var nodeAtt = vNode.attr(att.key);
-        return nodeAtt !== null && (!att.value || att.test(nodeAtt));
+        return nodeAtt !== null && att.test(nodeAtt);
       });
     }
     function matchesId(vNode, exp) {
@@ -12508,7 +12166,7 @@ module.exports = {
 
          default:
           test = function test(value) {
-            return !!value;
+            return value !== null;
           };
         }
         if (attributeValue === '' && /^[*$^]=$/.test(att.operator)) {
@@ -12524,6 +12182,7 @@ module.exports = {
         return {
           key: attributeKey,
           value: attributeValue,
+          type: typeof att.value === 'undefined' ? 'attrExist' : 'attrValue',
           test: test
         };
       });
@@ -12561,17 +12220,17 @@ module.exports = {
     function convertExpressions(expressions) {
       return expressions.map(function(exp) {
         var newExp = [];
-        var rule3 = exp.rule;
-        while (rule3) {
+        var rule = exp.rule;
+        while (rule) {
           newExp.push({
-            tag: rule3.tagName ? rule3.tagName.toLowerCase() : '*',
-            combinator: rule3.nestingOperator ? rule3.nestingOperator : ' ',
-            id: rule3.id,
-            attributes: convertAttributes(rule3.attrs),
-            classes: convertClasses(rule3.classNames),
-            pseudos: convertPseudos(rule3.pseudos)
+            tag: rule.tagName ? rule.tagName.toLowerCase() : '*',
+            combinator: rule.nestingOperator ? rule.nestingOperator : ' ',
+            id: rule.id,
+            attributes: convertAttributes(rule.attrs),
+            classes: convertClasses(rule.classNames),
+            pseudos: convertPseudos(rule.pseudos)
           });
-          rule3 = rule3.rule;
+          rule = rule.rule;
         }
         return newExp;
       });
@@ -12582,20 +12241,23 @@ module.exports = {
       return convertExpressions(expressions);
     }
     function optimizedMatchesExpression(vNode, expressions, index, matchAnyParent) {
+      if (!vNode) {
+        return false;
+      }
       var isArray = Array.isArray(expressions);
       var expression = isArray ? expressions[index] : expressions;
-      var matches14 = matchExpression(vNode, expression);
-      while (!matches14 && matchAnyParent && vNode.parent) {
+      var matches4 = matchExpression(vNode, expression);
+      while (!matches4 && matchAnyParent && vNode.parent) {
         vNode = vNode.parent;
-        matches14 = matchExpression(vNode, expression);
+        matches4 = matchExpression(vNode, expression);
       }
       if (index > 0) {
         if ([ ' ', '>' ].includes(expression.combinator) === false) {
           throw new Error('axe.utils.matchesExpression does not support the combinator: ' + expression.combinator);
         }
-        matches14 = matches14 && optimizedMatchesExpression(vNode.parent, expressions, index - 1, expression.combinator === ' ');
+        matches4 = matches4 && optimizedMatchesExpression(vNode.parent, expressions, index - 1, expression.combinator === ' ');
       }
-      return matches14;
+      return matches4;
     }
     function _matchesExpression(vNode, expressions, matchAnyParent) {
       return optimizedMatchesExpression(vNode, expressions, expressions.length - 1, matchAnyParent);
@@ -12719,6 +12381,357 @@ module.exports = {
       return q;
     }
     var queue_default = queue;
+    var uuid;
+    var _rng;
+    var _crypto = window.crypto || window.msCrypto;
+    if (!_rng && _crypto && _crypto.getRandomValues) {
+      _rnds8 = new Uint8Array(16);
+      _rng = function whatwgRNG() {
+        _crypto.getRandomValues(_rnds8);
+        return _rnds8;
+      };
+    }
+    var _rnds8;
+    if (!_rng) {
+      _rnds = new Array(16);
+      _rng = function _rng() {
+        for (var i = 0, r; i < 16; i++) {
+          if ((i & 3) === 0) {
+            r = Math.random() * 4294967296;
+          }
+          _rnds[i] = r >>> ((i & 3) << 3) & 255;
+        }
+        return _rnds;
+      };
+    }
+    var _rnds;
+    var BufferClass = typeof window.Buffer == 'function' ? window.Buffer : Array;
+    var _byteToHex = [];
+    var _hexToByte = {};
+    for (var i = 0; i < 256; i++) {
+      _byteToHex[i] = (i + 256).toString(16).substr(1);
+      _hexToByte[_byteToHex[i]] = i;
+    }
+    function parse(s, buf, offset) {
+      var i = buf && offset || 0, ii = 0;
+      buf = buf || [];
+      s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
+        if (ii < 16) {
+          buf[i + ii++] = _hexToByte[oct];
+        }
+      });
+      while (ii < 16) {
+        buf[i + ii++] = 0;
+      }
+      return buf;
+    }
+    function unparse(buf, offset) {
+      var i = offset || 0, bth = _byteToHex;
+      return bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + '-' + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]] + bth[buf[i++]];
+    }
+    var _seedBytes = _rng();
+    var _nodeId = [ _seedBytes[0] | 1, _seedBytes[1], _seedBytes[2], _seedBytes[3], _seedBytes[4], _seedBytes[5] ];
+    var _clockseq = (_seedBytes[6] << 8 | _seedBytes[7]) & 16383;
+    var _lastMSecs = 0;
+    var _lastNSecs = 0;
+    function v1(options, buf, offset) {
+      var i = buf && offset || 0;
+      var b = buf || [];
+      options = options || {};
+      var clockseq = options.clockseq != null ? options.clockseq : _clockseq;
+      var msecs = options.msecs != null ? options.msecs : new Date().getTime();
+      var nsecs = options.nsecs != null ? options.nsecs : _lastNSecs + 1;
+      var dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 1e4;
+      if (dt < 0 && options.clockseq == null) {
+        clockseq = clockseq + 1 & 16383;
+      }
+      if ((dt < 0 || msecs > _lastMSecs) && options.nsecs == null) {
+        nsecs = 0;
+      }
+      if (nsecs >= 1e4) {
+        throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
+      }
+      _lastMSecs = msecs;
+      _lastNSecs = nsecs;
+      _clockseq = clockseq;
+      msecs += 122192928e5;
+      var tl = ((msecs & 268435455) * 1e4 + nsecs) % 4294967296;
+      b[i++] = tl >>> 24 & 255;
+      b[i++] = tl >>> 16 & 255;
+      b[i++] = tl >>> 8 & 255;
+      b[i++] = tl & 255;
+      var tmh = msecs / 4294967296 * 1e4 & 268435455;
+      b[i++] = tmh >>> 8 & 255;
+      b[i++] = tmh & 255;
+      b[i++] = tmh >>> 24 & 15 | 16;
+      b[i++] = tmh >>> 16 & 255;
+      b[i++] = clockseq >>> 8 | 128;
+      b[i++] = clockseq & 255;
+      var node = options.node || _nodeId;
+      for (var n = 0; n < 6; n++) {
+        b[i + n] = node[n];
+      }
+      return buf ? buf : unparse(b);
+    }
+    function v4(options, buf, offset) {
+      var i = buf && offset || 0;
+      if (typeof options == 'string') {
+        buf = options == 'binary' ? new BufferClass(16) : null;
+        options = null;
+      }
+      options = options || {};
+      var rnds = options.random || (options.rng || _rng)();
+      rnds[6] = rnds[6] & 15 | 64;
+      rnds[8] = rnds[8] & 63 | 128;
+      if (buf) {
+        for (var ii = 0; ii < 16; ii++) {
+          buf[i + ii] = rnds[ii];
+        }
+      }
+      return buf || unparse(rnds);
+    }
+    uuid = v4;
+    uuid.v1 = v1;
+    uuid.v4 = v4;
+    uuid.parse = parse;
+    uuid.unparse = unparse;
+    uuid.BufferClass = BufferClass;
+    axe._uuid = v1();
+    var uuid_default = v4;
+    var errorTypes = Object.freeze([ 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError' ]);
+    function stringifyMessage(_ref2) {
+      var topic = _ref2.topic, channelId = _ref2.channelId, message = _ref2.message, messageId = _ref2.messageId, keepalive = _ref2.keepalive;
+      var data2 = {
+        channelId: channelId,
+        topic: topic,
+        messageId: messageId,
+        keepalive: !!keepalive,
+        source: getSource2()
+      };
+      if (message instanceof Error) {
+        data2.error = {
+          name: message.name,
+          message: message.message,
+          stack: message.stack
+        };
+      } else {
+        data2.payload = message;
+      }
+      return JSON.stringify(data2);
+    }
+    function parseMessage(dataString) {
+      var data2;
+      try {
+        data2 = JSON.parse(dataString);
+      } catch (e) {
+        return;
+      }
+      if (!isRespondableMessage(data2)) {
+        return;
+      }
+      var _data = data2, topic = _data.topic, channelId = _data.channelId, messageId = _data.messageId, keepalive = _data.keepalive;
+      var message = _typeof(data2.error) === 'object' ? buildErrorObject(data2.error) : data2.payload;
+      return {
+        topic: topic,
+        message: message,
+        messageId: messageId,
+        channelId: channelId,
+        keepalive: !!keepalive
+      };
+    }
+    function isRespondableMessage(postedMessage) {
+      return postedMessage !== null && _typeof(postedMessage) === 'object' && typeof postedMessage.channelId === 'string' && postedMessage.source === getSource2();
+    }
+    function buildErrorObject(error) {
+      var msg = error.message || 'Unknown error occurred';
+      var errorName = errorTypes.includes(error.name) ? error.name : 'Error';
+      var ErrConstructor = window[errorName] || Error;
+      if (error.stack) {
+        msg += '\n' + error.stack.replace(error.message, '');
+      }
+      return new ErrConstructor(msg);
+    }
+    function getSource2() {
+      var application = 'axeAPI';
+      var version = '';
+      if (typeof axe !== 'undefined' && axe._audit && axe._audit.application) {
+        application = axe._audit.application;
+      }
+      if (typeof axe !== 'undefined') {
+        version = axe.version;
+      }
+      return application + '.' + version;
+    }
+    function assertIsParentWindow(win) {
+      assetNotGlobalWindow(win);
+      assert_default(window.parent === win, 'Source of the response must be the parent window.');
+    }
+    function assertIsFrameWindow(win) {
+      assetNotGlobalWindow(win);
+      assert_default(win.parent === window, 'Respondable target must be a frame in the current window');
+    }
+    function assetNotGlobalWindow(win) {
+      assert_default(window !== win, 'Messages can not be sent to the same window.');
+    }
+    var channels = {};
+    function storeReplyHandler(channelId, replyHandler) {
+      var sendToParent = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+      assert_default(!channels[channelId], 'A replyHandler already exists for this message channel.');
+      channels[channelId] = {
+        replyHandler: replyHandler,
+        sendToParent: sendToParent
+      };
+    }
+    function getReplyHandler(channelId) {
+      return channels[channelId];
+    }
+    function deleteReplyHandler(channelId) {
+      delete channels[channelId];
+    }
+    var messageIds = [];
+    function createMessageId() {
+      var uuid2 = ''.concat(v4(), ':').concat(v4());
+      if (messageIds.includes(uuid2)) {
+        return createMessageId();
+      }
+      messageIds.push(uuid2);
+      return uuid2;
+    }
+    function isNewMessage(uuid2) {
+      if (messageIds.includes(uuid2)) {
+        return false;
+      }
+      messageIds.push(uuid2);
+      return true;
+    }
+    function postMessage(win, data2, sendToParent, replyHandler) {
+      if (typeof replyHandler === 'function') {
+        storeReplyHandler(data2.channelId, replyHandler, sendToParent);
+      }
+      sendToParent ? assertIsParentWindow(win) : assertIsFrameWindow(win);
+      if (data2.message instanceof Error && !sendToParent) {
+        axe.log(data2.message);
+        return false;
+      }
+      var dataString = stringifyMessage(_extends({
+        messageId: createMessageId()
+      }, data2));
+      var allowedOrigins = axe._audit.allowedOrigins;
+      if (!allowedOrigins || !allowedOrigins.length) {
+        return false;
+      }
+      allowedOrigins.forEach(function(origin) {
+        try {
+          win.postMessage(dataString, origin);
+        } catch (err2) {
+          if (err2 instanceof win.DOMException) {
+            throw new Error('allowedOrigins value "'.concat(origin, '" is not a valid origin'));
+          }
+          throw err2;
+        }
+      });
+      return true;
+    }
+    function processError(win, error, channelId) {
+      if (!win.parent !== window) {
+        return axe.log(error);
+      }
+      try {
+        postMessage(win, {
+          topic: null,
+          channelId: channelId,
+          message: error,
+          messageId: createMessageId(),
+          keepalive: true
+        }, true);
+      } catch (err2) {
+        return axe.log(err2);
+      }
+    }
+    function createResponder(win, channelId) {
+      var sendToParent = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+      return function respond(message, keepalive, replyHandler) {
+        var data2 = {
+          channelId: channelId,
+          message: message,
+          keepalive: keepalive
+        };
+        postMessage(win, data2, sendToParent, replyHandler);
+      };
+    }
+    function originIsAllowed(origin) {
+      var allowedOrigins = axe._audit.allowedOrigins;
+      return allowedOrigins && allowedOrigins.includes('*') || allowedOrigins.includes(origin);
+    }
+    function messageHandler(_ref3, topicHandler) {
+      var origin = _ref3.origin, dataString = _ref3.data, win = _ref3.source;
+      try {
+        var data2 = parseMessage(dataString) || {};
+        var channelId = data2.channelId, message = data2.message, messageId = data2.messageId;
+        if (!originIsAllowed(origin) || !isNewMessage(messageId)) {
+          return;
+        }
+        if (message instanceof Error && win.parent !== window) {
+          axe.log(message);
+          return false;
+        }
+        try {
+          if (data2.topic) {
+            var responder = createResponder(win, channelId);
+            assertIsParentWindow(win);
+            topicHandler(data2, responder);
+          } else {
+            callReplyHandler(win, data2);
+          }
+        } catch (error) {
+          processError(win, error, channelId);
+        }
+      } catch (error) {
+        axe.log(error);
+        return false;
+      }
+    }
+    function callReplyHandler(win, data2) {
+      var channelId = data2.channelId, message = data2.message, keepalive = data2.keepalive;
+      var _ref4 = getReplyHandler(channelId) || {}, replyHandler = _ref4.replyHandler, sendToParent = _ref4.sendToParent;
+      if (!replyHandler) {
+        return;
+      }
+      sendToParent ? assertIsParentWindow(win) : assertIsFrameWindow(win);
+      var responder = createResponder(win, channelId, sendToParent);
+      if (!keepalive && channelId) {
+        deleteReplyHandler(channelId);
+      }
+      try {
+        replyHandler(message, keepalive, responder);
+      } catch (error) {
+        axe.log(error);
+        responder(error, keepalive);
+      }
+    }
+    var frameMessenger = {
+      open: function open(topicHandler) {
+        if (typeof window.addEventListener !== 'function') {
+          return;
+        }
+        var handler = function handler(messageEvent) {
+          messageHandler(messageEvent, topicHandler);
+        };
+        window.addEventListener('message', handler, false);
+        return function() {
+          window.removeEventListener('message', handler, false);
+        };
+      },
+      post: function post(win, data2, replyHandler) {
+        if (typeof window.addEventListener !== 'function') {
+          return false;
+        }
+        return postMessage(win, data2, false, replyHandler);
+      }
+    };
+    function setDefaultFrameMessenger(respondable2) {
+      respondable2.updateMessenger(frameMessenger);
+    }
     var closeHandler;
     var postMessage2;
     var topicHandlers = {};
@@ -12837,8 +12850,8 @@ module.exports = {
       resultSet.forEach(function(res) {
         res.node = dq_element_default.fromFrame(res.node, options, frameSpec);
         var checks = get_all_checks_default(res);
-        checks.forEach(function(check4) {
-          check4.relatedNodes = check4.relatedNodes.map(function(node) {
+        checks.forEach(function(check) {
+          check.relatedNodes = check.relatedNodes.map(function(node) {
             return dq_element_default.fromFrame(node, options, frameSpec);
           });
         });
@@ -12931,13 +12944,13 @@ module.exports = {
       var q = queue_default();
       var frames = parentContent.frames;
       frames.forEach(function(_ref6) {
-        var frameElement = _ref6.node, context5 = _objectWithoutProperties(_ref6, _excluded);
+        var frameElement = _ref6.node, context = _objectWithoutProperties(_ref6, _excluded);
         q.defer(function(res, rej) {
           var params = {
             options: options,
             command: command,
             parameter: parameter,
-            context: context5
+            context: context
           };
           function callback(results) {
             if (!results) {
@@ -12956,28 +12969,18 @@ module.exports = {
       })['catch'](reject);
     }
     function _contains(vNode, otherVNode) {
-      if (vNode.shadowId || otherVNode.shadowId) {
-        do {
-          if (vNode.shadowId === otherVNode.shadowId) {
-            return true;
-          }
-          otherVNode = otherVNode.parent;
-        } while (otherVNode);
-        return false;
+      if (!vNode.shadowId && !otherVNode.shadowId && vNode.actualNode && typeof vNode.actualNode.contains === 'function') {
+        return vNode.actualNode.contains(otherVNode.actualNode);
       }
-      if (!vNode.actualNode) {
-        do {
-          if (otherVNode === vNode) {
-            return true;
-          }
-          otherVNode = otherVNode.parent;
-        } while (otherVNode);
-      }
-      if (typeof vNode.actualNode.contains !== 'function') {
-        var position = vNode.actualNode.compareDocumentPosition(otherVNode.actualNode);
-        return !!(position & 16);
-      }
-      return vNode.actualNode.contains(otherVNode.actualNode);
+      do {
+        if (vNode === otherVNode) {
+          return true;
+        } else if (otherVNode.nodeIndex < vNode.nodeIndex) {
+          return false;
+        }
+        otherVNode = otherVNode.parent;
+      } while (otherVNode);
+      return false;
     }
     function deepMerge() {
       var target = {};
@@ -13025,8 +13028,14 @@ module.exports = {
     var is_shadow_root_default = isShadowRoot;
     var dom_exports = {};
     __export(dom_exports, {
+      createGrid: function createGrid() {
+        return _createGrid;
+      },
       findElmsInContext: function findElmsInContext() {
         return find_elms_in_context_default;
+      },
+      findNearbyElms: function findNearbyElms() {
+        return _findNearbyElms;
       },
       findUp: function findUp() {
         return find_up_default;
@@ -13046,6 +13055,9 @@ module.exports = {
       getElementStack: function getElementStack() {
         return get_element_stack_default;
       },
+      getOverflowHiddenAncestors: function getOverflowHiddenAncestors() {
+        return get_overflow_hidden_ancestors_default;
+      },
       getRootNode: function getRootNode() {
         return get_root_node_default2;
       },
@@ -13061,11 +13073,17 @@ module.exports = {
       getViewportSize: function getViewportSize() {
         return get_viewport_size_default;
       },
+      getVisibleChildTextRects: function getVisibleChildTextRects() {
+        return get_visible_child_text_rects_default;
+      },
       hasContent: function hasContent() {
         return has_content_default;
       },
       hasContentVirtual: function hasContentVirtual() {
         return has_content_virtual_default;
+      },
+      hasLangText: function hasLangText() {
+        return _hasLangText;
       },
       idrefs: function idrefs() {
         return idrefs_default;
@@ -13077,19 +13095,28 @@ module.exports = {
         return _isCurrentPageLink;
       },
       isFocusable: function isFocusable() {
-        return is_focusable_default;
+        return _isFocusable;
       },
       isHTML5: function isHTML5() {
         return is_html5_default;
       },
+      isHiddenForEveryone: function isHiddenForEveryone() {
+        return _isHiddenForEveryone;
+      },
       isHiddenWithCSS: function isHiddenWithCSS() {
         return is_hidden_with_css_default;
+      },
+      isInTabOrder: function isInTabOrder() {
+        return _isInTabOrder;
       },
       isInTextBlock: function isInTextBlock() {
         return is_in_text_block_default;
       },
       isModalOpen: function isModalOpen() {
         return is_modal_open_default;
+      },
+      isMultiline: function isMultiline() {
+        return _isMultiline;
       },
       isNativelyFocusable: function isNativelyFocusable() {
         return is_natively_focusable_default;
@@ -13109,6 +13136,12 @@ module.exports = {
       isVisible: function isVisible() {
         return is_visible_default;
       },
+      isVisibleOnScreen: function isVisibleOnScreen() {
+        return _isVisibleOnScreen;
+      },
+      isVisibleToScreenReaders: function isVisibleToScreenReaders() {
+        return _isVisibleToScreenReaders;
+      },
       isVisualContent: function isVisualContent() {
         return is_visual_content_default;
       },
@@ -13126,6 +13159,9 @@ module.exports = {
       },
       visuallyOverlaps: function visuallyOverlaps() {
         return visually_overlaps_default;
+      },
+      visuallySort: function visuallySort() {
+        return _visuallySort;
       }
     });
     function getRootNode(node) {
@@ -13138,13 +13174,13 @@ module.exports = {
     var get_root_node_default = getRootNode;
     var get_root_node_default2 = get_root_node_default;
     function findElmsInContext(_ref7) {
-      var context5 = _ref7.context, value = _ref7.value, attr = _ref7.attr, _ref7$elm = _ref7.elm, elm = _ref7$elm === void 0 ? '' : _ref7$elm;
+      var context = _ref7.context, value = _ref7.value, attr = _ref7.attr, _ref7$elm = _ref7.elm, elm = _ref7$elm === void 0 ? '' : _ref7$elm;
       var root;
       var escapedValue = escape_selector_default(value);
-      if (context5.nodeType === 9 || context5.nodeType === 11) {
-        root = context5;
+      if (context.nodeType === 9 || context.nodeType === 11) {
+        root = context;
       } else {
-        root = get_root_node_default2(context5);
+        root = get_root_node_default2(context);
       }
       return Array.from(root.querySelectorAll(elm + '[' + attr + '=' + escapedValue + ']'));
     }
@@ -13178,6 +13214,175 @@ module.exports = {
       return find_up_virtual_default(get_node_from_tree_default(element), target);
     }
     var find_up_default = findUp;
+    var import_memoizee = __toModule(require_memoizee());
+    axe._memoizedFns = [];
+    function memoizeImplementation(fn) {
+      var memoized = (0, import_memoizee['default'])(fn);
+      axe._memoizedFns.push(memoized);
+      return memoized;
+    }
+    var memoize_default = memoizeImplementation;
+    function _rectsOverlap(rect1, rect2) {
+      return (rect1.left | 0) < (rect2.right | 0) && (rect1.right | 0) > (rect2.left | 0) && (rect1.top | 0) < (rect2.bottom | 0) && (rect1.bottom | 0) > (rect2.top | 0);
+    }
+    var getOverflowHiddenAncestors = memoize_default(function getOverflowHiddenAncestorsMemoized(vNode) {
+      var ancestors = [];
+      if (!vNode) {
+        return ancestors;
+      }
+      var overflow = vNode.getComputedStylePropertyValue('overflow');
+      if (overflow === 'hidden') {
+        ancestors.push(vNode);
+      }
+      return ancestors.concat(getOverflowHiddenAncestors(vNode.parent));
+    });
+    var get_overflow_hidden_ancestors_default = getOverflowHiddenAncestors;
+    var clipRegex = /rect\s*\(([0-9]+)px,?\s*([0-9]+)px,?\s*([0-9]+)px,?\s*([0-9]+)px\s*\)/;
+    var clipPathRegex = /(\w+)\((\d+)/;
+    function nativelyHidden(vNode) {
+      return [ 'style', 'script', 'noscript', 'template' ].includes(vNode.props.nodeName);
+    }
+    function displayHidden(vNode) {
+      if (vNode.props.nodeName === 'area') {
+        return false;
+      }
+      return vNode.getComputedStylePropertyValue('display') === 'none';
+    }
+    function visibilityHidden(vNode) {
+      var _ref8 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, isAncestor = _ref8.isAncestor;
+      return !isAncestor && [ 'hidden', 'collapse' ].includes(vNode.getComputedStylePropertyValue('visibility'));
+    }
+    function contentVisibiltyHidden(vNode) {
+      var _ref9 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, isAncestor = _ref9.isAncestor;
+      return !!isAncestor && vNode.getComputedStylePropertyValue('content-visibility') === 'hidden';
+    }
+    function ariaHidden(vNode) {
+      return vNode.attr('aria-hidden') === 'true';
+    }
+    function opacityHidden(vNode) {
+      return vNode.getComputedStylePropertyValue('opacity') === '0';
+    }
+    function scrollHidden(vNode) {
+      var scroll = _getScroll(vNode.actualNode);
+      var elHeight = parseInt(vNode.getComputedStylePropertyValue('height'));
+      var elWidth = parseInt(vNode.getComputedStylePropertyValue('width'));
+      return !!scroll && (elHeight === 0 || elWidth === 0);
+    }
+    function overflowHidden(vNode) {
+      var _ref10 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, isAncestor = _ref10.isAncestor;
+      if (isAncestor) {
+        return false;
+      }
+      var rect = vNode.boundingClientRect;
+      var nodes = get_overflow_hidden_ancestors_default(vNode);
+      if (!nodes.length) {
+        return false;
+      }
+      return nodes.some(function(node) {
+        var nodeRect = node.boundingClientRect;
+        if (nodeRect.width < 2 || nodeRect.height < 2) {
+          return true;
+        }
+        return !_rectsOverlap(rect, nodeRect);
+      });
+    }
+    function clipHidden(vNode) {
+      var matchesClip = vNode.getComputedStylePropertyValue('clip').match(clipRegex);
+      var matchesClipPath = vNode.getComputedStylePropertyValue('clip-path').match(clipPathRegex);
+      if (matchesClip && matchesClip.length === 5) {
+        var position = vNode.getComputedStylePropertyValue('position');
+        if ([ 'fixed', 'absolute' ].includes(position)) {
+          return matchesClip[3] - matchesClip[1] <= 0 && matchesClip[2] - matchesClip[4] <= 0;
+        }
+      }
+      if (matchesClipPath) {
+        var type = matchesClipPath[1];
+        var value = parseInt(matchesClipPath[2], 10);
+        switch (type) {
+         case 'inset':
+          return value >= 50;
+
+         case 'circle':
+          return value === 0;
+
+         default:
+        }
+      }
+      return false;
+    }
+    function areaHidden(vNode, visibleFunction) {
+      var mapEl = closest_default(vNode, 'map');
+      if (!mapEl) {
+        return true;
+      }
+      var mapElName = mapEl.attr('name');
+      if (!mapElName) {
+        return true;
+      }
+      var mapElRootNode = get_root_node_default(vNode.actualNode);
+      if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
+        return true;
+      }
+      var refs = query_selector_all_default(axe._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
+      if (!refs || !refs.length) {
+        return true;
+      }
+      return refs.some(function(ref) {
+        return !visibleFunction(ref);
+      });
+    }
+    function detailsHidden(vNode) {
+      var _vNode$parent;
+      if (((_vNode$parent = vNode.parent) === null || _vNode$parent === void 0 ? void 0 : _vNode$parent.props.nodeName) !== 'details') {
+        return false;
+      }
+      if (vNode.props.nodeName === 'summary') {
+        var firstSummary = vNode.parent.children.find(function(node) {
+          return node.props.nodeName === 'summary';
+        });
+        if (firstSummary === vNode) {
+          return false;
+        }
+      }
+      return !vNode.parent.hasAttr('open');
+    }
+    var hiddenMethods = [ displayHidden, visibilityHidden, contentVisibiltyHidden, detailsHidden ];
+    function _isHiddenForEveryone(vNode) {
+      var _ref11 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, skipAncestors = _ref11.skipAncestors, _ref11$isAncestor = _ref11.isAncestor, isAncestor = _ref11$isAncestor === void 0 ? false : _ref11$isAncestor;
+      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
+      if (skipAncestors) {
+        return isHiddenSelf(vNode, isAncestor);
+      }
+      return isHiddenAncestors(vNode, isAncestor);
+    }
+    var isHiddenSelf = memoize_default(function isHiddenSelfMemoized(vNode, isAncestor) {
+      if (nativelyHidden(vNode)) {
+        return true;
+      }
+      if (!vNode.actualNode) {
+        return false;
+      }
+      if (hiddenMethods.some(function(method) {
+        return method(vNode, {
+          isAncestor: isAncestor
+        });
+      })) {
+        return true;
+      }
+      if (!vNode.actualNode.isConnected) {
+        return true;
+      }
+      return false;
+    });
+    var isHiddenAncestors = memoize_default(function isHiddenAncestorsMemoized(vNode, isAncestor) {
+      if (isHiddenSelf(vNode, isAncestor)) {
+        return true;
+      }
+      if (!vNode.parent) {
+        return false;
+      }
+      return isHiddenAncestors(vNode.parent, true);
+    });
     function getComposedParent(element) {
       if (element.assignedSlot) {
         return getComposedParent(element.assignedSlot);
@@ -13192,63 +13397,6 @@ module.exports = {
       return null;
     }
     var get_composed_parent_default = getComposedParent;
-    var angularSkipLinkRegex = /^\/\#/;
-    var angularRouterLinkRegex = /^#[!/]/;
-    function _isCurrentPageLink(anchor) {
-      var _window$location;
-      var href = anchor.getAttribute('href');
-      if (!href || href === '#') {
-        return false;
-      }
-      if (angularSkipLinkRegex.test(href)) {
-        return true;
-      }
-      var hash = anchor.hash, protocol = anchor.protocol, hostname = anchor.hostname, port = anchor.port, pathname = anchor.pathname;
-      if (angularRouterLinkRegex.test(hash)) {
-        return false;
-      }
-      if (href.charAt(0) === '#') {
-        return true;
-      }
-      if (typeof ((_window$location = window.location) === null || _window$location === void 0 ? void 0 : _window$location.origin) !== 'string' || window.location.origin.indexOf('://') === -1) {
-        return null;
-      }
-      var currentPageUrl = window.location.origin + window.location.pathname;
-      var url;
-      if (!hostname) {
-        url = window.location.origin;
-      } else {
-        url = ''.concat(protocol, '//').concat(hostname).concat(port ? ':'.concat(port) : '');
-      }
-      if (!pathname) {
-        url += window.location.pathname;
-      } else {
-        url += (pathname[0] !== '/' ? '/' : '') + pathname;
-      }
-      return url === currentPageUrl;
-    }
-    function getElementByReference(node, attr) {
-      var fragment = node.getAttribute(attr);
-      if (!fragment) {
-        return null;
-      }
-      if (attr === 'href' && !_isCurrentPageLink(node)) {
-        return null;
-      }
-      if (fragment.indexOf('#') !== -1) {
-        fragment = decodeURIComponent(fragment.substr(fragment.indexOf('#') + 1));
-      }
-      var candidate = document.getElementById(fragment);
-      if (candidate) {
-        return candidate;
-      }
-      candidate = document.getElementsByName(fragment);
-      if (candidate.length) {
-        return candidate[0];
-      }
-      return null;
-    }
-    var get_element_by_reference_default = getElementByReference;
     function getScrollOffset(element) {
       if (!element.nodeType && element.document) {
         element = element.document;
@@ -13314,6 +13462,14 @@ module.exports = {
       return true;
     }
     function isOffscreen(element) {
+      var _ref12 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, isAncestor = _ref12.isAncestor;
+      if (isAncestor) {
+        return false;
+      }
+      element = element instanceof abstract_virtual_node_default ? element.actualNode : element;
+      if (!element) {
+        return void 0;
+      }
       var leftBoundary;
       var docElement = document.documentElement;
       var styl = window.getComputedStyle(element);
@@ -13338,147 +13494,64 @@ module.exports = {
       return false;
     }
     var is_offscreen_default = isOffscreen;
-    var clipRegex = /rect\s*\(([0-9]+)px,?\s*([0-9]+)px,?\s*([0-9]+)px,?\s*([0-9]+)px\s*\)/;
-    var clipPathRegex = /(\w+)\((\d+)/;
-    function isClipped(style) {
-      var matchesClip = style.getPropertyValue('clip').match(clipRegex);
-      var matchesClipPath = style.getPropertyValue('clip-path').match(clipPathRegex);
-      if (matchesClip && matchesClip.length === 5) {
-        var position = style.getPropertyValue('position');
-        if ([ 'fixed', 'absolute' ].includes(position)) {
-          return matchesClip[3] - matchesClip[1] <= 0 && matchesClip[2] - matchesClip[4] <= 0;
-        }
-      }
-      if (matchesClipPath) {
-        var type = matchesClipPath[1];
-        var value = parseInt(matchesClipPath[2], 10);
-        switch (type) {
-         case 'inset':
-          return value >= 50;
-
-         case 'circle':
-          return value === 0;
-
-         default:
-        }
-      }
-      return false;
+    var hiddenMethods2 = [ opacityHidden, scrollHidden, overflowHidden, clipHidden, is_offscreen_default ];
+    function _isVisibleOnScreen(vNode) {
+      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
+      return isVisibleOnScreenVirtual(vNode);
     }
-    function isAreaVisible(el, screenReader, recursed) {
-      var mapEl = find_up_default(el, 'map');
-      if (!mapEl) {
+    var isVisibleOnScreenVirtual = memoize_default(function isVisibleOnScreenMemoized(vNode, isAncestor) {
+      if (vNode.actualNode && vNode.props.nodeName === 'area') {
+        return !areaHidden(vNode, isVisibleOnScreenVirtual);
+      }
+      if (_isHiddenForEveryone(vNode, {
+        skipAncestors: true,
+        isAncestor: isAncestor
+      })) {
         return false;
       }
-      var mapElName = mapEl.getAttribute('name');
-      if (!mapElName) {
+      if (vNode.actualNode && hiddenMethods2.some(function(method) {
+        return method(vNode, {
+          isAncestor: isAncestor
+        });
+      })) {
         return false;
       }
-      var mapElRootNode = get_root_node_default2(el);
-      if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
-        return false;
-      }
-      var refs = query_selector_all_default(axe._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
-      if (!refs || !refs.length) {
-        return false;
-      }
-      return refs.some(function(_ref8) {
-        var actualNode = _ref8.actualNode;
-        return isVisible(actualNode, screenReader, recursed);
-      });
-    }
-    function isVisible(el, screenReader, recursed) {
-      var _window$Node;
-      if (!el) {
-        throw new TypeError('Cannot determine if element is visible for non-DOM nodes');
-      }
-      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
-      el = vNode ? vNode.actualNode : el;
-      var cacheName = '_isVisible' + (screenReader ? 'ScreenReader' : '');
-      var _ref9 = (_window$Node = window.Node) !== null && _window$Node !== void 0 ? _window$Node : {}, DOCUMENT_NODE = _ref9.DOCUMENT_NODE, DOCUMENT_FRAGMENT_NODE = _ref9.DOCUMENT_FRAGMENT_NODE;
-      var nodeType = vNode ? vNode.props.nodeType : el.nodeType;
-      var nodeName2 = vNode ? vNode.props.nodeName : el.nodeName.toLowerCase();
-      if (vNode && typeof vNode[cacheName] !== 'undefined') {
-        return vNode[cacheName];
-      }
-      if (nodeType === DOCUMENT_NODE) {
+      if (!vNode.parent) {
         return true;
       }
-      if ([ 'style', 'script', 'noscript', 'template' ].includes(nodeName2)) {
-        return false;
-      }
-      if (el && nodeType === DOCUMENT_FRAGMENT_NODE) {
-        el = el.host;
-      }
-      if (screenReader) {
-        var ariaHiddenValue = vNode ? vNode.attr('aria-hidden') : el.getAttribute('aria-hidden');
-        if (ariaHiddenValue === 'true') {
-          return false;
-        }
-      }
-      if (!el) {
-        var parent2 = vNode.parent;
-        var visible5 = true;
-        if (parent2) {
-          visible5 = isVisible(parent2, screenReader, true);
-        }
-        if (vNode) {
-          vNode[cacheName] = visible5;
-        }
-        return visible5;
-      }
-      var style = window.getComputedStyle(el, null);
-      if (style === null) {
-        return false;
-      }
-      if (nodeName2 === 'area') {
-        return isAreaVisible(el, screenReader, recursed);
-      }
-      if (style.getPropertyValue('display') === 'none') {
-        return false;
-      }
-      var elHeight = parseInt(style.getPropertyValue('height'));
-      var elWidth = parseInt(style.getPropertyValue('width'));
-      var scroll = _getScroll(el);
-      var scrollableWithZeroHeight = scroll && elHeight === 0;
-      var scrollableWithZeroWidth = scroll && elWidth === 0;
-      var posAbsoluteOverflowHiddenAndSmall = style.getPropertyValue('position') === 'absolute' && (elHeight < 2 || elWidth < 2) && style.getPropertyValue('overflow') === 'hidden';
-      if (!screenReader && (isClipped(style) || style.getPropertyValue('opacity') === '0' || scrollableWithZeroHeight || scrollableWithZeroWidth || posAbsoluteOverflowHiddenAndSmall)) {
-        return false;
-      }
-      if (!recursed && (style.getPropertyValue('visibility') === 'hidden' || !screenReader && is_offscreen_default(el))) {
-        return false;
-      }
-      var parent = el.assignedSlot ? el.assignedSlot : el.parentNode;
-      var visible4 = false;
-      if (parent) {
-        visible4 = isVisible(parent, screenReader, true);
-      }
-      if (vNode) {
-        vNode[cacheName] = visible4;
-      }
-      return visible4;
+      return isVisibleOnScreenVirtual(vNode.parent, true);
+    });
+    function _getBoundingRect(rectA, rectB) {
+      var top = Math.min(rectA.top, rectB.top);
+      var right = Math.max(rectA.right, rectB.right);
+      var bottom = Math.max(rectA.bottom, rectB.bottom);
+      var left = Math.min(rectA.left, rectB.left);
+      return new window.DOMRect(left, top, right - left, bottom - top);
     }
-    var is_visible_default = isVisible;
-    var gridSize = 200;
-    function createGrid() {
+    function _isPointInRect(_ref13, _ref14) {
+      var x = _ref13.x, y = _ref13.y;
+      var top = _ref14.top, right = _ref14.right, bottom = _ref14.bottom, left = _ref14.left;
+      return y >= top && x <= right && y <= bottom && x >= left;
+    }
+    function _createGrid() {
       var root = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : document.body;
-      var rootGrid = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {
-        container: null,
-        cells: []
-      };
+      var rootGrid = arguments.length > 1 ? arguments[1] : undefined;
       var parentVNode = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+      if (cache_default.get('gridCreated') && !parentVNode) {
+        return constants_default.gridSize;
+      }
+      cache_default.set('gridCreated', true);
       if (!parentVNode) {
+        var _rootGrid;
         var vNode = get_node_from_tree_default(document.documentElement);
         if (!vNode) {
           vNode = new virtual_node_default(document.documentElement);
         }
         vNode._stackingOrder = [ 0 ];
+        (_rootGrid = rootGrid) !== null && _rootGrid !== void 0 ? _rootGrid : rootGrid = new Grid();
         addNodeToGrid(rootGrid, vNode);
         if (_getScroll(vNode.actualNode)) {
-          var subGrid = {
-            container: vNode,
-            cells: []
-          };
+          var subGrid = new Grid(vNode);
           vNode._subGrid = subGrid;
         }
       }
@@ -13498,51 +13571,19 @@ module.exports = {
         var scrollRegionParent = findScrollRegionParent(_vNode, parentVNode);
         var grid = scrollRegionParent ? scrollRegionParent._subGrid : rootGrid;
         if (_getScroll(_vNode.actualNode)) {
-          var _subGrid = {
-            container: _vNode,
-            cells: []
-          };
+          var _subGrid = new Grid(_vNode);
           _vNode._subGrid = _subGrid;
         }
         var rect = _vNode.boundingClientRect;
-        if (rect.width !== 0 && rect.height !== 0 && is_visible_default(node)) {
+        if (rect.width !== 0 && rect.height !== 0 && _isVisibleOnScreen(node)) {
           addNodeToGrid(grid, _vNode);
         }
         if (is_shadow_root_default(node)) {
-          createGrid(node.shadowRoot, grid, _vNode);
+          _createGrid(node.shadowRoot, grid, _vNode);
         }
         node = treeWalker.nextNode();
       }
-    }
-    function getRectStack(grid, rect) {
-      var _grid$cells$row$col$f, _grid$cells$row$col;
-      var recursed = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-      var x = rect.left + rect.width / 2;
-      var y = rect.top + rect.height / 2;
-      var row = y / gridSize | 0;
-      var col = x / gridSize | 0;
-      if (row > grid.cells.length || col > grid.numCols) {
-        throw new Error('Element midpoint exceeds the grid bounds');
-      }
-      var stack = (_grid$cells$row$col$f = (_grid$cells$row$col = grid.cells[row][col]) === null || _grid$cells$row$col === void 0 ? void 0 : _grid$cells$row$col.filter(function(gridCellNode) {
-        return gridCellNode.clientRects.find(function(clientRect) {
-          var rectX = clientRect.left;
-          var rectY = clientRect.top;
-          return x <= rectX + clientRect.width && x >= rectX && y <= rectY + clientRect.height && y >= rectY;
-        });
-      })) !== null && _grid$cells$row$col$f !== void 0 ? _grid$cells$row$col$f : [];
-      var gridContainer = grid.container;
-      if (gridContainer) {
-        stack = getRectStack(gridContainer._grid, gridContainer.boundingClientRect, true).concat(stack);
-      }
-      if (!recursed) {
-        stack = stack.sort(visuallySort).map(function(vNode) {
-          return vNode.actualNode;
-        }).concat(document.documentElement).filter(function(node, index, array) {
-          return array.indexOf(node) === index;
-        });
-      }
-      return stack;
+      return constants_default.gridSize;
     }
     function isStackingContext(vNode, parentVNode) {
       var position = vNode.getComputedStylePropertyValue('position');
@@ -13610,80 +13651,6 @@ module.exports = {
       }
       return false;
     }
-    function isFloated(vNode) {
-      if (!vNode) {
-        return false;
-      }
-      if (vNode._isFloated !== void 0) {
-        return vNode._isFloated;
-      }
-      var floatStyle = vNode.getComputedStylePropertyValue('float');
-      if (floatStyle !== 'none') {
-        vNode._isFloated = true;
-        return true;
-      }
-      var floated = isFloated(vNode.parent);
-      vNode._isFloated = floated;
-      return floated;
-    }
-    function getPositionOrder(vNode) {
-      if (vNode.getComputedStylePropertyValue('display').indexOf('inline') !== -1) {
-        return 2;
-      }
-      if (isFloated(vNode)) {
-        return 1;
-      }
-      return 0;
-    }
-    function visuallySort(a, b) {
-      var length = Math.max(a._stackingOrder.length, b._stackingOrder.length);
-      for (var _i5 = 0; _i5 < length; _i5++) {
-        if (typeof b._stackingOrder[_i5] === 'undefined') {
-          return -1;
-        } else if (typeof a._stackingOrder[_i5] === 'undefined') {
-          return 1;
-        }
-        if (b._stackingOrder[_i5] > a._stackingOrder[_i5]) {
-          return 1;
-        }
-        if (b._stackingOrder[_i5] < a._stackingOrder[_i5]) {
-          return -1;
-        }
-      }
-      var aNode = a.actualNode;
-      var bNode = b.actualNode;
-      if (aNode.getRootNode && aNode.getRootNode() !== bNode.getRootNode()) {
-        var boundaries = [];
-        while (aNode) {
-          boundaries.push({
-            root: aNode.getRootNode(),
-            node: aNode
-          });
-          aNode = aNode.getRootNode().host;
-        }
-        while (bNode && !boundaries.find(function(boundary) {
-          return boundary.root === bNode.getRootNode();
-        })) {
-          bNode = bNode.getRootNode().host;
-        }
-        aNode = boundaries.find(function(boundary) {
-          return boundary.root === bNode.getRootNode();
-        }).node;
-        if (aNode === bNode) {
-          return a.actualNode.getRootNode() !== aNode.getRootNode() ? -1 : 1;
-        }
-      }
-      var _window$Node2 = window.Node, DOCUMENT_POSITION_FOLLOWING = _window$Node2.DOCUMENT_POSITION_FOLLOWING, DOCUMENT_POSITION_CONTAINS = _window$Node2.DOCUMENT_POSITION_CONTAINS, DOCUMENT_POSITION_CONTAINED_BY = _window$Node2.DOCUMENT_POSITION_CONTAINED_BY;
-      var docPosition = aNode.compareDocumentPosition(bNode);
-      var DOMOrder = docPosition & DOCUMENT_POSITION_FOLLOWING ? 1 : -1;
-      var isDescendant = docPosition & DOCUMENT_POSITION_CONTAINS || docPosition & DOCUMENT_POSITION_CONTAINED_BY;
-      var aPosition = getPositionOrder(a);
-      var bPosition = getPositionOrder(b);
-      if (aPosition === bPosition || isDescendant) {
-        return DOMOrder;
-      }
-      return bPosition - aPosition;
-    }
     function getStackingOrder(vNode, parentVNode) {
       var stackingOrder = parentVNode._stackingOrder.slice();
       var zIndex = vNode.getComputedStylePropertyValue('z-index');
@@ -13730,32 +13697,537 @@ module.exports = {
       return scrollRegionParent;
     }
     function addNodeToGrid(grid, vNode) {
-      vNode._grid = grid;
       vNode.clientRects.forEach(function(rect) {
-        var _grid$numCols;
-        var x = rect.left;
-        var y = rect.top;
-        var startRow = y / gridSize | 0;
-        var startCol = x / gridSize | 0;
-        var endRow = (y + rect.height) / gridSize | 0;
-        var endCol = (x + rect.width) / gridSize | 0;
-        grid.numCols = Math.max((_grid$numCols = grid.numCols) !== null && _grid$numCols !== void 0 ? _grid$numCols : 0, endCol);
-        for (var row = startRow; row <= endRow; row++) {
-          grid.cells[row] = grid.cells[row] || [];
-          for (var col = startCol; col <= endCol; col++) {
-            grid.cells[row][col] = grid.cells[row][col] || [];
-            if (!grid.cells[row][col].includes(vNode)) {
-              grid.cells[row][col].push(vNode);
-            }
+        var _vNode$_grid;
+        (_vNode$_grid = vNode._grid) !== null && _vNode$_grid !== void 0 ? _vNode$_grid : vNode._grid = grid;
+        var gridRect = grid.getGridPositionOfRect(rect);
+        grid.loopGridPosition(gridRect, function(gridCell) {
+          if (!gridCell.includes(vNode)) {
+            gridCell.push(vNode);
           }
-        }
+        });
       });
     }
-    function getElementStack(node) {
-      if (!cache_default.get('gridCreated')) {
-        createGrid();
-        cache_default.set('gridCreated', true);
+    var Grid = function() {
+      function Grid() {
+        var container = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+        _classCallCheck(this, Grid);
+        this.container = container;
+        this.cells = [];
       }
+      _createClass(Grid, [ {
+        key: 'toGridIndex',
+        value: function toGridIndex(num) {
+          return Math.floor(num / constants_default.gridSize);
+        }
+      }, {
+        key: 'getCellFromPoint',
+        value: function getCellFromPoint(_ref15) {
+          var _this$cells, _row;
+          var x = _ref15.x, y = _ref15.y;
+          assert_default(this.boundaries, 'Grid does not have cells added');
+          var rowIndex = this.toGridIndex(y);
+          var colIndex = this.toGridIndex(x);
+          assert_default(_isPointInRect({
+            y: rowIndex,
+            x: colIndex
+          }, this.boundaries), 'Element midpoint exceeds the grid bounds');
+          var row = (_this$cells = this.cells[rowIndex - this.cells._negativeIndex]) !== null && _this$cells !== void 0 ? _this$cells : [];
+          return (_row = row[colIndex - row._negativeIndex]) !== null && _row !== void 0 ? _row : [];
+        }
+      }, {
+        key: 'loopGridPosition',
+        value: function loopGridPosition(gridPosition, callback) {
+          var _gridPosition = gridPosition, left = _gridPosition.left, right = _gridPosition.right, top = _gridPosition.top, bottom = _gridPosition.bottom;
+          if (this.boundaries) {
+            gridPosition = _getBoundingRect(this.boundaries, gridPosition);
+          }
+          this.boundaries = gridPosition;
+          loopNegativeIndexMatrix(this.cells, top, bottom, function(gridRow, row) {
+            loopNegativeIndexMatrix(gridRow, left, right, function(gridCell, col) {
+              callback(gridCell, {
+                row: row,
+                col: col
+              });
+            });
+          });
+        }
+      }, {
+        key: 'getGridPositionOfRect',
+        value: function getGridPositionOfRect(_ref16) {
+          var top = _ref16.top, right = _ref16.right, bottom = _ref16.bottom, left = _ref16.left;
+          var margin = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+          top = this.toGridIndex(top - margin);
+          right = this.toGridIndex(right + margin - 1);
+          bottom = this.toGridIndex(bottom + margin - 1);
+          left = this.toGridIndex(left - margin);
+          return new window.DOMRect(left, top, right - left, bottom - top);
+        }
+      } ]);
+      return Grid;
+    }();
+    function loopNegativeIndexMatrix(matrix, start, end, callback) {
+      var _matrix$_negativeInde;
+      (_matrix$_negativeInde = matrix._negativeIndex) !== null && _matrix$_negativeInde !== void 0 ? _matrix$_negativeInde : matrix._negativeIndex = 0;
+      if (start < matrix._negativeIndex) {
+        for (var _i5 = 0; _i5 < matrix._negativeIndex - start; _i5++) {
+          matrix.splice(0, 0, []);
+        }
+        matrix._negativeIndex = start;
+      }
+      var startOffset = start - matrix._negativeIndex;
+      var endOffset = end - matrix._negativeIndex;
+      for (var index = startOffset; index <= endOffset; index++) {
+        var _index, _matrix$_index;
+        (_matrix$_index = matrix[_index = index]) !== null && _matrix$_index !== void 0 ? _matrix$_index : matrix[_index] = [];
+        callback(matrix[index], index + matrix._negativeIndex);
+      }
+    }
+    function _findNearbyElms(vNode) {
+      var _vNode$_grid2, _vNode$_grid2$cells;
+      var margin = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      _createGrid();
+      if (!((_vNode$_grid2 = vNode._grid) !== null && _vNode$_grid2 !== void 0 && (_vNode$_grid2$cells = _vNode$_grid2.cells) !== null && _vNode$_grid2$cells !== void 0 && _vNode$_grid2$cells.length)) {
+        return [];
+      }
+      var rect = vNode.boundingClientRect;
+      var grid = vNode._grid;
+      var selfIsFixed = hasFixedPosition(vNode);
+      var gridPosition = grid.getGridPositionOfRect(rect, margin);
+      var neighbors = [];
+      grid.loopGridPosition(gridPosition, function(vNeighbors) {
+        var _iterator2 = _createForOfIteratorHelper(vNeighbors), _step2;
+        try {
+          for (_iterator2.s(); !(_step2 = _iterator2.n()).done; ) {
+            var vNeighbor = _step2.value;
+            if (vNeighbor && vNeighbor !== vNode && !neighbors.includes(vNeighbor) && selfIsFixed === hasFixedPosition(vNeighbor)) {
+              neighbors.push(vNeighbor);
+            }
+          }
+        } catch (err) {
+          _iterator2.e(err);
+        } finally {
+          _iterator2.f();
+        }
+      });
+      return neighbors;
+    }
+    var hasFixedPosition = memoize_default(function(vNode) {
+      if (!vNode) {
+        return false;
+      }
+      if (vNode.getComputedStylePropertyValue('position') === 'fixed') {
+        return true;
+      }
+      return hasFixedPosition(vNode.parent);
+    });
+    var angularSkipLinkRegex = /^\/\#/;
+    var angularRouterLinkRegex = /^#[!/]/;
+    function _isCurrentPageLink(anchor) {
+      var _window$location;
+      var href = anchor.getAttribute('href');
+      if (!href || href === '#') {
+        return false;
+      }
+      if (angularSkipLinkRegex.test(href)) {
+        return true;
+      }
+      var hash = anchor.hash, protocol = anchor.protocol, hostname = anchor.hostname, port = anchor.port, pathname = anchor.pathname;
+      if (angularRouterLinkRegex.test(hash)) {
+        return false;
+      }
+      if (href.charAt(0) === '#') {
+        return true;
+      }
+      if (typeof ((_window$location = window.location) === null || _window$location === void 0 ? void 0 : _window$location.origin) !== 'string' || window.location.origin.indexOf('://') === -1) {
+        return null;
+      }
+      var currentPageUrl = window.location.origin + window.location.pathname;
+      var url;
+      if (!hostname) {
+        url = window.location.origin;
+      } else {
+        url = ''.concat(protocol, '//').concat(hostname).concat(port ? ':'.concat(port) : '');
+      }
+      if (!pathname) {
+        url += window.location.pathname;
+      } else {
+        url += (pathname[0] !== '/' ? '/' : '') + pathname;
+      }
+      return url === currentPageUrl;
+    }
+    function getElementByReference(node, attr) {
+      var fragment = node.getAttribute(attr);
+      if (!fragment) {
+        return null;
+      }
+      if (attr === 'href' && !_isCurrentPageLink(node)) {
+        return null;
+      }
+      if (fragment.indexOf('#') !== -1) {
+        fragment = decodeURIComponent(fragment.substr(fragment.indexOf('#') + 1));
+      }
+      var candidate = document.getElementById(fragment);
+      if (candidate) {
+        return candidate;
+      }
+      candidate = document.getElementsByName(fragment);
+      if (candidate.length) {
+        return candidate[0];
+      }
+      return null;
+    }
+    var get_element_by_reference_default = getElementByReference;
+    function _visuallySort(a, b) {
+      _createGrid();
+      var length = Math.max(a._stackingOrder.length, b._stackingOrder.length);
+      for (var _i6 = 0; _i6 < length; _i6++) {
+        if (typeof b._stackingOrder[_i6] === 'undefined') {
+          return -1;
+        } else if (typeof a._stackingOrder[_i6] === 'undefined') {
+          return 1;
+        }
+        if (b._stackingOrder[_i6] > a._stackingOrder[_i6]) {
+          return 1;
+        }
+        if (b._stackingOrder[_i6] < a._stackingOrder[_i6]) {
+          return -1;
+        }
+      }
+      var aNode = a.actualNode;
+      var bNode = b.actualNode;
+      if (aNode.getRootNode && aNode.getRootNode() !== bNode.getRootNode()) {
+        var boundaries = [];
+        while (aNode) {
+          boundaries.push({
+            root: aNode.getRootNode(),
+            node: aNode
+          });
+          aNode = aNode.getRootNode().host;
+        }
+        while (bNode && !boundaries.find(function(boundary) {
+          return boundary.root === bNode.getRootNode();
+        })) {
+          bNode = bNode.getRootNode().host;
+        }
+        aNode = boundaries.find(function(boundary) {
+          return boundary.root === bNode.getRootNode();
+        }).node;
+        if (aNode === bNode) {
+          return a.actualNode.getRootNode() !== aNode.getRootNode() ? -1 : 1;
+        }
+      }
+      var _window$Node = window.Node, DOCUMENT_POSITION_FOLLOWING = _window$Node.DOCUMENT_POSITION_FOLLOWING, DOCUMENT_POSITION_CONTAINS = _window$Node.DOCUMENT_POSITION_CONTAINS, DOCUMENT_POSITION_CONTAINED_BY = _window$Node.DOCUMENT_POSITION_CONTAINED_BY;
+      var docPosition = aNode.compareDocumentPosition(bNode);
+      var DOMOrder = docPosition & DOCUMENT_POSITION_FOLLOWING ? 1 : -1;
+      var isDescendant = docPosition & DOCUMENT_POSITION_CONTAINS || docPosition & DOCUMENT_POSITION_CONTAINED_BY;
+      var aPosition = getPositionOrder(a);
+      var bPosition = getPositionOrder(b);
+      if (aPosition === bPosition || isDescendant) {
+        return DOMOrder;
+      }
+      return bPosition - aPosition;
+    }
+    function getPositionOrder(vNode) {
+      if (vNode.getComputedStylePropertyValue('display').indexOf('inline') !== -1) {
+        return 2;
+      }
+      if (isFloated(vNode)) {
+        return 1;
+      }
+      return 0;
+    }
+    function isFloated(vNode) {
+      if (!vNode) {
+        return false;
+      }
+      if (vNode._isFloated !== void 0) {
+        return vNode._isFloated;
+      }
+      var floatStyle = vNode.getComputedStylePropertyValue('float');
+      if (floatStyle !== 'none') {
+        vNode._isFloated = true;
+        return true;
+      }
+      var floated = isFloated(vNode.parent);
+      vNode._isFloated = floated;
+      return floated;
+    }
+    var math_exports = {};
+    __export(math_exports, {
+      getBoundingRect: function getBoundingRect() {
+        return _getBoundingRect;
+      },
+      getIntersectionRect: function getIntersectionRect() {
+        return _getIntersectionRect;
+      },
+      getOffset: function getOffset() {
+        return _getOffset;
+      },
+      getRectCenter: function getRectCenter() {
+        return _getRectCenter;
+      },
+      hasVisualOverlap: function hasVisualOverlap() {
+        return _hasVisualOverlap;
+      },
+      isPointInRect: function isPointInRect() {
+        return _isPointInRect;
+      },
+      rectsOverlap: function rectsOverlap() {
+        return _rectsOverlap;
+      },
+      splitRects: function splitRects() {
+        return _splitRects;
+      }
+    });
+    function _getIntersectionRect(rect1, rect2) {
+      var leftX = Math.max(rect1.left, rect2.left);
+      var rightX = Math.min(rect1.right, rect2.right);
+      var topY = Math.max(rect1.top, rect2.top);
+      var bottomY = Math.min(rect1.bottom, rect2.bottom);
+      if (leftX >= rightX || topY >= bottomY) {
+        return null;
+      }
+      return new window.DOMRect(leftX, topY, rightX - leftX, bottomY - topY);
+    }
+    function _getOffset(vNodeA, vNodeB) {
+      var rectA = vNodeA.boundingClientRect;
+      var rectB = vNodeB.boundingClientRect;
+      var pointA = getFarthestPoint(rectA, rectB);
+      var pointB = getClosestPoint(pointA, rectA, rectB);
+      return pointDistance(pointA, pointB);
+    }
+    function getFarthestPoint(rectA, rectB) {
+      var dimensionProps = [ [ 'x', 'left', 'right', 'width' ], [ 'y', 'top', 'bottom', 'height' ] ];
+      var farthestPoint = {};
+      dimensionProps.forEach(function(_ref17) {
+        var _ref18 = _slicedToArray(_ref17, 4), axis = _ref18[0], start = _ref18[1], end = _ref18[2], diameter = _ref18[3];
+        if (rectB[start] < rectA[start] && rectB[end] > rectA[end]) {
+          farthestPoint[axis] = rectA[start] + rectA[diameter] / 2;
+          return;
+        }
+        var centerB = rectB[start] + rectB[diameter] / 2;
+        var startDistance = Math.abs(centerB - rectA[start]);
+        var endDistance = Math.abs(centerB - rectA[end]);
+        if (startDistance >= endDistance) {
+          farthestPoint[axis] = rectA[start];
+        } else {
+          farthestPoint[axis] = rectA[end];
+        }
+      });
+      return farthestPoint;
+    }
+    function getClosestPoint(_ref19, ownRect, adjacentRect) {
+      var x = _ref19.x, y = _ref19.y;
+      if (pointInRect({
+        x: x,
+        y: y
+      }, adjacentRect)) {
+        var closestPoint = getCornerInAdjacentRect({
+          x: x,
+          y: y
+        }, ownRect, adjacentRect);
+        if (closestPoint !== null) {
+          return closestPoint;
+        }
+        adjacentRect = ownRect;
+      }
+      var _adjacentRect = adjacentRect, top = _adjacentRect.top, right = _adjacentRect.right, bottom = _adjacentRect.bottom, left = _adjacentRect.left;
+      var xAligned = x >= left && x <= right;
+      var yAligned = y >= top && y <= bottom;
+      var closestX = Math.abs(left - x) < Math.abs(right - x) ? left : right;
+      var closestY = Math.abs(top - y) < Math.abs(bottom - y) ? top : bottom;
+      if (!xAligned && yAligned) {
+        return {
+          x: closestX,
+          y: y
+        };
+      } else if (xAligned && !yAligned) {
+        return {
+          x: x,
+          y: closestY
+        };
+      } else if (!xAligned && !yAligned) {
+        return {
+          x: closestX,
+          y: closestY
+        };
+      }
+      if (Math.abs(x - closestX) < Math.abs(y - closestY)) {
+        return {
+          x: closestX,
+          y: y
+        };
+      } else {
+        return {
+          x: x,
+          y: closestY
+        };
+      }
+    }
+    function pointDistance(pointA, pointB) {
+      var xDistance = Math.abs(pointA.x - pointB.x);
+      var yDistance = Math.abs(pointA.y - pointB.y);
+      if (!xDistance || !yDistance) {
+        return xDistance || yDistance;
+      }
+      return Math.sqrt(Math.pow(xDistance, 2) + Math.pow(yDistance, 2));
+    }
+    function pointInRect(_ref20, rect) {
+      var x = _ref20.x, y = _ref20.y;
+      return y >= rect.top && x <= rect.right && y <= rect.bottom && x >= rect.left;
+    }
+    function getCornerInAdjacentRect(_ref21, ownRect, adjacentRect) {
+      var x = _ref21.x, y = _ref21.y;
+      var closestX, closestY;
+      if (x === ownRect.left && ownRect.right < adjacentRect.right) {
+        closestX = ownRect.right;
+      } else if (x === ownRect.right && ownRect.left > adjacentRect.left) {
+        closestX = ownRect.left;
+      }
+      if (y === ownRect.top && ownRect.bottom < adjacentRect.bottom) {
+        closestY = ownRect.bottom;
+      } else if (y === ownRect.bottom && ownRect.top > adjacentRect.top) {
+        closestY = ownRect.top;
+      }
+      if (!closestX && !closestY) {
+        return null;
+      } else if (!closestY) {
+        return {
+          x: closestX,
+          y: y
+        };
+      } else if (!closestX) {
+        return {
+          x: x,
+          y: closestY
+        };
+      }
+      if (Math.abs(x - closestX) < Math.abs(y - closestY)) {
+        return {
+          x: closestX,
+          y: y
+        };
+      } else {
+        return {
+          x: x,
+          y: closestY
+        };
+      }
+    }
+    function _getRectCenter(_ref22) {
+      var left = _ref22.left, top = _ref22.top, width = _ref22.width, height = _ref22.height;
+      return new window.DOMPoint(left + width / 2, top + height / 2);
+    }
+    function _hasVisualOverlap(vNodeA, vNodeB) {
+      var rectA = vNodeA.boundingClientRect;
+      var rectB = vNodeB.boundingClientRect;
+      if (rectA.left >= rectB.right || rectA.right <= rectB.left || rectA.top >= rectB.bottom || rectA.bottom <= rectB.top) {
+        return false;
+      }
+      return _visuallySort(vNodeA, vNodeB) > 0;
+    }
+    function _splitRects(outerRect, overlapRects) {
+      var uniqueRects = [ outerRect ];
+      var _iterator3 = _createForOfIteratorHelper(overlapRects), _step3;
+      try {
+        var _loop3 = function _loop3() {
+          var overlapRect = _step3.value;
+          uniqueRects = uniqueRects.reduce(function(uniqueRects2, inputRect) {
+            return uniqueRects2.concat(splitRect(inputRect, overlapRect));
+          }, []);
+        };
+        for (_iterator3.s(); !(_step3 = _iterator3.n()).done; ) {
+          _loop3();
+        }
+      } catch (err) {
+        _iterator3.e(err);
+      } finally {
+        _iterator3.f();
+      }
+      return uniqueRects;
+    }
+    function splitRect(inputRect, clipRect) {
+      var top = inputRect.top, left = inputRect.left, bottom = inputRect.bottom, right = inputRect.right;
+      var yAligned = top < clipRect.bottom && bottom > clipRect.top;
+      var xAligned = left < clipRect.right && right > clipRect.left;
+      var rects = [];
+      if (between(clipRect.top, top, bottom) && xAligned) {
+        rects.push({
+          top: top,
+          left: left,
+          bottom: clipRect.top,
+          right: right
+        });
+      }
+      if (between(clipRect.right, left, right) && yAligned) {
+        rects.push({
+          top: top,
+          left: clipRect.right,
+          bottom: bottom,
+          right: right
+        });
+      }
+      if (between(clipRect.bottom, top, bottom) && xAligned) {
+        rects.push({
+          top: clipRect.bottom,
+          right: right,
+          bottom: bottom,
+          left: left
+        });
+      }
+      if (between(clipRect.left, left, right) && yAligned) {
+        rects.push({
+          top: top,
+          left: left,
+          bottom: bottom,
+          right: clipRect.left
+        });
+      }
+      if (rects.length === 0) {
+        rects.push(inputRect);
+      }
+      return rects.map(computeRect);
+    }
+    var between = function between(num, min, max) {
+      return num > min && num < max;
+    };
+    function computeRect(baseRect) {
+      return _extends({}, baseRect, {
+        x: baseRect.left,
+        y: baseRect.top,
+        height: baseRect.bottom - baseRect.top,
+        width: baseRect.right - baseRect.left
+      });
+    }
+    function getRectStack(grid, rect) {
+      var recursed = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+      var center = _getRectCenter(rect);
+      var gridCell = grid.getCellFromPoint(center) || [];
+      var floorX = Math.floor(center.x);
+      var floorY = Math.floor(center.y);
+      var stack = gridCell.filter(function(gridCellNode) {
+        return gridCellNode.clientRects.some(function(clientRect) {
+          var rectX = clientRect.left;
+          var rectY = clientRect.top;
+          return floorX < Math.floor(rectX + clientRect.width) && floorX >= Math.floor(rectX) && floorY < Math.floor(rectY + clientRect.height) && floorY >= Math.floor(rectY);
+        });
+      });
+      var gridContainer = grid.container;
+      if (gridContainer) {
+        stack = getRectStack(gridContainer._grid, gridContainer.boundingClientRect, true).concat(stack);
+      }
+      if (!recursed) {
+        stack = stack.sort(_visuallySort).map(function(vNode) {
+          return vNode.actualNode;
+        }).concat(document.documentElement).filter(function(node, index, array) {
+          return array.indexOf(node) === index;
+        });
+      }
+      return stack;
+    }
+    function getElementStack(node) {
+      _createGrid();
       var vNode = get_node_from_tree_default(node);
       var grid = vNode._grid;
       if (!grid) {
@@ -13775,85 +14247,78 @@ module.exports = {
       return tabbableElements;
     }
     var get_tabbable_elements_default = getTabbableElements;
-    function sanitize(str) {
-      if (!str) {
-        return '';
+    var text_exports = {};
+    __export(text_exports, {
+      accessibleText: function accessibleText() {
+        return accessible_text_default;
+      },
+      accessibleTextVirtual: function accessibleTextVirtual() {
+        return accessible_text_virtual_default;
+      },
+      autocomplete: function autocomplete() {
+        return _autocomplete;
+      },
+      formControlValue: function formControlValue() {
+        return form_control_value_default;
+      },
+      formControlValueMethods: function formControlValueMethods() {
+        return _formControlValueMethods;
+      },
+      hasUnicode: function hasUnicode() {
+        return has_unicode_default;
+      },
+      isHumanInterpretable: function isHumanInterpretable() {
+        return is_human_interpretable_default;
+      },
+      isIconLigature: function isIconLigature() {
+        return is_icon_ligature_default;
+      },
+      isValidAutocomplete: function isValidAutocomplete() {
+        return is_valid_autocomplete_default;
+      },
+      label: function label() {
+        return label_default;
+      },
+      labelText: function labelText() {
+        return label_text_default;
+      },
+      labelVirtual: function labelVirtual() {
+        return label_virtual_default2;
+      },
+      nativeElementType: function nativeElementType() {
+        return native_element_type_default;
+      },
+      nativeTextAlternative: function nativeTextAlternative() {
+        return native_text_alternative_default;
+      },
+      nativeTextMethods: function nativeTextMethods() {
+        return native_text_methods_default;
+      },
+      removeUnicode: function removeUnicode() {
+        return remove_unicode_default;
+      },
+      sanitize: function sanitize() {
+        return sanitize_default;
+      },
+      subtreeText: function subtreeText() {
+        return subtree_text_default;
+      },
+      titleText: function titleText() {
+        return title_text_default;
+      },
+      unsupported: function unsupported() {
+        return unsupported_default;
+      },
+      visible: function visible() {
+        return visible_default;
+      },
+      visibleTextNodes: function visibleTextNodes() {
+        return visible_text_nodes_default;
+      },
+      visibleVirtual: function visibleVirtual() {
+        return visible_virtual_default;
       }
-      return str.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ').replace(/[\s]{2,}/g, ' ').trim();
-    }
-    var sanitize_default = sanitize;
-    function getTextElementStack(node) {
-      if (!cache_default.get('gridCreated')) {
-        createGrid();
-        cache_default.set('gridCreated', true);
-      }
-      var vNode = get_node_from_tree_default(node);
-      var grid = vNode._grid;
-      if (!grid) {
-        return [];
-      }
-      var nodeRect = vNode.boundingClientRect;
-      var clientRects = [];
-      Array.from(node.childNodes).forEach(function(elm) {
-        if (elm.nodeType === 3 && sanitize_default(elm.textContent) !== '') {
-          var range = document.createRange();
-          range.selectNodeContents(elm);
-          var rects = range.getClientRects();
-          var outsideRectBounds = Array.from(rects).some(function(rect) {
-            var horizontalMidpoint = rect.left + rect.width / 2;
-            var verticalMidpoint = rect.top + rect.height / 2;
-            return horizontalMidpoint < nodeRect.left || horizontalMidpoint > nodeRect.right || verticalMidpoint < nodeRect.top || verticalMidpoint > nodeRect.bottom;
-          });
-          if (outsideRectBounds) {
-            return;
-          }
-          for (var _i6 = 0; _i6 < rects.length; _i6++) {
-            var rect = rects[_i6];
-            if (rect.width >= 1 && rect.height >= 1) {
-              clientRects.push(rect);
-            }
-          }
-        }
-      });
-      if (!clientRects.length) {
-        return [ get_element_stack_default(node) ];
-      }
-      return clientRects.map(function(rect) {
-        return getRectStack(grid, rect);
-      });
-    }
-    var get_text_element_stack_default = getTextElementStack;
-    var visualRoles = [ 'checkbox', 'img', 'radio', 'range', 'slider', 'spinbutton', 'textbox' ];
-    function isVisualContent(element) {
-      var role = element.getAttribute('role');
-      if (role) {
-        return visualRoles.indexOf(role) !== -1;
-      }
-      switch (element.nodeName.toUpperCase()) {
-       case 'IMG':
-       case 'IFRAME':
-       case 'OBJECT':
-       case 'VIDEO':
-       case 'AUDIO':
-       case 'CANVAS':
-       case 'SVG':
-       case 'MATH':
-       case 'BUTTON':
-       case 'SELECT':
-       case 'TEXTAREA':
-       case 'KEYGEN':
-       case 'PROGRESS':
-       case 'METER':
-        return true;
-
-       case 'INPUT':
-        return element.type !== 'hidden';
-
-       default:
-        return false;
-      }
-    }
-    var is_visual_content_default = isVisualContent;
+    });
     function idrefs(node, attr) {
       node = node.actualNode || node;
       try {
@@ -13872,363 +14337,48 @@ module.exports = {
       }
     }
     var idrefs_default = idrefs;
-    function visibleVirtual(element, screenReader, noRecursing) {
-      var vNode = element instanceof abstract_virtual_node_default ? element : get_node_from_tree_default(element);
-      var visible4 = !element.actualNode || element.actualNode && is_visible_default(element.actualNode, screenReader);
-      var result = vNode.children.map(function(child) {
-        var _child$props = child.props, nodeType = _child$props.nodeType, nodeValue = _child$props.nodeValue;
-        if (nodeType === 3) {
-          if (nodeValue && visible4) {
-            return nodeValue;
-          }
-        } else if (!noRecursing) {
-          return visibleVirtual(child, screenReader);
-        }
-      }).join('');
-      return sanitize_default(result);
+    function accessibleText(element, context) {
+      var virtualNode = get_node_from_tree_default(element);
+      return accessible_text_virtual_default(virtualNode, context);
     }
-    var visible_virtual_default = visibleVirtual;
-    function labelVirtual(virtualNode) {
-      var ref, candidate;
-      if (virtualNode.attr('aria-labelledby')) {
-        ref = idrefs_default(virtualNode.actualNode, 'aria-labelledby');
-        candidate = ref.map(function(thing) {
-          var vNode = get_node_from_tree_default(thing);
-          return vNode ? visible_virtual_default(vNode) : '';
-        }).join(' ').trim();
-        if (candidate) {
-          return candidate;
+    var accessible_text_default = accessibleText;
+    function arialabelledbyText(vNode) {
+      var context = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      if (!(vNode instanceof abstract_virtual_node_default)) {
+        if (vNode.nodeType !== 1) {
+          return '';
         }
+        vNode = get_node_from_tree_default(vNode);
       }
-      candidate = virtualNode.attr('aria-label');
-      if (candidate) {
-        candidate = sanitize_default(candidate);
-        if (candidate) {
-          return candidate;
-        }
+      if (vNode.props.nodeType !== 1 || context.inLabelledByContext || context.inControlContext || !vNode.attr('aria-labelledby')) {
+        return '';
       }
-      return null;
-    }
-    var label_virtual_default = labelVirtual;
-    var hiddenTextElms = [ 'HEAD', 'TITLE', 'TEMPLATE', 'SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'VIDEO', 'AUDIO', 'NOSCRIPT' ];
-    function hasChildTextNodes(elm) {
-      if (!hiddenTextElms.includes(elm.actualNode.nodeName.toUpperCase())) {
-        return elm.children.some(function(_ref10) {
-          var actualNode = _ref10.actualNode;
-          return actualNode.nodeType === 3 && actualNode.nodeValue.trim();
-        });
-      }
-    }
-    function hasContentVirtual(elm, noRecursion, ignoreAria) {
-      return hasChildTextNodes(elm) || is_visual_content_default(elm.actualNode) || !ignoreAria && !!label_virtual_default(elm) || !noRecursion && elm.children.some(function(child) {
-        return child.actualNode.nodeType === 1 && hasContentVirtual(child);
+      var refs = idrefs_default(vNode, 'aria-labelledby').filter(function(elm) {
+        return elm;
       });
-    }
-    var has_content_virtual_default = hasContentVirtual;
-    function hasContent(elm, noRecursion, ignoreAria) {
-      elm = get_node_from_tree_default(elm);
-      return has_content_virtual_default(elm, noRecursion, ignoreAria);
-    }
-    var has_content_default = hasContent;
-    function isHiddenWithCSS(el, descendentVisibilityValue) {
-      var vNode = get_node_from_tree_default(el);
-      if (!vNode) {
-        return _isHiddenWithCSS(el, descendentVisibilityValue);
-      }
-      if (vNode._isHiddenWithCSS === void 0) {
-        vNode._isHiddenWithCSS = _isHiddenWithCSS(el, descendentVisibilityValue);
-      }
-      return vNode._isHiddenWithCSS;
-    }
-    function _isHiddenWithCSS(el, descendentVisibilityValue) {
-      if (el.nodeType === 9) {
-        return false;
-      }
-      if (el.nodeType === 11) {
-        el = el.host;
-      }
-      if ([ 'STYLE', 'SCRIPT' ].includes(el.nodeName.toUpperCase())) {
-        return false;
-      }
-      var style = window.getComputedStyle(el, null);
-      if (!style) {
-        throw new Error('Style does not exist for the given element.');
-      }
-      var displayValue = style.getPropertyValue('display');
-      if (displayValue === 'none') {
-        return true;
-      }
-      var HIDDEN_VISIBILITY_VALUES = [ 'hidden', 'collapse' ];
-      var visibilityValue = style.getPropertyValue('visibility');
-      if (HIDDEN_VISIBILITY_VALUES.includes(visibilityValue) && !descendentVisibilityValue) {
-        return true;
-      }
-      if (HIDDEN_VISIBILITY_VALUES.includes(visibilityValue) && descendentVisibilityValue && HIDDEN_VISIBILITY_VALUES.includes(descendentVisibilityValue)) {
-        return true;
-      }
-      var parent = get_composed_parent_default(el);
-      if (parent && !HIDDEN_VISIBILITY_VALUES.includes(visibilityValue)) {
-        return isHiddenWithCSS(parent, visibilityValue);
-      }
-      return false;
-    }
-    var is_hidden_with_css_default = isHiddenWithCSS;
-    function focusDisabled(el) {
-      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
-      if (vNode.hasAttr('disabled')) {
-        return true;
-      }
-      var parentNode = vNode.parent;
-      var ancestors = [];
-      var fieldsetDisabled = false;
-      while (parentNode && parentNode.shadowId === vNode.shadowId && !fieldsetDisabled) {
-        ancestors.push(parentNode);
-        if (parentNode.props.nodeName === 'legend') {
-          break;
+      return refs.reduce(function(accessibleName, elm) {
+        var accessibleNameAdd = accessible_text_default(elm, _extends({
+          inLabelledByContext: true,
+          startNode: context.startNode || vNode
+        }, context));
+        if (!accessibleName) {
+          return accessibleNameAdd;
+        } else {
+          return ''.concat(accessibleName, ' ').concat(accessibleNameAdd);
         }
-        if (parentNode._inDisabledFieldset !== void 0) {
-          fieldsetDisabled = parentNode._inDisabledFieldset;
-          break;
-        }
-        if (parentNode.props.nodeName === 'fieldset' && parentNode.hasAttr('disabled')) {
-          fieldsetDisabled = true;
-        }
-        parentNode = parentNode.parent;
-      }
-      ancestors.forEach(function(ancestor) {
-        return ancestor._inDisabledFieldset = fieldsetDisabled;
-      });
-      if (fieldsetDisabled) {
-        return true;
-      }
-      if (vNode.props.nodeName !== 'area') {
-        if (!vNode.actualNode) {
-          return false;
-        }
-        return is_hidden_with_css_default(vNode.actualNode);
-      }
-      return false;
+      }, '');
     }
-    var focus_disabled_default = focusDisabled;
-    function isNativelyFocusable(el) {
-      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
-      if (!vNode || focus_disabled_default(vNode)) {
-        return false;
-      }
-      switch (vNode.props.nodeName) {
-       case 'a':
-       case 'area':
-        if (vNode.hasAttr('href')) {
-          return true;
+    var arialabelledby_text_default = arialabelledbyText;
+    function arialabelText(vNode) {
+      if (!(vNode instanceof abstract_virtual_node_default)) {
+        if (vNode.nodeType !== 1) {
+          return '';
         }
-        break;
-
-       case 'input':
-        return vNode.props.type !== 'hidden';
-
-       case 'textarea':
-       case 'select':
-       case 'summary':
-       case 'button':
-        return true;
-
-       case 'details':
-        return !query_selector_all_default(vNode, 'summary').length;
+        vNode = get_node_from_tree_default(vNode);
       }
-      return false;
+      return vNode.attr('aria-label') || '';
     }
-    var is_natively_focusable_default = isNativelyFocusable;
-    function isFocusable(el) {
-      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
-      if (vNode.props.nodeType !== 1) {
-        return false;
-      }
-      if (focus_disabled_default(vNode)) {
-        return false;
-      } else if (is_natively_focusable_default(vNode)) {
-        return true;
-      }
-      var tabindex = vNode.attr('tabindex');
-      if (tabindex && !isNaN(parseInt(tabindex, 10))) {
-        return true;
-      }
-      return false;
-    }
-    var is_focusable_default = isFocusable;
-    function insertedIntoFocusOrder(el) {
-      var tabIndex = parseInt(el.getAttribute('tabindex'), 10);
-      return tabIndex > -1 && is_focusable_default(el) && !is_natively_focusable_default(el);
-    }
-    var inserted_into_focus_order_default = insertedIntoFocusOrder;
-    function isHTML5(doc) {
-      var node = doc.doctype;
-      if (node === null) {
-        return false;
-      }
-      return node.name === 'html' && !node.publicId && !node.systemId;
-    }
-    var is_html5_default = isHTML5;
-    function walkDomNode(node, functor) {
-      if (functor(node.actualNode) !== false) {
-        node.children.forEach(function(child) {
-          return walkDomNode(child, functor);
-        });
-      }
-    }
-    var blockLike = [ 'block', 'list-item', 'table', 'flex', 'grid', 'inline-block' ];
-    function isBlock(elm) {
-      var display = window.getComputedStyle(elm).getPropertyValue('display');
-      return blockLike.includes(display) || display.substr(0, 6) === 'table-';
-    }
-    function getBlockParent(node) {
-      var parentBlock = get_composed_parent_default(node);
-      while (parentBlock && !isBlock(parentBlock)) {
-        parentBlock = get_composed_parent_default(parentBlock);
-      }
-      return get_node_from_tree_default(parentBlock);
-    }
-    function isInTextBlock(node) {
-      if (isBlock(node)) {
-        return false;
-      }
-      var virtualParent = getBlockParent(node);
-      var parentText = '';
-      var linkText = '';
-      var inBrBlock = 0;
-      walkDomNode(virtualParent, function(currNode) {
-        if (inBrBlock === 2) {
-          return false;
-        }
-        if (currNode.nodeType === 3) {
-          parentText += currNode.nodeValue;
-        }
-        if (currNode.nodeType !== 1) {
-          return;
-        }
-        var nodeName2 = (currNode.nodeName || '').toUpperCase();
-        if ([ 'BR', 'HR' ].includes(nodeName2)) {
-          if (inBrBlock === 0) {
-            parentText = '';
-            linkText = '';
-          } else {
-            inBrBlock = 2;
-          }
-        } else if (currNode.style.display === 'none' || currNode.style.overflow === 'hidden' || ![ '', null, 'none' ].includes(currNode.style['float']) || ![ '', null, 'relative' ].includes(currNode.style.position)) {
-          return false;
-        } else if (nodeName2 === 'A' && currNode.href || (currNode.getAttribute('role') || '').toLowerCase() === 'link') {
-          if (currNode === node) {
-            inBrBlock = 1;
-          }
-          linkText += currNode.textContent;
-          return false;
-        }
-      });
-      parentText = sanitize_default(parentText);
-      linkText = sanitize_default(linkText);
-      return parentText.length > linkText.length;
-    }
-    var is_in_text_block_default = isInTextBlock;
-    function isModalOpen(options) {
-      options = options || {};
-      var modalPercent = options.modalPercent || .75;
-      if (cache_default.get('isModalOpen')) {
-        return cache_default.get('isModalOpen');
-      }
-      var definiteModals = query_selector_all_filter_default(axe._tree[0], 'dialog, [role=dialog], [aria-modal=true]', function(vNode) {
-        return is_visible_default(vNode.actualNode);
-      });
-      if (definiteModals.length) {
-        cache_default.set('isModalOpen', true);
-        return true;
-      }
-      var viewport = get_viewport_size_default(window);
-      var percentWidth = viewport.width * modalPercent;
-      var percentHeight = viewport.height * modalPercent;
-      var x = (viewport.width - percentWidth) / 2;
-      var y = (viewport.height - percentHeight) / 2;
-      var points = [ {
-        x: x,
-        y: y
-      }, {
-        x: viewport.width - x,
-        y: y
-      }, {
-        x: viewport.width / 2,
-        y: viewport.height / 2
-      }, {
-        x: x,
-        y: viewport.height - y
-      }, {
-        x: viewport.width - x,
-        y: viewport.height - y
-      } ];
-      var stacks = points.map(function(point) {
-        return Array.from(document.elementsFromPoint(point.x, point.y));
-      });
-      var _loop3 = function _loop3(_i7) {
-        var modalElement = stacks[_i7].find(function(elm) {
-          var style = window.getComputedStyle(elm);
-          return parseInt(style.width, 10) >= percentWidth && parseInt(style.height, 10) >= percentHeight && style.getPropertyValue('pointer-events') !== 'none' && (style.position === 'absolute' || style.position === 'fixed');
-        });
-        if (modalElement && stacks.every(function(stack) {
-          return stack.includes(modalElement);
-        })) {
-          cache_default.set('isModalOpen', true);
-          return {
-            v: true
-          };
-        }
-      };
-      for (var _i7 = 0; _i7 < stacks.length; _i7++) {
-        var _ret = _loop3(_i7);
-        if (_typeof(_ret) === 'object') {
-          return _ret.v;
-        }
-      }
-      cache_default.set('isModalOpen', void 0);
-      return void 0;
-    }
-    var is_modal_open_default = isModalOpen;
-    function isNode(element) {
-      return element instanceof window.Node;
-    }
-    var is_node_default = isNode;
-    var data = {};
-    var incompleteData = {
-      set: function set(key, reason) {
-        if (typeof key !== 'string') {
-          throw new Error('Incomplete data: key must be a string');
-        }
-        if (reason) {
-          data[key] = reason;
-        }
-        return data[key];
-      },
-      get: function get(key) {
-        return data[key];
-      },
-      clear: function clear() {
-        data = {};
-      }
-    };
-    var incomplete_data_default = incompleteData;
-    function elementHasImage(elm, style) {
-      var graphicNodes = [ 'IMG', 'CANVAS', 'OBJECT', 'IFRAME', 'VIDEO', 'SVG' ];
-      var nodeName2 = elm.nodeName.toUpperCase();
-      if (graphicNodes.includes(nodeName2)) {
-        incomplete_data_default.set('bgColor', 'imgNode');
-        return true;
-      }
-      style = style || window.getComputedStyle(elm);
-      var bgImageStyle = style.getPropertyValue('background-image');
-      var hasBgImage = bgImageStyle !== 'none';
-      if (hasBgImage) {
-        var hasGradient = /gradient/.test(bgImageStyle);
-        incomplete_data_default.set('bgColor', hasGradient ? 'bgGradient' : 'bgImage');
-      }
-      return hasBgImage;
-    }
-    var element_has_image_default = elementHasImage;
+    var arialabel_text_default = arialabelText;
     var ariaAttrs = {
       'aria-activedescendant': {
         type: 'idref',
@@ -14324,7 +14474,6 @@ module.exports = {
       },
       'aria-invalid': {
         type: 'nmtoken',
-        allowEmpty: true,
         values: [ 'grammar', 'false', 'spelling', 'true' ],
         global: true
       },
@@ -14491,7 +14640,8 @@ module.exports = {
       },
       checkbox: {
         type: 'widget',
-        allowedAttrs: [ 'aria-checked', 'aria-readonly', 'aria-required' ],
+        requiredAttrs: [ 'aria-checked' ],
+        allowedAttrs: [ 'aria-readonly', 'aria-required' ],
         superclassRole: [ 'input' ],
         accessibleNameRequired: true,
         nameFromContent: true,
@@ -14511,7 +14661,7 @@ module.exports = {
         nameFromContent: true
       },
       combobox: {
-        type: 'composite',
+        type: 'widget',
         requiredAttrs: [ 'aria-expanded', 'aria-controls' ],
         allowedAttrs: [ 'aria-owns', 'aria-autocomplete', 'aria-readonly', 'aria-required', 'aria-activedescendant', 'aria-orientation' ],
         superclassRole: [ 'select' ],
@@ -14645,12 +14795,12 @@ module.exports = {
       },
       list: {
         type: 'structure',
-        requiredOwned: [ 'group', 'listitem' ],
+        requiredOwned: [ 'listitem' ],
         allowedAttrs: [ 'aria-expanded' ],
         superclassRole: [ 'section' ]
       },
       listbox: {
-        type: 'composite',
+        type: 'widget',
         requiredOwned: [ 'group', 'option' ],
         allowedAttrs: [ 'aria-multiselectable', 'aria-readonly', 'aria-required', 'aria-activedescendant', 'aria-expanded', 'aria-orientation' ],
         superclassRole: [ 'select' ],
@@ -14658,7 +14808,7 @@ module.exports = {
       },
       listitem: {
         type: 'structure',
-        requiredContext: [ 'list', 'group' ],
+        requiredContext: [ 'list' ],
         allowedAttrs: [ 'aria-level', 'aria-posinset', 'aria-setsize', 'aria-expanded' ],
         superclassRole: [ 'section' ],
         nameFromContent: true
@@ -14686,13 +14836,13 @@ module.exports = {
       },
       menu: {
         type: 'composite',
-        requiredOwned: [ 'group', 'menuitemradio', 'menuitem', 'menuitemcheckbox' ],
+        requiredOwned: [ 'group', 'menuitemradio', 'menuitem', 'menuitemcheckbox', 'menu' ],
         allowedAttrs: [ 'aria-activedescendant', 'aria-expanded', 'aria-orientation' ],
         superclassRole: [ 'select' ]
       },
       menubar: {
         type: 'composite',
-        requiredOwned: [ 'group', 'menuitemradio', 'menuitem', 'menuitemcheckbox' ],
+        requiredOwned: [ 'group', 'menuitemradio', 'menuitem', 'menuitemcheckbox', 'menu' ],
         allowedAttrs: [ 'aria-activedescendant', 'aria-expanded', 'aria-orientation' ],
         superclassRole: [ 'menu' ]
       },
@@ -14707,7 +14857,8 @@ module.exports = {
       menuitemcheckbox: {
         type: 'widget',
         requiredContext: [ 'menu', 'menubar', 'group' ],
-        allowedAttrs: [ 'aria-checked', 'aria-posinset', 'aria-readonly', 'aria-setsize' ],
+        requiredAttrs: [ 'aria-checked' ],
+        allowedAttrs: [ 'aria-posinset', 'aria-readonly', 'aria-setsize' ],
         superclassRole: [ 'checkbox', 'menuitem' ],
         accessibleNameRequired: true,
         nameFromContent: true,
@@ -14716,7 +14867,8 @@ module.exports = {
       menuitemradio: {
         type: 'widget',
         requiredContext: [ 'menu', 'menubar', 'group' ],
-        allowedAttrs: [ 'aria-checked', 'aria-posinset', 'aria-readonly', 'aria-setsize' ],
+        requiredAttrs: [ 'aria-checked' ],
+        allowedAttrs: [ 'aria-posinset', 'aria-readonly', 'aria-setsize' ],
         superclassRole: [ 'menuitemcheckbox', 'radio' ],
         accessibleNameRequired: true,
         nameFromContent: true,
@@ -14724,8 +14876,8 @@ module.exports = {
       },
       meter: {
         type: 'structure',
-        allowedAttrs: [ 'aria-valuetext' ],
-        requiredAttrs: [ 'aria-valuemax', 'aria-valuemin', 'aria-valuenow' ],
+        requiredAttrs: [ 'aria-valuenow' ],
+        allowedAttrs: [ 'aria-valuemax', 'aria-valuemin', 'aria-valuetext' ],
         superclassRole: [ 'range' ],
         accessibleNameRequired: true,
         childrenPresentational: true
@@ -14778,7 +14930,8 @@ module.exports = {
       },
       radio: {
         type: 'widget',
-        allowedAttrs: [ 'aria-checked', 'aria-posinset', 'aria-setsize', 'aria-required' ],
+        requiredAttrs: [ 'aria-checked' ],
+        allowedAttrs: [ 'aria-posinset', 'aria-setsize', 'aria-required' ],
         superclassRole: [ 'input' ],
         accessibleNameRequired: true,
         nameFromContent: true,
@@ -14786,7 +14939,6 @@ module.exports = {
       },
       radiogroup: {
         type: 'composite',
-        requiredOwned: [ 'radio' ],
         allowedAttrs: [ 'aria-readonly', 'aria-required', 'aria-activedescendant', 'aria-expanded', 'aria-orientation' ],
         superclassRole: [ 'select' ],
         accessibleNameRequired: false
@@ -14862,7 +15014,8 @@ module.exports = {
       },
       separator: {
         type: 'structure',
-        allowedAttrs: [ 'aria-valuemax', 'aria-valuemin', 'aria-valuenow', 'aria-orientation', 'aria-valuetext' ],
+        requiredAttrs: [ 'aria-valuenow' ],
+        allowedAttrs: [ 'aria-valuemax', 'aria-valuemin', 'aria-orientation', 'aria-valuetext' ],
         superclassRole: [ 'structure', 'widget' ],
         childrenPresentational: true
       },
@@ -14876,8 +15029,7 @@ module.exports = {
       },
       spinbutton: {
         type: 'widget',
-        requiredAttrs: [ 'aria-valuenow' ],
-        allowedAttrs: [ 'aria-valuemax', 'aria-valuemin', 'aria-readonly', 'aria-required', 'aria-activedescendant', 'aria-valuetext' ],
+        allowedAttrs: [ 'aria-valuemax', 'aria-valuemin', 'aria-readonly', 'aria-required', 'aria-activedescendant', 'aria-valuetext', 'aria-valuenow' ],
         superclassRole: [ 'composite', 'input', 'range' ],
         accessibleNameRequired: true
       },
@@ -15331,7 +15483,7 @@ module.exports = {
       },
       button: {
         contentTypes: [ 'interactive', 'phrasing', 'flow' ],
-        allowedRoles: [ 'checkbox', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'switch', 'tab' ],
+        allowedRoles: [ 'checkbox', 'combobox', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'switch', 'tab' ],
         namingMethods: [ 'subtreeText' ]
       },
       canvas: {
@@ -15542,7 +15694,7 @@ module.exports = {
                 type: 'button'
               }
             },
-            allowedRoles: [ 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'switch', 'tab' ]
+            allowedRoles: [ 'checkbox', 'combobox', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'switch', 'tab' ]
           },
           buttonType: {
             matches: {
@@ -16120,6 +16272,1788 @@ module.exports = {
       });
     }
     var standards_default = standards;
+    function isUnsupportedRole(role) {
+      var roleDefinition = standards_default.ariaRoles[role];
+      return roleDefinition ? !!roleDefinition.unsupported : false;
+    }
+    var is_unsupported_role_default = isUnsupportedRole;
+    function isValidRole(role) {
+      var _ref23 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, allowAbstract = _ref23.allowAbstract, _ref23$flagUnsupporte = _ref23.flagUnsupported, flagUnsupported = _ref23$flagUnsupporte === void 0 ? false : _ref23$flagUnsupporte;
+      var roleDefinition = standards_default.ariaRoles[role];
+      var isRoleUnsupported = is_unsupported_role_default(role);
+      if (!roleDefinition || flagUnsupported && isRoleUnsupported) {
+        return false;
+      }
+      return allowAbstract ? true : roleDefinition.type !== 'abstract';
+    }
+    var is_valid_role_default = isValidRole;
+    function getExplicitRole(vNode) {
+      var _ref24 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, fallback = _ref24.fallback, abstracts = _ref24.abstracts, dpub = _ref24.dpub;
+      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
+      if (vNode.props.nodeType !== 1) {
+        return null;
+      }
+      var roleAttr = (vNode.attr('role') || '').trim().toLowerCase();
+      var roleList = fallback ? token_list_default(roleAttr) : [ roleAttr ];
+      var firstValidRole = roleList.find(function(role) {
+        if (!dpub && role.substr(0, 4) === 'doc-') {
+          return false;
+        }
+        return is_valid_role_default(role, {
+          allowAbstract: abstracts
+        });
+      });
+      return firstValidRole || null;
+    }
+    var get_explicit_role_default = getExplicitRole;
+    function getElementsByContentType(type) {
+      return Object.keys(standards_default.htmlElms).filter(function(nodeName2) {
+        var elm = standards_default.htmlElms[nodeName2];
+        if (elm.contentTypes) {
+          return elm.contentTypes.includes(type);
+        }
+        if (!elm.variant) {
+          return false;
+        }
+        if (elm.variant['default'] && elm.variant['default'].contentTypes) {
+          return elm.variant['default'].contentTypes.includes(type);
+        }
+        return false;
+      });
+    }
+    var get_elements_by_content_type_default = getElementsByContentType;
+    function getGlobalAriaAttrs() {
+      return cache_default.get('globalAriaAttrs', function() {
+        return Object.keys(standards_default.ariaAttrs).filter(function(attrName) {
+          return standards_default.ariaAttrs[attrName].global;
+        });
+      });
+    }
+    var get_global_aria_attrs_default = getGlobalAriaAttrs;
+    function toGrid(node) {
+      var table = [];
+      var rows = node.rows;
+      for (var i = 0, rowLength = rows.length; i < rowLength; i++) {
+        var cells = rows[i].cells;
+        table[i] = table[i] || [];
+        var columnIndex = 0;
+        for (var j = 0, cellLength = cells.length; j < cellLength; j++) {
+          for (var colSpan = 0; colSpan < cells[j].colSpan; colSpan++) {
+            var rowspanAttr = cells[j].getAttribute('rowspan');
+            var rowspanValue = parseInt(rowspanAttr) === 0 || cells[j].rowspan === 0 ? rows.length : cells[j].rowSpan;
+            for (var rowSpan = 0; rowSpan < rowspanValue; rowSpan++) {
+              table[i + rowSpan] = table[i + rowSpan] || [];
+              while (table[i + rowSpan][columnIndex]) {
+                columnIndex++;
+              }
+              table[i + rowSpan][columnIndex] = cells[j];
+            }
+            columnIndex++;
+          }
+        }
+      }
+      return table;
+    }
+    var to_grid_default = memoize_default(toGrid);
+    function getCellPosition(cell, tableGrid) {
+      var rowIndex, index;
+      if (!tableGrid) {
+        tableGrid = to_grid_default(find_up_default(cell, 'table'));
+      }
+      for (rowIndex = 0; rowIndex < tableGrid.length; rowIndex++) {
+        if (tableGrid[rowIndex]) {
+          index = tableGrid[rowIndex].indexOf(cell);
+          if (index !== -1) {
+            return {
+              x: index,
+              y: rowIndex
+            };
+          }
+        }
+      }
+    }
+    var get_cell_position_default = memoize_default(getCellPosition);
+    function getScope(cell) {
+      var vNode = cell instanceof abstract_virtual_node_default ? cell : get_node_from_tree_default(cell);
+      cell = vNode.actualNode;
+      var scope = vNode.attr('scope');
+      var role = vNode.attr('role');
+      if (![ 'td', 'th' ].includes(vNode.props.nodeName)) {
+        throw new TypeError('Expected TD or TH element');
+      }
+      if (role === 'columnheader') {
+        return 'col';
+      } else if (role === 'rowheader') {
+        return 'row';
+      } else if (scope === 'col' || scope === 'row') {
+        return scope;
+      } else if (vNode.props.nodeName !== 'th') {
+        return false;
+      } else if (!vNode.actualNode) {
+        return 'auto';
+      }
+      var tableGrid = to_grid_default(find_up_default(cell, 'table'));
+      var pos = get_cell_position_default(cell, tableGrid);
+      var headerRow = tableGrid[pos.y].reduce(function(headerRow2, cell2) {
+        return headerRow2 && cell2.nodeName.toUpperCase() === 'TH';
+      }, true);
+      if (headerRow) {
+        return 'col';
+      }
+      var headerCol = tableGrid.map(function(col) {
+        return col[pos.x];
+      }).reduce(function(headerCol2, cell2) {
+        return headerCol2 && cell2 && cell2.nodeName.toUpperCase() === 'TH';
+      }, true);
+      if (headerCol) {
+        return 'row';
+      }
+      return 'auto';
+    }
+    var get_scope_default = getScope;
+    function isColumnHeader(element) {
+      return [ 'col', 'auto' ].indexOf(get_scope_default(element)) !== -1;
+    }
+    var is_column_header_default = isColumnHeader;
+    function isRowHeader(cell) {
+      return [ 'row', 'auto' ].includes(get_scope_default(cell));
+    }
+    var is_row_header_default = isRowHeader;
+    function sanitize(str) {
+      if (!str) {
+        return '';
+      }
+      return str.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ').replace(/[\s]{2,}/g, ' ').trim();
+    }
+    var sanitize_default = sanitize;
+    var allowedDisabledNodeNames = [ 'button', 'command', 'fieldset', 'keygen', 'optgroup', 'option', 'select', 'textarea', 'input' ];
+    function isDisabledAttrAllowed(nodeName2) {
+      return allowedDisabledNodeNames.includes(nodeName2);
+    }
+    function focusDisabled(el) {
+      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
+      if (isDisabledAttrAllowed(vNode.props.nodeName) && vNode.hasAttr('disabled')) {
+        return true;
+      }
+      var parentNode = vNode.parent;
+      var ancestors = [];
+      var fieldsetDisabled = false;
+      while (parentNode && parentNode.shadowId === vNode.shadowId && !fieldsetDisabled) {
+        ancestors.push(parentNode);
+        if (parentNode.props.nodeName === 'legend') {
+          break;
+        }
+        if (parentNode._inDisabledFieldset !== void 0) {
+          fieldsetDisabled = parentNode._inDisabledFieldset;
+          break;
+        }
+        if (parentNode.props.nodeName === 'fieldset' && parentNode.hasAttr('disabled')) {
+          fieldsetDisabled = true;
+        }
+        parentNode = parentNode.parent;
+      }
+      ancestors.forEach(function(ancestor) {
+        return ancestor._inDisabledFieldset = fieldsetDisabled;
+      });
+      if (fieldsetDisabled) {
+        return true;
+      }
+      if (vNode.props.nodeName !== 'area') {
+        if (!vNode.actualNode) {
+          return false;
+        }
+        return _isHiddenForEveryone(vNode);
+      }
+      return false;
+    }
+    var focus_disabled_default = focusDisabled;
+    function isNativelyFocusable(el) {
+      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
+      if (!vNode || focus_disabled_default(vNode)) {
+        return false;
+      }
+      switch (vNode.props.nodeName) {
+       case 'a':
+       case 'area':
+        if (vNode.hasAttr('href')) {
+          return true;
+        }
+        break;
+
+       case 'input':
+        return vNode.props.type !== 'hidden';
+
+       case 'textarea':
+       case 'select':
+       case 'summary':
+       case 'button':
+        return true;
+
+       case 'details':
+        return !query_selector_all_default(vNode, 'summary').length;
+      }
+      return false;
+    }
+    var is_natively_focusable_default = isNativelyFocusable;
+    function _isFocusable(el) {
+      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
+      if (vNode.props.nodeType !== 1) {
+        return false;
+      }
+      if (focus_disabled_default(vNode)) {
+        return false;
+      } else if (is_natively_focusable_default(vNode)) {
+        return true;
+      }
+      var tabindex = vNode.attr('tabindex');
+      if (tabindex && !isNaN(parseInt(tabindex, 10))) {
+        return true;
+      }
+      return false;
+    }
+    var sectioningElementSelector = get_elements_by_content_type_default('sectioning').map(function(nodeName2) {
+      return ''.concat(nodeName2, ':not([role])');
+    }).join(', ') + ' , main:not([role]), [role=article], [role=complementary], [role=main], [role=navigation], [role=region]';
+    function hasAccessibleName(vNode) {
+      var ariaLabelledby = sanitize_default(arialabelledby_text_default(vNode));
+      var ariaLabel = sanitize_default(arialabel_text_default(vNode));
+      return !!(ariaLabelledby || ariaLabel);
+    }
+    var implicitHtmlRoles = {
+      a: function a(vNode) {
+        return vNode.hasAttr('href') ? 'link' : null;
+      },
+      area: function area(vNode) {
+        return vNode.hasAttr('href') ? 'link' : null;
+      },
+      article: 'article',
+      aside: 'complementary',
+      body: 'document',
+      button: 'button',
+      datalist: 'listbox',
+      dd: 'definition',
+      dfn: 'term',
+      details: 'group',
+      dialog: 'dialog',
+      dt: 'term',
+      fieldset: 'group',
+      figure: 'figure',
+      footer: function footer(vNode) {
+        var sectioningElement = closest_default(vNode, sectioningElementSelector);
+        return !sectioningElement ? 'contentinfo' : null;
+      },
+      form: function form(vNode) {
+        return hasAccessibleName(vNode) ? 'form' : null;
+      },
+      h1: 'heading',
+      h2: 'heading',
+      h3: 'heading',
+      h4: 'heading',
+      h5: 'heading',
+      h6: 'heading',
+      header: function header(vNode) {
+        var sectioningElement = closest_default(vNode, sectioningElementSelector);
+        return !sectioningElement ? 'banner' : null;
+      },
+      hr: 'separator',
+      img: function img(vNode) {
+        var emptyAlt = vNode.hasAttr('alt') && !vNode.attr('alt');
+        var hasGlobalAria = get_global_aria_attrs_default().find(function(attr) {
+          return vNode.hasAttr(attr);
+        });
+        return emptyAlt && !hasGlobalAria && !_isFocusable(vNode) ? 'presentation' : 'img';
+      },
+      input: function input(vNode) {
+        var suggestionsSourceElement;
+        if (vNode.hasAttr('list')) {
+          var listElement = idrefs_default(vNode.actualNode, 'list').filter(function(node) {
+            return !!node;
+          })[0];
+          suggestionsSourceElement = listElement && listElement.nodeName.toLowerCase() === 'datalist';
+        }
+        switch (vNode.props.type) {
+         case 'checkbox':
+          return 'checkbox';
+
+         case 'number':
+          return 'spinbutton';
+
+         case 'radio':
+          return 'radio';
+
+         case 'range':
+          return 'slider';
+
+         case 'search':
+          return !suggestionsSourceElement ? 'searchbox' : 'combobox';
+
+         case 'button':
+         case 'image':
+         case 'reset':
+         case 'submit':
+          return 'button';
+
+         case 'text':
+         case 'tel':
+         case 'url':
+         case 'email':
+         case '':
+          return !suggestionsSourceElement ? 'textbox' : 'combobox';
+
+         default:
+          return 'textbox';
+        }
+      },
+      li: 'listitem',
+      main: 'main',
+      math: 'math',
+      menu: 'list',
+      nav: 'navigation',
+      ol: 'list',
+      optgroup: 'group',
+      option: 'option',
+      output: 'status',
+      progress: 'progressbar',
+      section: function section(vNode) {
+        return hasAccessibleName(vNode) ? 'region' : null;
+      },
+      select: function select(vNode) {
+        return vNode.hasAttr('multiple') || parseInt(vNode.attr('size')) > 1 ? 'listbox' : 'combobox';
+      },
+      summary: 'button',
+      table: 'table',
+      tbody: 'rowgroup',
+      td: function td(vNode) {
+        var table = closest_default(vNode, 'table');
+        var role = get_explicit_role_default(table);
+        return [ 'grid', 'treegrid' ].includes(role) ? 'gridcell' : 'cell';
+      },
+      textarea: 'textbox',
+      tfoot: 'rowgroup',
+      th: function th(vNode) {
+        if (is_column_header_default(vNode)) {
+          return 'columnheader';
+        }
+        if (is_row_header_default(vNode)) {
+          return 'rowheader';
+        }
+      },
+      thead: 'rowgroup',
+      tr: 'row',
+      ul: 'list'
+    };
+    var implicit_html_roles_default = implicitHtmlRoles;
+    function fromPrimative(someString, matcher) {
+      var matcherType = _typeof(matcher);
+      if (Array.isArray(matcher) && typeof someString !== 'undefined') {
+        return matcher.includes(someString);
+      }
+      if (matcherType === 'function') {
+        return !!matcher(someString);
+      }
+      if (someString !== null && someString !== void 0) {
+        if (matcher instanceof RegExp) {
+          return matcher.test(someString);
+        }
+        if (/^\/.*\/$/.test(matcher)) {
+          var pattern = matcher.substring(1, matcher.length - 1);
+          return new RegExp(pattern).test(someString);
+        }
+      }
+      return matcher === someString;
+    }
+    var from_primative_default = fromPrimative;
+    function hasAccessibleName2(vNode, matcher) {
+      return from_primative_default(!!accessible_text_virtual_default(vNode), matcher);
+    }
+    var has_accessible_name_default = hasAccessibleName2;
+    function fromFunction(getValue, matcher) {
+      var matcherType = _typeof(matcher);
+      if (matcherType !== 'object' || Array.isArray(matcher) || matcher instanceof RegExp) {
+        throw new Error('Expect matcher to be an object');
+      }
+      return Object.keys(matcher).every(function(propName) {
+        return from_primative_default(getValue(propName), matcher[propName]);
+      });
+    }
+    var from_function_default = fromFunction;
+    function attributes(vNode, matcher) {
+      if (!(vNode instanceof abstract_virtual_node_default)) {
+        vNode = get_node_from_tree_default(vNode);
+      }
+      return from_function_default(function(attrName) {
+        return vNode.attr(attrName);
+      }, matcher);
+    }
+    var attributes_default = attributes;
+    function condition(arg, condition2) {
+      return !!condition2(arg);
+    }
+    var condition_default = condition;
+    function explicitRole(vNode, matcher) {
+      return from_primative_default(get_explicit_role_default(vNode), matcher);
+    }
+    var explicit_role_default = explicitRole;
+    function implicitRole(vNode, matcher) {
+      return from_primative_default(implicit_role_default(vNode), matcher);
+    }
+    var implicit_role_default2 = implicitRole;
+    function nodeName(vNode, matcher) {
+      if (!(vNode instanceof abstract_virtual_node_default)) {
+        vNode = get_node_from_tree_default(vNode);
+      }
+      return from_primative_default(vNode.props.nodeName, matcher);
+    }
+    var node_name_default = nodeName;
+    function properties(vNode, matcher) {
+      if (!(vNode instanceof abstract_virtual_node_default)) {
+        vNode = get_node_from_tree_default(vNode);
+      }
+      return from_function_default(function(propName) {
+        return vNode.props[propName];
+      }, matcher);
+    }
+    var properties_default = properties;
+    function semanticRole(vNode, matcher) {
+      return from_primative_default(get_role_default(vNode), matcher);
+    }
+    var semantic_role_default = semanticRole;
+    var matchers = {
+      hasAccessibleName: has_accessible_name_default,
+      attributes: attributes_default,
+      condition: condition_default,
+      explicitRole: explicit_role_default,
+      implicitRole: implicit_role_default2,
+      nodeName: node_name_default,
+      properties: properties_default,
+      semanticRole: semantic_role_default
+    };
+    function fromDefinition(vNode, definition) {
+      if (!(vNode instanceof abstract_virtual_node_default)) {
+        vNode = get_node_from_tree_default(vNode);
+      }
+      if (Array.isArray(definition)) {
+        return definition.some(function(definitionItem) {
+          return fromDefinition(vNode, definitionItem);
+        });
+      }
+      if (typeof definition === 'string') {
+        return matches_default(vNode, definition);
+      }
+      return Object.keys(definition).every(function(matcherName) {
+        if (!matchers[matcherName]) {
+          throw new Error('Unknown matcher type "'.concat(matcherName, '"'));
+        }
+        var matchMethod = matchers[matcherName];
+        var matcher = definition[matcherName];
+        return matchMethod(vNode, matcher);
+      });
+    }
+    var from_definition_default = fromDefinition;
+    function matches2(vNode, definition) {
+      return from_definition_default(vNode, definition);
+    }
+    var matches_default2 = matches2;
+    matches_default2.hasAccessibleName = has_accessible_name_default;
+    matches_default2.attributes = attributes_default;
+    matches_default2.condition = condition_default;
+    matches_default2.explicitRole = explicit_role_default;
+    matches_default2.fromDefinition = from_definition_default;
+    matches_default2.fromFunction = from_function_default;
+    matches_default2.fromPrimative = from_primative_default;
+    matches_default2.implicitRole = implicit_role_default2;
+    matches_default2.nodeName = node_name_default;
+    matches_default2.properties = properties_default;
+    matches_default2.semanticRole = semantic_role_default;
+    var matches_default3 = matches_default2;
+    function getElementSpec(vNode) {
+      var _ref25 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref25$noMatchAccessi = _ref25.noMatchAccessibleName, noMatchAccessibleName = _ref25$noMatchAccessi === void 0 ? false : _ref25$noMatchAccessi;
+      var standard = standards_default.htmlElms[vNode.props.nodeName];
+      if (!standard) {
+        return {};
+      }
+      if (!standard.variant) {
+        return standard;
+      }
+      var variant = standard.variant, spec = _objectWithoutProperties(standard, _excluded2);
+      for (var variantName in variant) {
+        if (!variant.hasOwnProperty(variantName) || variantName === 'default') {
+          continue;
+        }
+        var _variant$variantName = variant[variantName], matches4 = _variant$variantName.matches, props = _objectWithoutProperties(_variant$variantName, _excluded3);
+        var matchProperties = Array.isArray(matches4) ? matches4 : [ matches4 ];
+        for (var _i7 = 0; _i7 < matchProperties.length && noMatchAccessibleName; _i7++) {
+          if (matchProperties[_i7].hasOwnProperty('hasAccessibleName')) {
+            return standard;
+          }
+        }
+        if (matches_default3(vNode, matches4)) {
+          for (var propName in props) {
+            if (props.hasOwnProperty(propName)) {
+              spec[propName] = props[propName];
+            }
+          }
+        }
+      }
+      for (var _propName in variant['default']) {
+        if (variant['default'].hasOwnProperty(_propName) && typeof spec[_propName] === 'undefined') {
+          spec[_propName] = variant['default'][_propName];
+        }
+      }
+      return spec;
+    }
+    var get_element_spec_default = getElementSpec;
+    function implicitRole2(node) {
+      var _ref26 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, chromium = _ref26.chromium;
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      node = vNode.actualNode;
+      if (!vNode) {
+        throw new ReferenceError('Cannot get implicit role of a node outside the current scope.');
+      }
+      var nodeName2 = vNode.props.nodeName;
+      var role = implicit_html_roles_default[nodeName2];
+      if (!role && chromium) {
+        var _get_element_spec_def = get_element_spec_default(vNode), chromiumRole = _get_element_spec_def.chromiumRole;
+        return chromiumRole || null;
+      }
+      if (typeof role === 'function') {
+        return role(vNode);
+      }
+      return role || null;
+    }
+    var implicit_role_default = implicitRole2;
+    var inheritsPresentationChain = {
+      td: [ 'tr' ],
+      th: [ 'tr' ],
+      tr: [ 'thead', 'tbody', 'tfoot', 'table' ],
+      thead: [ 'table' ],
+      tbody: [ 'table' ],
+      tfoot: [ 'table' ],
+      li: [ 'ol', 'ul' ],
+      dt: [ 'dl', 'div' ],
+      dd: [ 'dl', 'div' ],
+      div: [ 'dl' ]
+    };
+    function getInheritedRole(vNode, explicitRoleOptions) {
+      var parentNodeNames = inheritsPresentationChain[vNode.props.nodeName];
+      if (!parentNodeNames) {
+        return null;
+      }
+      if (!vNode.parent) {
+        if (!vNode.actualNode) {
+          return null;
+        }
+        throw new ReferenceError('Cannot determine role presentational inheritance of a required parent outside the current scope.');
+      }
+      if (!parentNodeNames.includes(vNode.parent.props.nodeName)) {
+        return null;
+      }
+      var parentRole = get_explicit_role_default(vNode.parent, explicitRoleOptions);
+      if ([ 'none', 'presentation' ].includes(parentRole) && !hasConflictResolution(vNode.parent)) {
+        return parentRole;
+      }
+      if (parentRole) {
+        return null;
+      }
+      return getInheritedRole(vNode.parent, explicitRoleOptions);
+    }
+    function resolveImplicitRole(vNode, _ref27) {
+      var chromium = _ref27.chromium, explicitRoleOptions = _objectWithoutProperties(_ref27, _excluded4);
+      var implicitRole3 = implicit_role_default(vNode, {
+        chromium: chromium
+      });
+      if (!implicitRole3) {
+        return null;
+      }
+      var presentationalRole = getInheritedRole(vNode, explicitRoleOptions);
+      if (presentationalRole) {
+        return presentationalRole;
+      }
+      return implicitRole3;
+    }
+    function hasConflictResolution(vNode) {
+      var hasGlobalAria = get_global_aria_attrs_default().some(function(attr) {
+        return vNode.hasAttr(attr);
+      });
+      return hasGlobalAria || _isFocusable(vNode);
+    }
+    function resolveRole(node) {
+      var _ref28 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var noImplicit = _ref28.noImplicit, roleOptions = _objectWithoutProperties(_ref28, _excluded5);
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (vNode.props.nodeType !== 1) {
+        return null;
+      }
+      var explicitRole2 = get_explicit_role_default(vNode, roleOptions);
+      if (!explicitRole2) {
+        return noImplicit ? null : resolveImplicitRole(vNode, roleOptions);
+      }
+      if (![ 'presentation', 'none' ].includes(explicitRole2)) {
+        return explicitRole2;
+      }
+      if (hasConflictResolution(vNode)) {
+        return noImplicit ? null : resolveImplicitRole(vNode, roleOptions);
+      }
+      return explicitRole2;
+    }
+    function getRole(node) {
+      var _ref29 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var noPresentational = _ref29.noPresentational, options = _objectWithoutProperties(_ref29, _excluded6);
+      var role = resolveRole(node, options);
+      if (noPresentational && [ 'presentation', 'none' ].includes(role)) {
+        return null;
+      }
+      return role;
+    }
+    var get_role_default = getRole;
+    var alwaysTitleElements = [ 'iframe' ];
+    function titleText(node) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (vNode.props.nodeType !== 1 || !node.hasAttr('title')) {
+        return '';
+      }
+      if (!matches_default2(vNode, alwaysTitleElements) && [ 'none', 'presentation' ].includes(get_role_default(vNode))) {
+        return '';
+      }
+      return vNode.attr('title');
+    }
+    var title_text_default = titleText;
+    function namedFromContents(vNode) {
+      var _ref30 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, strict = _ref30.strict;
+      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
+      if (vNode.props.nodeType !== 1) {
+        return false;
+      }
+      var role = get_role_default(vNode);
+      var roleDef = standards_default.ariaRoles[role];
+      if (roleDef && roleDef.nameFromContent) {
+        return true;
+      }
+      if (strict) {
+        return false;
+      }
+      return !roleDef || [ 'presentation', 'none' ].includes(role);
+    }
+    var named_from_contents_default = namedFromContents;
+    function getOwnedVirtual(virtualNode) {
+      var actualNode = virtualNode.actualNode, children = virtualNode.children;
+      if (!children) {
+        throw new Error('getOwnedVirtual requires a virtual node');
+      }
+      if (virtualNode.hasAttr('aria-owns')) {
+        var owns = idrefs_default(actualNode, 'aria-owns').filter(function(element) {
+          return !!element;
+        }).map(function(element) {
+          return axe.utils.getNodeFromTree(element);
+        });
+        return [].concat(_toConsumableArray(children), _toConsumableArray(owns));
+      }
+      return _toConsumableArray(children);
+    }
+    var get_owned_virtual_default = getOwnedVirtual;
+    function subtreeText(virtualNode) {
+      var context = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var alreadyProcessed2 = accessible_text_virtual_default.alreadyProcessed;
+      context.startNode = context.startNode || virtualNode;
+      var _context = context, strict = _context.strict, inControlContext = _context.inControlContext, inLabelledByContext = _context.inLabelledByContext;
+      var _get_element_spec_def2 = get_element_spec_default(virtualNode, {
+        noMatchAccessibleName: true
+      }), contentTypes = _get_element_spec_def2.contentTypes;
+      if (alreadyProcessed2(virtualNode, context) || virtualNode.props.nodeType !== 1 || contentTypes !== null && contentTypes !== void 0 && contentTypes.includes('embedded')) {
+        return '';
+      }
+      if (!named_from_contents_default(virtualNode, {
+        strict: strict
+      }) && !context.subtreeDescendant) {
+        return '';
+      }
+      if (!strict) {
+        var subtreeDescendant = !inControlContext && !inLabelledByContext;
+        context = _extends({
+          subtreeDescendant: subtreeDescendant
+        }, context);
+      }
+      return get_owned_virtual_default(virtualNode).reduce(function(contentText, child) {
+        return appendAccessibleText(contentText, child, context);
+      }, '');
+    }
+    var phrasingElements = get_elements_by_content_type_default('phrasing').concat([ '#text' ]);
+    function appendAccessibleText(contentText, virtualNode, context) {
+      var nodeName2 = virtualNode.props.nodeName;
+      var contentTextAdd = accessible_text_virtual_default(virtualNode, context);
+      if (!contentTextAdd) {
+        return contentText;
+      }
+      if (!phrasingElements.includes(nodeName2)) {
+        if (contentTextAdd[0] !== ' ') {
+          contentTextAdd += ' ';
+        }
+        if (contentText && contentText[contentText.length - 1] !== ' ') {
+          contentTextAdd = ' ' + contentTextAdd;
+        }
+      }
+      return contentText + contentTextAdd;
+    }
+    var subtree_text_default = subtreeText;
+    function labelText(virtualNode) {
+      var context = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var alreadyProcessed2 = accessible_text_virtual_default.alreadyProcessed;
+      if (context.inControlContext || context.inLabelledByContext || alreadyProcessed2(virtualNode, context)) {
+        return '';
+      }
+      if (!context.startNode) {
+        context.startNode = virtualNode;
+      }
+      var labelContext = _extends({
+        inControlContext: true
+      }, context);
+      var explicitLabels = getExplicitLabels(virtualNode);
+      var implicitLabel = closest_default(virtualNode, 'label');
+      var labels;
+      if (implicitLabel) {
+        labels = [].concat(_toConsumableArray(explicitLabels), [ implicitLabel.actualNode ]);
+        labels.sort(node_sorter_default);
+      } else {
+        labels = explicitLabels;
+      }
+      return labels.map(function(label3) {
+        return accessible_text_default(label3, labelContext);
+      }).filter(function(text) {
+        return text !== '';
+      }).join(' ');
+    }
+    function getExplicitLabels(virtualNode) {
+      if (!virtualNode.attr('id')) {
+        return [];
+      }
+      if (!virtualNode.actualNode) {
+        throw new TypeError('Cannot resolve explicit label reference for non-DOM nodes');
+      }
+      return find_elms_in_context_default({
+        elm: 'label',
+        attr: 'for',
+        value: virtualNode.attr('id'),
+        context: virtualNode.actualNode
+      });
+    }
+    var label_text_default = labelText;
+    var defaultButtonValues = {
+      submit: 'Submit',
+      image: 'Submit',
+      reset: 'Reset',
+      button: ''
+    };
+    var nativeTextMethods = {
+      valueText: function valueText(_ref31) {
+        var actualNode = _ref31.actualNode;
+        return actualNode.value || '';
+      },
+      buttonDefaultText: function buttonDefaultText(_ref32) {
+        var actualNode = _ref32.actualNode;
+        return defaultButtonValues[actualNode.type] || '';
+      },
+      tableCaptionText: descendantText.bind(null, 'caption'),
+      figureText: descendantText.bind(null, 'figcaption'),
+      svgTitleText: descendantText.bind(null, 'title'),
+      fieldsetLegendText: descendantText.bind(null, 'legend'),
+      altText: attrText.bind(null, 'alt'),
+      tableSummaryText: attrText.bind(null, 'summary'),
+      titleText: title_text_default,
+      subtreeText: subtree_text_default,
+      labelText: label_text_default,
+      singleSpace: function singleSpace() {
+        return ' ';
+      },
+      placeholderText: attrText.bind(null, 'placeholder')
+    };
+    function attrText(attr, vNode) {
+      return vNode.attr(attr) || '';
+    }
+    function descendantText(nodeName2, _ref33, context) {
+      var actualNode = _ref33.actualNode;
+      nodeName2 = nodeName2.toLowerCase();
+      var nodeNames2 = [ nodeName2, actualNode.nodeName.toLowerCase() ].join(',');
+      var candidate = actualNode.querySelector(nodeNames2);
+      if (!candidate || candidate.nodeName.toLowerCase() !== nodeName2) {
+        return '';
+      }
+      return accessible_text_default(candidate, context);
+    }
+    var native_text_methods_default = nativeTextMethods;
+    function nativeTextAlternative(virtualNode) {
+      var context = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var actualNode = virtualNode.actualNode;
+      if (virtualNode.props.nodeType !== 1 || [ 'presentation', 'none' ].includes(get_role_default(virtualNode))) {
+        return '';
+      }
+      var textMethods = findTextMethods(virtualNode);
+      var accName = textMethods.reduce(function(accName2, step) {
+        return accName2 || step(virtualNode, context);
+      }, '');
+      if (context.debug) {
+        axe.log(accName || '{empty-value}', actualNode, context);
+      }
+      return accName;
+    }
+    function findTextMethods(virtualNode) {
+      var elmSpec = get_element_spec_default(virtualNode, {
+        noMatchAccessibleName: true
+      });
+      var methods = elmSpec.namingMethods || [];
+      return methods.map(function(methodName) {
+        return native_text_methods_default[methodName];
+      });
+    }
+    var native_text_alternative_default = nativeTextAlternative;
+    var unsupported = {
+      accessibleNameFromFieldValue: [ 'combobox', 'listbox', 'progressbar' ]
+    };
+    var unsupported_default = unsupported;
+    function _isVisibleToScreenReaders(vNode) {
+      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
+      return isVisibleToScreenReadersVirtual(vNode);
+    }
+    var isVisibleToScreenReadersVirtual = memoize_default(function isVisibleToScreenReadersMemoized(vNode, isAncestor) {
+      if (ariaHidden(vNode)) {
+        return false;
+      }
+      if (vNode.actualNode && vNode.props.nodeName === 'area') {
+        return !areaHidden(vNode, isVisibleToScreenReadersVirtual);
+      }
+      if (_isHiddenForEveryone(vNode, {
+        skipAncestors: true,
+        isAncestor: isAncestor
+      })) {
+        return false;
+      }
+      if (!vNode.parent) {
+        return true;
+      }
+      return isVisibleToScreenReadersVirtual(vNode.parent, true);
+    });
+    function visibleVirtual(element, screenReader, noRecursing) {
+      var vNode = element instanceof abstract_virtual_node_default ? element : get_node_from_tree_default(element);
+      var visibleMethod = screenReader ? _isVisibleToScreenReaders : _isVisibleOnScreen;
+      var visible2 = !element.actualNode || element.actualNode && visibleMethod(element);
+      var result = vNode.children.map(function(child) {
+        var _child$props = child.props, nodeType = _child$props.nodeType, nodeValue = _child$props.nodeValue;
+        if (nodeType === 3) {
+          if (nodeValue && visible2) {
+            return nodeValue;
+          }
+        } else if (!noRecursing) {
+          return visibleVirtual(child, screenReader);
+        }
+      }).join('');
+      return sanitize_default(result);
+    }
+    var visible_virtual_default = visibleVirtual;
+    var nonTextInputTypes = [ 'button', 'checkbox', 'color', 'file', 'hidden', 'image', 'password', 'radio', 'reset', 'submit' ];
+    function isNativeTextbox(node) {
+      node = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      var nodeName2 = node.props.nodeName;
+      return nodeName2 === 'textarea' || nodeName2 === 'input' && !nonTextInputTypes.includes((node.attr('type') || '').toLowerCase());
+    }
+    var is_native_textbox_default = isNativeTextbox;
+    function isNativeSelect(node) {
+      node = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      var nodeName2 = node.props.nodeName;
+      return nodeName2 === 'select';
+    }
+    var is_native_select_default = isNativeSelect;
+    function isAriaTextbox(node) {
+      var role = get_explicit_role_default(node);
+      return role === 'textbox';
+    }
+    var is_aria_textbox_default = isAriaTextbox;
+    function isAriaListbox(node) {
+      var role = get_explicit_role_default(node);
+      return role === 'listbox';
+    }
+    var is_aria_listbox_default = isAriaListbox;
+    function isAriaCombobox(node) {
+      var role = get_explicit_role_default(node);
+      return role === 'combobox';
+    }
+    var is_aria_combobox_default = isAriaCombobox;
+    var rangeRoles = [ 'progressbar', 'scrollbar', 'slider', 'spinbutton' ];
+    function isAriaRange(node) {
+      var role = get_explicit_role_default(node);
+      return rangeRoles.includes(role);
+    }
+    var is_aria_range_default = isAriaRange;
+    var controlValueRoles = [ 'textbox', 'progressbar', 'scrollbar', 'slider', 'spinbutton', 'combobox', 'listbox' ];
+    var _formControlValueMethods = {
+      nativeTextboxValue: nativeTextboxValue,
+      nativeSelectValue: nativeSelectValue,
+      ariaTextboxValue: ariaTextboxValue,
+      ariaListboxValue: ariaListboxValue,
+      ariaComboboxValue: ariaComboboxValue,
+      ariaRangeValue: ariaRangeValue
+    };
+    function formControlValue(virtualNode) {
+      var context = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var actualNode = virtualNode.actualNode;
+      var unsupportedRoles = unsupported_default.accessibleNameFromFieldValue || [];
+      var role = get_role_default(virtualNode);
+      if (context.startNode === virtualNode || !controlValueRoles.includes(role) || unsupportedRoles.includes(role)) {
+        return '';
+      }
+      var valueMethods = Object.keys(_formControlValueMethods).map(function(name) {
+        return _formControlValueMethods[name];
+      });
+      var valueString = valueMethods.reduce(function(accName, step) {
+        return accName || step(virtualNode, context);
+      }, '');
+      if (context.debug) {
+        log_default(valueString || '{empty-value}', actualNode, context);
+      }
+      return valueString;
+    }
+    function nativeTextboxValue(node) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (is_native_textbox_default(vNode)) {
+        return vNode.props.value || '';
+      }
+      return '';
+    }
+    function nativeSelectValue(node) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (!is_native_select_default(vNode)) {
+        return '';
+      }
+      var options = query_selector_all_default(vNode, 'option');
+      var selectedOptions = options.filter(function(option) {
+        return option.props.selected;
+      });
+      if (!selectedOptions.length) {
+        selectedOptions.push(options[0]);
+      }
+      return selectedOptions.map(function(option) {
+        return visible_virtual_default(option);
+      }).join(' ') || '';
+    }
+    function ariaTextboxValue(node) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      var actualNode = vNode.actualNode;
+      if (!is_aria_textbox_default(vNode)) {
+        return '';
+      }
+      if (!actualNode || actualNode && !_isHiddenForEveryone(actualNode)) {
+        return visible_virtual_default(vNode, true);
+      } else {
+        return actualNode.textContent;
+      }
+    }
+    function ariaListboxValue(node, context) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (!is_aria_listbox_default(vNode)) {
+        return '';
+      }
+      var selected = get_owned_virtual_default(vNode).filter(function(owned) {
+        return get_role_default(owned) === 'option' && owned.attr('aria-selected') === 'true';
+      });
+      if (selected.length === 0) {
+        return '';
+      }
+      return accessible_text_virtual_default(selected[0], context);
+    }
+    function ariaComboboxValue(node, context) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (!is_aria_combobox_default(vNode)) {
+        return '';
+      }
+      var listbox = get_owned_virtual_default(vNode).filter(function(elm) {
+        return get_role_default(elm) === 'listbox';
+      })[0];
+      return listbox ? ariaListboxValue(listbox, context) : '';
+    }
+    function ariaRangeValue(node) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      if (!is_aria_range_default(vNode) || !vNode.hasAttr('aria-valuenow')) {
+        return '';
+      }
+      var valueNow = +vNode.attr('aria-valuenow');
+      return !isNaN(valueNow) ? String(valueNow) : '0';
+    }
+    var form_control_value_default = formControlValue;
+    function getUnicodeNonBmpRegExp() {
+      return /[\u1D00-\u1D7F\u1D80-\u1DBF\u1DC0-\u1DFF\u20A0-\u20CF\u20D0-\u20FF\u2100-\u214F\u2150-\u218F\u2190-\u21FF\u2200-\u22FF\u2300-\u23FF\u2400-\u243F\u2440-\u245F\u2460-\u24FF\u2500-\u257F\u2580-\u259F\u25A0-\u25FF\u2600-\u26FF\u2700-\u27BF\uE000-\uF8FF]/g;
+    }
+    function getPunctuationRegExp() {
+      return /[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&\xa3\xa2\xa5\xa7\u20ac()*+,\-.\/:;<=>?@\[\]^_`{|}~\xb1]/g;
+    }
+    function getSupplementaryPrivateUseRegExp() {
+      return /[\uDB80-\uDBBF][\uDC00-\uDFFF]/g;
+    }
+    var emoji_regex_default = function emoji_regex_default() {
+      return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26D3\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26F9(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC3\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF5\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC08\uDC26](?:\u200D\u2B1B)?|[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E\uDC70\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4-\uDEB6](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED7\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E[\uDDAF-\uDDB3\uDDBC\uDDBD])|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE])))?))?|\uDC6F(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDD75(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD-\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE88\uDE90-\uDEBD\uDEBF-\uDEC2\uDECE-\uDEDB\uDEE0-\uDEE8]|\uDD3C(?:\u200D[\u2640\u2642]\uFE0F?|\uD83C[\uDFFB-\uDFFF])?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83E\uDDD1))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF-\uDDB3\uDDBC\uDDBD]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
+    };
+    function hasUnicode(str, options) {
+      var emoji = options.emoji, nonBmp = options.nonBmp, punctuations = options.punctuations;
+      if (emoji) {
+        return emoji_regex_default().test(str);
+      }
+      if (nonBmp) {
+        return getUnicodeNonBmpRegExp().test(str) || getSupplementaryPrivateUseRegExp().test(str);
+      }
+      if (punctuations) {
+        return getPunctuationRegExp().test(str);
+      }
+      return false;
+    }
+    var has_unicode_default = hasUnicode;
+    function isIconLigature(textVNode) {
+      var differenceThreshold = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : .15;
+      var occurrenceThreshold = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 3;
+      var nodeValue = textVNode.actualNode.nodeValue.trim();
+      if (!sanitize_default(nodeValue) || has_unicode_default(nodeValue, {
+        emoji: true,
+        nonBmp: true
+      })) {
+        return false;
+      }
+      var canvasContext = cache_default.get('canvasContext', function() {
+        return document.createElement('canvas').getContext('2d');
+      });
+      var canvas = canvasContext.canvas;
+      if (!cache_default.get('fonts')) {
+        cache_default.set('fonts', {});
+      }
+      var fonts = cache_default.get('fonts');
+      var style = window.getComputedStyle(textVNode.parent.actualNode);
+      var fontFamily = style.getPropertyValue('font-family');
+      if (!fonts[fontFamily]) {
+        fonts[fontFamily] = {
+          occurrences: 0,
+          numLigatures: 0
+        };
+      }
+      var font = fonts[fontFamily];
+      if (font.occurrences >= occurrenceThreshold) {
+        if (font.numLigatures / font.occurrences === 1) {
+          return true;
+        } else if (font.numLigatures === 0) {
+          return false;
+        }
+      }
+      font.occurrences++;
+      var fontSize = 30;
+      var fontStyle = ''.concat(fontSize, 'px ').concat(fontFamily);
+      canvasContext.font = fontStyle;
+      var firstChar = nodeValue.charAt(0);
+      var width = canvasContext.measureText(firstChar).width;
+      if (width < 30) {
+        var diff = 30 / width;
+        width *= diff;
+        fontSize *= diff;
+        fontStyle = ''.concat(fontSize, 'px ').concat(fontFamily);
+      }
+      canvas.width = width;
+      canvas.height = fontSize;
+      canvasContext.font = fontStyle;
+      canvasContext.textAlign = 'left';
+      canvasContext.textBaseline = 'top';
+      canvasContext.fillText(firstChar, 0, 0);
+      var compareData = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize).data.buffer);
+      if (!compareData.some(function(pixel) {
+        return pixel;
+      })) {
+        font.numLigatures++;
+        return true;
+      }
+      canvasContext.clearRect(0, 0, width, fontSize);
+      canvasContext.fillText(nodeValue, 0, 0);
+      var compareWith = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize).data.buffer);
+      var differences = compareData.reduce(function(diff, pixel, i) {
+        if (pixel === 0 && compareWith[i] === 0) {
+          return diff;
+        }
+        if (pixel !== 0 && compareWith[i] !== 0) {
+          return diff;
+        }
+        return ++diff;
+      }, 0);
+      var expectedWidth = nodeValue.split('').reduce(function(width2, _char2) {
+        return width2 + canvasContext.measureText(_char2).width;
+      }, 0);
+      var actualWidth = canvasContext.measureText(nodeValue).width;
+      var pixelDifference = differences / compareData.length;
+      var sizeDifference = 1 - actualWidth / expectedWidth;
+      if (pixelDifference >= differenceThreshold && sizeDifference >= differenceThreshold) {
+        font.numLigatures++;
+        return true;
+      }
+      return false;
+    }
+    var is_icon_ligature_default = isIconLigature;
+    function accessibleTextVirtual(virtualNode) {
+      var context = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      context = prepareContext(virtualNode, context);
+      if (shouldIgnoreHidden(virtualNode, context)) {
+        return '';
+      }
+      if (shouldIgnoreIconLigature(virtualNode, context)) {
+        return '';
+      }
+      var computationSteps = [ arialabelledby_text_default, arialabel_text_default, native_text_alternative_default, form_control_value_default, subtree_text_default, textNodeValue, title_text_default ];
+      var accName = computationSteps.reduce(function(accName2, step) {
+        if (context.startNode === virtualNode) {
+          accName2 = sanitize_default(accName2);
+        }
+        if (accName2 !== '') {
+          return accName2;
+        }
+        return step(virtualNode, context);
+      }, '');
+      if (context.debug) {
+        axe.log(accName || '{empty-value}', virtualNode.actualNode, context);
+      }
+      return accName;
+    }
+    function textNodeValue(virtualNode) {
+      if (virtualNode.props.nodeType !== 3) {
+        return '';
+      }
+      return virtualNode.props.nodeValue;
+    }
+    function shouldIgnoreHidden(virtualNode, context) {
+      if (!virtualNode) {
+        return false;
+      }
+      if (virtualNode.props.nodeType !== 1 || context.includeHidden) {
+        return false;
+      }
+      return !_isVisibleToScreenReaders(virtualNode);
+    }
+    function shouldIgnoreIconLigature(virtualNode, context) {
+      var _context$occurrenceTh;
+      var ignoreIconLigature = context.ignoreIconLigature, pixelThreshold = context.pixelThreshold;
+      var occurrenceThreshold = (_context$occurrenceTh = context.occurrenceThreshold) !== null && _context$occurrenceTh !== void 0 ? _context$occurrenceTh : context.occuranceThreshold;
+      if (virtualNode.props.nodeType !== 3 || !ignoreIconLigature) {
+        return false;
+      }
+      return is_icon_ligature_default(virtualNode, pixelThreshold, occurrenceThreshold);
+    }
+    function prepareContext(virtualNode, context) {
+      if (!context.startNode) {
+        context = _extends({
+          startNode: virtualNode
+        }, context);
+      }
+      if (virtualNode.props.nodeType === 1 && context.inLabelledByContext && context.includeHidden === void 0) {
+        context = _extends({
+          includeHidden: !_isVisibleToScreenReaders(virtualNode)
+        }, context);
+      }
+      return context;
+    }
+    accessibleTextVirtual.alreadyProcessed = function alreadyProcessed(virtualnode, context) {
+      context.processed = context.processed || [];
+      if (context.processed.includes(virtualnode)) {
+        return true;
+      }
+      context.processed.push(virtualnode);
+      return false;
+    };
+    var accessible_text_virtual_default = accessibleTextVirtual;
+    function removeUnicode(str, options) {
+      var emoji = options.emoji, nonBmp = options.nonBmp, punctuations = options.punctuations;
+      if (emoji) {
+        str = str.replace(emoji_regex_default(), '');
+      }
+      if (nonBmp) {
+        str = str.replace(getUnicodeNonBmpRegExp(), '');
+        str = str.replace(getSupplementaryPrivateUseRegExp(), '');
+      }
+      if (punctuations) {
+        str = str.replace(getPunctuationRegExp(), '');
+      }
+      return str;
+    }
+    var remove_unicode_default = removeUnicode;
+    function isHumanInterpretable(str) {
+      if (!str.length) {
+        return 0;
+      }
+      var alphaNumericIconMap = [ 'x', 'i' ];
+      if (alphaNumericIconMap.includes(str)) {
+        return 0;
+      }
+      var noUnicodeStr = remove_unicode_default(str, {
+        emoji: true,
+        nonBmp: true,
+        punctuations: true
+      });
+      if (!sanitize_default(noUnicodeStr)) {
+        return 0;
+      }
+      return 1;
+    }
+    var is_human_interpretable_default = isHumanInterpretable;
+    var _autocomplete = {
+      stateTerms: [ 'on', 'off' ],
+      standaloneTerms: [ 'name', 'honorific-prefix', 'given-name', 'additional-name', 'family-name', 'honorific-suffix', 'nickname', 'username', 'new-password', 'current-password', 'organization-title', 'organization', 'street-address', 'address-line1', 'address-line2', 'address-line3', 'address-level4', 'address-level3', 'address-level2', 'address-level1', 'country', 'country-name', 'postal-code', 'cc-name', 'cc-given-name', 'cc-additional-name', 'cc-family-name', 'cc-number', 'cc-exp', 'cc-exp-month', 'cc-exp-year', 'cc-csc', 'cc-type', 'transaction-currency', 'transaction-amount', 'language', 'bday', 'bday-day', 'bday-month', 'bday-year', 'sex', 'url', 'photo', 'one-time-code' ],
+      qualifiers: [ 'home', 'work', 'mobile', 'fax', 'pager' ],
+      qualifiedTerms: [ 'tel', 'tel-country-code', 'tel-national', 'tel-area-code', 'tel-local', 'tel-local-prefix', 'tel-local-suffix', 'tel-extension', 'email', 'impp' ],
+      locations: [ 'billing', 'shipping' ]
+    };
+    function isValidAutocomplete(autocompleteValue) {
+      var _ref34 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref34$looseTyped = _ref34.looseTyped, looseTyped = _ref34$looseTyped === void 0 ? false : _ref34$looseTyped, _ref34$stateTerms = _ref34.stateTerms, stateTerms = _ref34$stateTerms === void 0 ? [] : _ref34$stateTerms, _ref34$locations = _ref34.locations, locations = _ref34$locations === void 0 ? [] : _ref34$locations, _ref34$qualifiers = _ref34.qualifiers, qualifiers = _ref34$qualifiers === void 0 ? [] : _ref34$qualifiers, _ref34$standaloneTerm = _ref34.standaloneTerms, standaloneTerms = _ref34$standaloneTerm === void 0 ? [] : _ref34$standaloneTerm, _ref34$qualifiedTerms = _ref34.qualifiedTerms, qualifiedTerms = _ref34$qualifiedTerms === void 0 ? [] : _ref34$qualifiedTerms;
+      autocompleteValue = autocompleteValue.toLowerCase().trim();
+      stateTerms = stateTerms.concat(_autocomplete.stateTerms);
+      if (stateTerms.includes(autocompleteValue) || autocompleteValue === '') {
+        return true;
+      }
+      qualifiers = qualifiers.concat(_autocomplete.qualifiers);
+      locations = locations.concat(_autocomplete.locations);
+      standaloneTerms = standaloneTerms.concat(_autocomplete.standaloneTerms);
+      qualifiedTerms = qualifiedTerms.concat(_autocomplete.qualifiedTerms);
+      var autocompleteTerms = autocompleteValue.split(/\s+/g);
+      if (!looseTyped) {
+        if (autocompleteTerms[0].length > 8 && autocompleteTerms[0].substr(0, 8) === 'section-') {
+          autocompleteTerms.shift();
+        }
+        if (locations.includes(autocompleteTerms[0])) {
+          autocompleteTerms.shift();
+        }
+        if (qualifiers.includes(autocompleteTerms[0])) {
+          autocompleteTerms.shift();
+          standaloneTerms = [];
+        }
+        if (autocompleteTerms.length !== 1) {
+          return false;
+        }
+      }
+      var purposeTerm = autocompleteTerms[autocompleteTerms.length - 1];
+      return standaloneTerms.includes(purposeTerm) || qualifiedTerms.includes(purposeTerm);
+    }
+    var is_valid_autocomplete_default = isValidAutocomplete;
+    function labelVirtual(virtualNode) {
+      var ref, candidate;
+      if (virtualNode.attr('aria-labelledby')) {
+        ref = idrefs_default(virtualNode.actualNode, 'aria-labelledby');
+        candidate = ref.map(function(thing) {
+          var vNode = get_node_from_tree_default(thing);
+          return vNode ? visible_virtual_default(vNode) : '';
+        }).join(' ').trim();
+        if (candidate) {
+          return candidate;
+        }
+      }
+      candidate = virtualNode.attr('aria-label');
+      if (candidate) {
+        candidate = sanitize_default(candidate);
+        if (candidate) {
+          return candidate;
+        }
+      }
+      return null;
+    }
+    var label_virtual_default = labelVirtual;
+    function visible(element, screenReader, noRecursing) {
+      element = get_node_from_tree_default(element);
+      return visible_virtual_default(element, screenReader, noRecursing);
+    }
+    var visible_default = visible;
+    function labelVirtual2(virtualNode) {
+      var ref, candidate, doc;
+      candidate = label_virtual_default(virtualNode);
+      if (candidate) {
+        return candidate;
+      }
+      if (virtualNode.attr('id')) {
+        if (!virtualNode.actualNode) {
+          throw new TypeError('Cannot resolve explicit label reference for non-DOM nodes');
+        }
+        var id = escape_selector_default(virtualNode.attr('id'));
+        doc = get_root_node_default2(virtualNode.actualNode);
+        ref = doc.querySelector('label[for="' + id + '"]');
+        candidate = ref && visible_default(ref, true);
+        if (candidate) {
+          return candidate;
+        }
+      }
+      ref = closest_default(virtualNode, 'label');
+      candidate = ref && visible_virtual_default(ref, true);
+      if (candidate) {
+        return candidate;
+      }
+      return null;
+    }
+    var label_virtual_default2 = labelVirtual2;
+    function label(node) {
+      node = get_node_from_tree_default(node);
+      return label_virtual_default2(node);
+    }
+    var label_default = label;
+    var nativeElementType = [ {
+      matches: [ {
+        nodeName: 'textarea'
+      }, {
+        nodeName: 'input',
+        properties: {
+          type: [ 'text', 'password', 'search', 'tel', 'email', 'url' ]
+        }
+      } ],
+      namingMethods: 'labelText'
+    }, {
+      matches: {
+        nodeName: 'input',
+        properties: {
+          type: [ 'button', 'submit', 'reset' ]
+        }
+      },
+      namingMethods: [ 'valueText', 'titleText', 'buttonDefaultText' ]
+    }, {
+      matches: {
+        nodeName: 'input',
+        properties: {
+          type: 'image'
+        }
+      },
+      namingMethods: [ 'altText', 'valueText', 'labelText', 'titleText', 'buttonDefaultText' ]
+    }, {
+      matches: 'button',
+      namingMethods: 'subtreeText'
+    }, {
+      matches: 'fieldset',
+      namingMethods: 'fieldsetLegendText'
+    }, {
+      matches: 'OUTPUT',
+      namingMethods: 'subtreeText'
+    }, {
+      matches: [ {
+        nodeName: 'select'
+      }, {
+        nodeName: 'input',
+        properties: {
+          type: /^(?!text|password|search|tel|email|url|button|submit|reset)/
+        }
+      } ],
+      namingMethods: 'labelText'
+    }, {
+      matches: 'summary',
+      namingMethods: 'subtreeText'
+    }, {
+      matches: 'figure',
+      namingMethods: [ 'figureText', 'titleText' ]
+    }, {
+      matches: 'img',
+      namingMethods: 'altText'
+    }, {
+      matches: 'table',
+      namingMethods: [ 'tableCaptionText', 'tableSummaryText' ]
+    }, {
+      matches: [ 'hr', 'br' ],
+      namingMethods: [ 'titleText', 'singleSpace' ]
+    } ];
+    var native_element_type_default = nativeElementType;
+    function visibleTextNodes(vNode) {
+      var parentVisible = _isVisibleOnScreen(vNode);
+      var nodes = [];
+      vNode.children.forEach(function(child) {
+        if (child.actualNode.nodeType === 3) {
+          if (parentVisible) {
+            nodes.push(child);
+          }
+        } else {
+          nodes = nodes.concat(visibleTextNodes(child));
+        }
+      });
+      return nodes;
+    }
+    var visible_text_nodes_default = visibleTextNodes;
+    var getVisibleChildTextRects = memoize_default(function getVisibleChildTextRectsMemoized(node) {
+      var vNode = get_node_from_tree_default(node);
+      var nodeRect = vNode.boundingClientRect;
+      var clientRects = [];
+      var overflowHiddenNodes = get_overflow_hidden_ancestors_default(vNode);
+      node.childNodes.forEach(function(textNode) {
+        if (textNode.nodeType !== 3 || sanitize_default(textNode.nodeValue) === '') {
+          return;
+        }
+        var contentRects = getContentRects(textNode);
+        if (isOutsideNodeBounds(contentRects, nodeRect)) {
+          return;
+        }
+        clientRects.push.apply(clientRects, _toConsumableArray(filterHiddenRects(contentRects, overflowHiddenNodes)));
+      });
+      return clientRects.length ? clientRects : [ nodeRect ];
+    });
+    var get_visible_child_text_rects_default = getVisibleChildTextRects;
+    function getContentRects(node) {
+      var range = document.createRange();
+      range.selectNodeContents(node);
+      return Array.from(range.getClientRects());
+    }
+    function isOutsideNodeBounds(rects, nodeRect) {
+      return rects.some(function(rect) {
+        var centerPoint = _getRectCenter(rect);
+        return !_isPointInRect(centerPoint, nodeRect);
+      });
+    }
+    function filterHiddenRects(contentRects, overflowHiddenNodes) {
+      var visibleRects = [];
+      contentRects.forEach(function(contentRect) {
+        if (contentRect.width < 1 || contentRect.height < 1) {
+          return;
+        }
+        var visibleRect = overflowHiddenNodes.reduce(function(rect, overflowNode) {
+          return rect && _getIntersectionRect(rect, overflowNode.boundingClientRect);
+        }, contentRect);
+        if (visibleRect) {
+          visibleRects.push(visibleRect);
+        }
+      });
+      return visibleRects;
+    }
+    function getTextElementStack(node) {
+      _createGrid();
+      var vNode = get_node_from_tree_default(node);
+      var grid = vNode._grid;
+      if (!grid) {
+        return [];
+      }
+      var clientRects = get_visible_child_text_rects_default(node);
+      return clientRects.map(function(rect) {
+        return getRectStack(grid, rect);
+      });
+    }
+    var get_text_element_stack_default = getTextElementStack;
+    var visualRoles = [ 'checkbox', 'img', 'meter', 'progressbar', 'scrollbar', 'radio', 'slider', 'spinbutton', 'textbox' ];
+    function isVisualContent(el) {
+      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
+      var role = axe.commons.aria.getExplicitRole(vNode);
+      if (role) {
+        return visualRoles.indexOf(role) !== -1;
+      }
+      switch (vNode.props.nodeName) {
+       case 'img':
+       case 'iframe':
+       case 'object':
+       case 'video':
+       case 'audio':
+       case 'canvas':
+       case 'svg':
+       case 'math':
+       case 'button':
+       case 'select':
+       case 'textarea':
+       case 'keygen':
+       case 'progress':
+       case 'meter':
+        return true;
+
+       case 'input':
+        return vNode.props.type !== 'hidden';
+
+       default:
+        return false;
+      }
+    }
+    var is_visual_content_default = isVisualContent;
+    var hiddenTextElms = [ 'head', 'title', 'template', 'script', 'style', 'iframe', 'object', 'video', 'audio', 'noscript' ];
+    function hasChildTextNodes(elm) {
+      if (hiddenTextElms.includes(elm.props.nodeName)) {
+        return false;
+      }
+      return elm.children.some(function(_ref35) {
+        var props = _ref35.props;
+        return props.nodeType === 3 && props.nodeValue.trim();
+      });
+    }
+    function hasContentVirtual(elm, noRecursion, ignoreAria) {
+      return hasChildTextNodes(elm) || is_visual_content_default(elm.actualNode) || !ignoreAria && !!label_virtual_default(elm) || !noRecursion && elm.children.some(function(child) {
+        return child.actualNode.nodeType === 1 && hasContentVirtual(child);
+      });
+    }
+    var has_content_virtual_default = hasContentVirtual;
+    function hasContent(elm, noRecursion, ignoreAria) {
+      elm = get_node_from_tree_default(elm);
+      return has_content_virtual_default(elm, noRecursion, ignoreAria);
+    }
+    var has_content_default = hasContent;
+    function _hasLangText(virtualNode) {
+      if (typeof virtualNode.children === 'undefined' || hasChildTextNodes(virtualNode)) {
+        return true;
+      }
+      if (virtualNode.props.nodeType === 1 && is_visual_content_default(virtualNode)) {
+        return !!axe.commons.text.accessibleTextVirtual(virtualNode);
+      }
+      return virtualNode.children.some(function(child) {
+        return !child.attr('lang') && _hasLangText(child) && !_isHiddenForEveryone(child);
+      });
+    }
+    function insertedIntoFocusOrder(el) {
+      var tabIndex = parseInt(el.getAttribute('tabindex'), 10);
+      return tabIndex > -1 && _isFocusable(el) && !is_natively_focusable_default(el);
+    }
+    var inserted_into_focus_order_default = insertedIntoFocusOrder;
+    function isHiddenWithCSS(node, descendentVisibilityValue) {
+      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
+      var el = node instanceof window.Node ? node : vNode === null || vNode === void 0 ? void 0 : vNode.actualNode;
+      if (!vNode) {
+        return _isHiddenWithCSS(el, descendentVisibilityValue);
+      }
+      if (vNode._isHiddenWithCSS === void 0) {
+        vNode._isHiddenWithCSS = _isHiddenWithCSS(el, descendentVisibilityValue);
+      }
+      return vNode._isHiddenWithCSS;
+    }
+    function _isHiddenWithCSS(el, descendentVisibilityValue) {
+      if (el.nodeType === 9) {
+        return false;
+      }
+      if (el.nodeType === 11) {
+        el = el.host;
+      }
+      if ([ 'STYLE', 'SCRIPT' ].includes(el.nodeName.toUpperCase())) {
+        return false;
+      }
+      var style = window.getComputedStyle(el, null);
+      if (!style) {
+        throw new Error('Style does not exist for the given element.');
+      }
+      var displayValue = style.getPropertyValue('display');
+      if (displayValue === 'none') {
+        return true;
+      }
+      var HIDDEN_VISIBILITY_VALUES = [ 'hidden', 'collapse' ];
+      var visibilityValue = style.getPropertyValue('visibility');
+      if (HIDDEN_VISIBILITY_VALUES.includes(visibilityValue) && !descendentVisibilityValue) {
+        return true;
+      }
+      if (HIDDEN_VISIBILITY_VALUES.includes(visibilityValue) && descendentVisibilityValue && HIDDEN_VISIBILITY_VALUES.includes(descendentVisibilityValue)) {
+        return true;
+      }
+      var parent = get_composed_parent_default(el);
+      if (parent && !HIDDEN_VISIBILITY_VALUES.includes(visibilityValue)) {
+        return isHiddenWithCSS(parent, visibilityValue);
+      }
+      return false;
+    }
+    var is_hidden_with_css_default = isHiddenWithCSS;
+    function isHTML5(doc) {
+      var node = doc.doctype;
+      if (node === null) {
+        return false;
+      }
+      return node.name === 'html' && !node.publicId && !node.systemId;
+    }
+    var is_html5_default = isHTML5;
+    function _isInTabOrder(el) {
+      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
+      if (vNode.props.nodeType !== 1) {
+        return false;
+      }
+      var tabindex = parseInt(vNode.attr('tabindex', 10));
+      if (tabindex <= -1) {
+        return false;
+      }
+      return _isFocusable(vNode);
+    }
+    function getRoleType(role) {
+      var _window3;
+      if (role instanceof abstract_virtual_node_default || (_window3 = window) !== null && _window3 !== void 0 && _window3.Node && role instanceof window.Node) {
+        role = axe.commons.aria.getRole(role);
+      }
+      var roleDef = standards_default.ariaRoles[role];
+      return (roleDef === null || roleDef === void 0 ? void 0 : roleDef.type) || null;
+    }
+    var get_role_type_default = getRoleType;
+    function walkDomNode(node, functor) {
+      if (functor(node.actualNode) !== false) {
+        node.children.forEach(function(child) {
+          return walkDomNode(child, functor);
+        });
+      }
+    }
+    var blockLike = [ 'block', 'list-item', 'table', 'flex', 'grid', 'inline-block' ];
+    function isBlock(elm) {
+      var display = window.getComputedStyle(elm).getPropertyValue('display');
+      return blockLike.includes(display) || display.substr(0, 6) === 'table-';
+    }
+    function getBlockParent(node) {
+      var parentBlock = get_composed_parent_default(node);
+      while (parentBlock && !isBlock(parentBlock)) {
+        parentBlock = get_composed_parent_default(parentBlock);
+      }
+      return get_node_from_tree_default(parentBlock);
+    }
+    function isInTextBlock(node, options) {
+      if (isBlock(node)) {
+        return false;
+      }
+      var virtualParent = getBlockParent(node);
+      var parentText = '';
+      var widgetText = '';
+      var inBrBlock = 0;
+      walkDomNode(virtualParent, function(currNode) {
+        if (inBrBlock === 2) {
+          return false;
+        }
+        if (currNode.nodeType === 3) {
+          parentText += currNode.nodeValue;
+        }
+        if (currNode.nodeType !== 1) {
+          return;
+        }
+        var nodeName2 = (currNode.nodeName || '').toUpperCase();
+        if (currNode === node) {
+          inBrBlock = 1;
+        }
+        if ([ 'BR', 'HR' ].includes(nodeName2)) {
+          if (inBrBlock === 0) {
+            parentText = '';
+            widgetText = '';
+          } else {
+            inBrBlock = 2;
+          }
+        } else if (currNode.style.display === 'none' || currNode.style.overflow === 'hidden' || ![ '', null, 'none' ].includes(currNode.style['float']) || ![ '', null, 'relative' ].includes(currNode.style.position)) {
+          return false;
+        } else if (get_role_type_default(currNode) === 'widget') {
+          widgetText += currNode.textContent;
+          return false;
+        }
+      });
+      parentText = sanitize_default(parentText);
+      if (options !== null && options !== void 0 && options.noLengthCompare) {
+        return parentText.length !== 0;
+      }
+      widgetText = sanitize_default(widgetText);
+      return parentText.length > widgetText.length;
+    }
+    var is_in_text_block_default = isInTextBlock;
+    function isModalOpen(options) {
+      options = options || {};
+      var modalPercent = options.modalPercent || .75;
+      if (cache_default.get('isModalOpen')) {
+        return cache_default.get('isModalOpen');
+      }
+      var definiteModals = query_selector_all_filter_default(axe._tree[0], 'dialog, [role=dialog], [aria-modal=true]', _isVisibleOnScreen);
+      if (definiteModals.length) {
+        cache_default.set('isModalOpen', true);
+        return true;
+      }
+      var viewport = get_viewport_size_default(window);
+      var percentWidth = viewport.width * modalPercent;
+      var percentHeight = viewport.height * modalPercent;
+      var x = (viewport.width - percentWidth) / 2;
+      var y = (viewport.height - percentHeight) / 2;
+      var points = [ {
+        x: x,
+        y: y
+      }, {
+        x: viewport.width - x,
+        y: y
+      }, {
+        x: viewport.width / 2,
+        y: viewport.height / 2
+      }, {
+        x: x,
+        y: viewport.height - y
+      }, {
+        x: viewport.width - x,
+        y: viewport.height - y
+      } ];
+      var stacks = points.map(function(point) {
+        return Array.from(document.elementsFromPoint(point.x, point.y));
+      });
+      var _loop4 = function _loop4(_i8) {
+        var modalElement = stacks[_i8].find(function(elm) {
+          var style = window.getComputedStyle(elm);
+          return parseInt(style.width, 10) >= percentWidth && parseInt(style.height, 10) >= percentHeight && style.getPropertyValue('pointer-events') !== 'none' && (style.position === 'absolute' || style.position === 'fixed');
+        });
+        if (modalElement && stacks.every(function(stack) {
+          return stack.includes(modalElement);
+        })) {
+          cache_default.set('isModalOpen', true);
+          return {
+            v: true
+          };
+        }
+      };
+      for (var _i8 = 0; _i8 < stacks.length; _i8++) {
+        var _ret = _loop4(_i8);
+        if (_typeof(_ret) === 'object') {
+          return _ret.v;
+        }
+      }
+      cache_default.set('isModalOpen', void 0);
+      return void 0;
+    }
+    var is_modal_open_default = isModalOpen;
+    function _isMultiline(domNode) {
+      var margin = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 2;
+      var range = domNode.ownerDocument.createRange();
+      range.setStart(domNode, 0);
+      range.setEnd(domNode, domNode.childNodes.length);
+      var lastLineEnd = 0;
+      var lineCount = 0;
+      var _iterator4 = _createForOfIteratorHelper(range.getClientRects()), _step4;
+      try {
+        for (_iterator4.s(); !(_step4 = _iterator4.n()).done; ) {
+          var rect = _step4.value;
+          if (rect.height <= margin) {
+            continue;
+          }
+          if (lastLineEnd > rect.top + margin) {
+            lastLineEnd = Math.max(lastLineEnd, rect.bottom);
+          } else if (lineCount === 0) {
+            lastLineEnd = rect.bottom;
+            lineCount++;
+          } else {
+            return true;
+          }
+        }
+      } catch (err) {
+        _iterator4.e(err);
+      } finally {
+        _iterator4.f();
+      }
+      return false;
+    }
+    function isNode(element) {
+      return element instanceof window.Node;
+    }
+    var is_node_default = isNode;
+    var data = {};
+    var incompleteData = {
+      set: function set(key, reason) {
+        if (typeof key !== 'string') {
+          throw new Error('Incomplete data: key must be a string');
+        }
+        if (reason) {
+          data[key] = reason;
+        }
+        return data[key];
+      },
+      get: function get(key) {
+        return data[key];
+      },
+      clear: function clear() {
+        data = {};
+      }
+    };
+    var incomplete_data_default = incompleteData;
+    function elementHasImage(elm, style) {
+      var graphicNodes = [ 'IMG', 'CANVAS', 'OBJECT', 'IFRAME', 'VIDEO', 'SVG' ];
+      var nodeName2 = elm.nodeName.toUpperCase();
+      if (graphicNodes.includes(nodeName2)) {
+        incomplete_data_default.set('bgColor', 'imgNode');
+        return true;
+      }
+      style = style || window.getComputedStyle(elm);
+      var bgImageStyle = style.getPropertyValue('background-image');
+      var hasBgImage = bgImageStyle !== 'none';
+      if (hasBgImage) {
+        var hasGradient = /gradient/.test(bgImageStyle);
+        incomplete_data_default.set('bgColor', hasGradient ? 'bgGradient' : 'bgImage');
+      }
+      return hasBgImage;
+    }
+    var element_has_image_default = elementHasImage;
     function convertColorVal(colorFunc, value, index) {
       if (/%$/.test(value)) {
         if (index === 3) {
@@ -16137,8 +18071,8 @@ module.exports = {
       }
       return parseFloat(value);
     }
-    function hslToRgb(_ref11) {
-      var _ref12 = _slicedToArray(_ref11, 4), hue = _ref12[0], saturation = _ref12[1], lightness = _ref12[2], alpha = _ref12[3];
+    function hslToRgb(_ref36) {
+      var _ref37 = _slicedToArray(_ref36, 4), hue = _ref37[0], saturation = _ref37[1], lightness = _ref37[2], alpha = _ref37[3];
       saturation /= 255;
       lightness /= 255;
       var high = (1 - Math.abs(2 * lightness - 1)) * saturation;
@@ -16158,11 +18092,12 @@ module.exports = {
       } else {
         colors = [ high, 0, low ];
       }
-      return colors.map(function(color11) {
-        return Math.round((color11 + base) * 255);
+      return colors.map(function(color) {
+        return Math.round((color + base) * 255);
       }).concat(alpha);
     }
-    function Color(red, green, blue, alpha) {
+    function Color(red, green, blue) {
+      var alpha = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 1;
       this.red = red;
       this.green = green;
       this.blue = blue;
@@ -16173,24 +18108,33 @@ module.exports = {
         var blueString = Math.round(this.blue).toString(16);
         return '#' + (this.red > 15.5 ? redString : '0' + redString) + (this.green > 15.5 ? greenString : '0' + greenString) + (this.blue > 15.5 ? blueString : '0' + blueString);
       };
+      this.toJSON = function toJSON() {
+        var red2 = this.red, green2 = this.green, blue2 = this.blue, alpha2 = this.alpha;
+        return {
+          red: red2,
+          green: green2,
+          blue: blue2,
+          alpha: alpha2
+        };
+      };
       var hexRegex = /^#[0-9a-f]{3,8}$/i;
       var colorFnRegex = /^((?:rgb|hsl)a?)\s*\(([^\)]*)\)/i;
       this.parseString = function parseString(colorString) {
         if (standards_default.cssColors[colorString] || colorString === 'transparent') {
-          var _ref13 = standards_default.cssColors[colorString] || [ 0, 0, 0 ], _ref14 = _slicedToArray(_ref13, 3), red2 = _ref14[0], green2 = _ref14[1], blue2 = _ref14[2];
+          var _ref38 = standards_default.cssColors[colorString] || [ 0, 0, 0 ], _ref39 = _slicedToArray(_ref38, 3), red2 = _ref39[0], green2 = _ref39[1], blue2 = _ref39[2];
           this.red = red2;
           this.green = green2;
           this.blue = blue2;
           this.alpha = colorString === 'transparent' ? 0 : 1;
-          return;
+          return this;
         }
         if (colorString.match(colorFnRegex)) {
           this.parseColorFnString(colorString);
-          return;
+          return this;
         }
         if (colorString.match(hexRegex)) {
           this.parseHexString(colorString);
-          return;
+          return this;
         }
         throw new Error('Unable to parse color "'.concat(colorString, '"'));
       };
@@ -16227,7 +18171,7 @@ module.exports = {
         }
       };
       this.parseColorFnString = function parseColorFnString(colorString) {
-        var _ref15 = colorString.match(colorFnRegex) || [], _ref16 = _slicedToArray(_ref15, 3), colorFunc = _ref16[1], colorValStr = _ref16[2];
+        var _ref40 = colorString.match(colorFnRegex) || [], _ref41 = _slicedToArray(_ref40, 3), colorFunc = _ref41[1], colorValStr = _ref41[2];
         if (!colorFunc || !colorValStr) {
           return;
         }
@@ -16277,24 +18221,144 @@ module.exports = {
       if (!element.href) {
         return false;
       }
-      var firstPageLink;
-      if (typeof cache_default.get('firstPageLink') !== 'undefined') {
-        firstPageLink = cache_default.get('firstPageLink');
-      } else {
-        if (!window.location.origin) {
-          firstPageLink = query_selector_all_default(axe._tree, 'a:not([href^="#"]):not([href^="/#"]):not([href^="javascript:"])')[0];
-        } else {
-          firstPageLink = query_selector_all_default(axe._tree, 'a[href]:not([href^="javascript:"])').find(function(link) {
-            return !_isCurrentPageLink(link.actualNode);
-          });
-        }
-        cache_default.set('firstPageLink', firstPageLink || null);
-      }
+      var firstPageLink = cache_default.get('firstPageLink', generateFirstPageLink);
       if (!firstPageLink) {
         return true;
       }
       return element.compareDocumentPosition(firstPageLink.actualNode) === element.DOCUMENT_POSITION_FOLLOWING;
     }
+    function generateFirstPageLink() {
+      var firstPageLink;
+      if (!window.location.origin) {
+        firstPageLink = query_selector_all_default(axe._tree, 'a:not([href^="#"]):not([href^="/#"]):not([href^="javascript:"])')[0];
+      } else {
+        firstPageLink = query_selector_all_default(axe._tree, 'a[href]:not([href^="javascript:"])').find(function(link) {
+          return !_isCurrentPageLink(link.actualNode);
+        });
+      }
+      return firstPageLink || null;
+    }
+    var clipRegex2 = /rect\s*\(([0-9]+)px,?\s*([0-9]+)px,?\s*([0-9]+)px,?\s*([0-9]+)px\s*\)/;
+    var clipPathRegex2 = /(\w+)\((\d+)/;
+    function isClipped(style) {
+      var matchesClip = style.getPropertyValue('clip').match(clipRegex2);
+      var matchesClipPath = style.getPropertyValue('clip-path').match(clipPathRegex2);
+      if (matchesClip && matchesClip.length === 5) {
+        var position = style.getPropertyValue('position');
+        if ([ 'fixed', 'absolute' ].includes(position)) {
+          return matchesClip[3] - matchesClip[1] <= 0 && matchesClip[2] - matchesClip[4] <= 0;
+        }
+      }
+      if (matchesClipPath) {
+        var type = matchesClipPath[1];
+        var value = parseInt(matchesClipPath[2], 10);
+        switch (type) {
+         case 'inset':
+          return value >= 50;
+
+         case 'circle':
+          return value === 0;
+
+         default:
+        }
+      }
+      return false;
+    }
+    function isAreaVisible(el, screenReader, recursed) {
+      var mapEl = find_up_default(el, 'map');
+      if (!mapEl) {
+        return false;
+      }
+      var mapElName = mapEl.getAttribute('name');
+      if (!mapElName) {
+        return false;
+      }
+      var mapElRootNode = get_root_node_default2(el);
+      if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
+        return false;
+      }
+      var refs = query_selector_all_default(axe._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
+      if (!refs || !refs.length) {
+        return false;
+      }
+      return refs.some(function(_ref42) {
+        var actualNode = _ref42.actualNode;
+        return isVisible(actualNode, screenReader, recursed);
+      });
+    }
+    function isVisible(el, screenReader, recursed) {
+      var _window$Node2;
+      if (!el) {
+        throw new TypeError('Cannot determine if element is visible for non-DOM nodes');
+      }
+      var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
+      el = vNode ? vNode.actualNode : el;
+      var cacheName = '_isVisible' + (screenReader ? 'ScreenReader' : '');
+      var _ref43 = (_window$Node2 = window.Node) !== null && _window$Node2 !== void 0 ? _window$Node2 : {}, DOCUMENT_NODE = _ref43.DOCUMENT_NODE, DOCUMENT_FRAGMENT_NODE = _ref43.DOCUMENT_FRAGMENT_NODE;
+      var nodeType = vNode ? vNode.props.nodeType : el.nodeType;
+      var nodeName2 = vNode ? vNode.props.nodeName : el.nodeName.toLowerCase();
+      if (vNode && typeof vNode[cacheName] !== 'undefined') {
+        return vNode[cacheName];
+      }
+      if (nodeType === DOCUMENT_NODE) {
+        return true;
+      }
+      if ([ 'style', 'script', 'noscript', 'template' ].includes(nodeName2)) {
+        return false;
+      }
+      if (el && nodeType === DOCUMENT_FRAGMENT_NODE) {
+        el = el.host;
+      }
+      if (screenReader) {
+        var ariaHiddenValue = vNode ? vNode.attr('aria-hidden') : el.getAttribute('aria-hidden');
+        if (ariaHiddenValue === 'true') {
+          return false;
+        }
+      }
+      if (!el) {
+        var parent2 = vNode.parent;
+        var visible3 = true;
+        if (parent2) {
+          visible3 = isVisible(parent2, screenReader, true);
+        }
+        if (vNode) {
+          vNode[cacheName] = visible3;
+        }
+        return visible3;
+      }
+      var style = window.getComputedStyle(el, null);
+      if (style === null) {
+        return false;
+      }
+      if (nodeName2 === 'area') {
+        return isAreaVisible(el, screenReader, recursed);
+      }
+      if (style.getPropertyValue('display') === 'none') {
+        return false;
+      }
+      var elHeight = parseInt(style.getPropertyValue('height'));
+      var elWidth = parseInt(style.getPropertyValue('width'));
+      var scroll = _getScroll(el);
+      var scrollableWithZeroHeight = scroll && elHeight === 0;
+      var scrollableWithZeroWidth = scroll && elWidth === 0;
+      var posAbsoluteOverflowHiddenAndSmall = style.getPropertyValue('position') === 'absolute' && (elHeight < 2 || elWidth < 2) && style.getPropertyValue('overflow') === 'hidden';
+      if (!screenReader && (isClipped(style) || style.getPropertyValue('opacity') === '0' || scrollableWithZeroHeight || scrollableWithZeroWidth || posAbsoluteOverflowHiddenAndSmall)) {
+        return false;
+      }
+      if (!recursed && (style.getPropertyValue('visibility') === 'hidden' || !screenReader && is_offscreen_default(el))) {
+        return false;
+      }
+      var parent = el.assignedSlot ? el.assignedSlot : el.parentNode;
+      var visible2 = false;
+      if (parent) {
+        visible2 = isVisible(parent, screenReader, true);
+      }
+      if (vNode) {
+        vNode[cacheName] = visible2;
+      }
+      return visible2;
+    }
+    var is_visible_default = isVisible;
     function reduceToElementsBelowFloating(elements, targetNode) {
       var floatingPositions = [ 'fixed', 'sticky' ];
       var finalElements = [];
@@ -16576,7 +18640,7 @@ module.exports = {
         key: 'isFocusable',
         get: function get() {
           if (!this._cache.hasOwnProperty('isFocusable')) {
-            this._cache.isFocusable = is_focusable_default(this.actualNode);
+            this._cache.isFocusable = _isFocusable(this.actualNode);
           }
           return this._cache.isFocusable;
         }
@@ -16610,6 +18674,126 @@ module.exports = {
       return VirtualNode;
     }(abstract_virtual_node_default);
     var virtual_node_default = VirtualNode;
+    function tokenList(str) {
+      return (str || '').trim().replace(/\s{2,}/g, ' ').split(' ');
+    }
+    var token_list_default = tokenList;
+    var idsKey = ' [idsMap]';
+    function getNodesMatchingExpression(domTree, expressions, filter) {
+      var selectorMap = domTree[0]._selectorMap;
+      if (!selectorMap) {
+        return;
+      }
+      var shadowId = domTree[0].shadowId;
+      for (var _i9 = 0; _i9 < expressions.length; _i9++) {
+        if (expressions[_i9].length > 1 && expressions[_i9].some(function(expression) {
+          return isGlobalSelector(expression);
+        })) {
+          return;
+        }
+      }
+      var nodeSet = new Set();
+      expressions.forEach(function(expression) {
+        var _matchingNodes$nodes;
+        var matchingNodes = findMatchingNodes(expression, selectorMap, shadowId);
+        matchingNodes === null || matchingNodes === void 0 ? void 0 : (_matchingNodes$nodes = matchingNodes.nodes) === null || _matchingNodes$nodes === void 0 ? void 0 : _matchingNodes$nodes.forEach(function(node) {
+          if (matchingNodes.isComplexSelector && !_matchesExpression(node, expression)) {
+            return;
+          }
+          nodeSet.add(node);
+        });
+      });
+      var matchedNodes = [];
+      nodeSet.forEach(function(node) {
+        return matchedNodes.push(node);
+      });
+      if (filter) {
+        matchedNodes = matchedNodes.filter(filter);
+      }
+      return matchedNodes.sort(function(a, b) {
+        return a.nodeIndex - b.nodeIndex;
+      });
+    }
+    function findMatchingNodes(expression, selectorMap, shadowId) {
+      var exp = expression[expression.length - 1];
+      var nodes = null;
+      var isComplexSelector = expression.length > 1 || !!exp.pseudos || !!exp.classes;
+      if (isGlobalSelector(exp)) {
+        nodes = selectorMap['*'];
+      } else {
+        if (exp.id) {
+          var _selectorMap$idsKey$e;
+          if (!selectorMap[idsKey] || !((_selectorMap$idsKey$e = selectorMap[idsKey][exp.id]) !== null && _selectorMap$idsKey$e !== void 0 && _selectorMap$idsKey$e.length)) {
+            return;
+          }
+          nodes = selectorMap[idsKey][exp.id].filter(function(node) {
+            return node.shadowId === shadowId;
+          });
+        }
+        if (exp.tag && exp.tag !== '*') {
+          var _selectorMap$exp$tag;
+          if (!((_selectorMap$exp$tag = selectorMap[exp.tag]) !== null && _selectorMap$exp$tag !== void 0 && _selectorMap$exp$tag.length)) {
+            return;
+          }
+          var cachedNodes = selectorMap[exp.tag];
+          nodes = nodes ? getSharedValues(cachedNodes, nodes) : cachedNodes;
+        }
+        if (exp.classes) {
+          var _selectorMap$Class;
+          if (!((_selectorMap$Class = selectorMap['[class]']) !== null && _selectorMap$Class !== void 0 && _selectorMap$Class.length)) {
+            return;
+          }
+          var _cachedNodes = selectorMap['[class]'];
+          nodes = nodes ? getSharedValues(_cachedNodes, nodes) : _cachedNodes;
+        }
+        if (exp.attributes) {
+          for (var _i10 = 0; _i10 < exp.attributes.length; _i10++) {
+            var _selectorMap;
+            var attr = exp.attributes[_i10];
+            if (attr.type === 'attrValue') {
+              isComplexSelector = true;
+            }
+            if (!((_selectorMap = selectorMap['['.concat(attr.key, ']')]) !== null && _selectorMap !== void 0 && _selectorMap.length)) {
+              return;
+            }
+            var _cachedNodes2 = selectorMap['['.concat(attr.key, ']')];
+            nodes = nodes ? getSharedValues(_cachedNodes2, nodes) : _cachedNodes2;
+          }
+        }
+      }
+      return {
+        nodes: nodes,
+        isComplexSelector: isComplexSelector
+      };
+    }
+    function isGlobalSelector(expression) {
+      return expression.tag === '*' && !expression.attributes && !expression.id && !expression.classes;
+    }
+    function getSharedValues(a, b) {
+      return a.filter(function(node) {
+        return b.includes(node);
+      });
+    }
+    function cacheSelector(key, vNode, map) {
+      map[key] = map[key] || [];
+      map[key].push(vNode);
+    }
+    function cacheNodeSelectors(vNode, selectorMap) {
+      if (vNode.props.nodeType !== 1) {
+        return;
+      }
+      cacheSelector(vNode.props.nodeName, vNode, selectorMap);
+      cacheSelector('*', vNode, selectorMap);
+      vNode.attrNames.forEach(function(attrName) {
+        if (attrName === 'id') {
+          selectorMap[idsKey] = selectorMap[idsKey] || {};
+          token_list_default(vNode.attr(attrName)).forEach(function(value) {
+            cacheSelector(value, vNode, selectorMap[idsKey]);
+          });
+        }
+        cacheSelector('['.concat(attrName, ']'), vNode, selectorMap);
+      });
+    }
     var hasShadowRoot;
     function getSlotChildren(node) {
       var retVal = [];
@@ -16619,6 +18803,11 @@ module.exports = {
         node = node.nextSibling;
       }
       return retVal;
+    }
+    function createNode(node, parent, shadowId) {
+      var vNode = new virtual_node_default(node, parent, shadowId);
+      cacheNodeSelectors(vNode, cache_default.get('selectorMap'));
+      return vNode;
     }
     function flattenTree(node, shadowId, parent) {
       var retVal, realArray, nodeName2;
@@ -16635,7 +18824,7 @@ module.exports = {
       nodeName2 = node.nodeName.toLowerCase();
       if (is_shadow_root_default(node)) {
         hasShadowRoot = true;
-        retVal = new virtual_node_default(node, parent, shadowId);
+        retVal = createNode(node, parent, shadowId);
         shadowId = 'a' + Math.random().toString().substring(2);
         realArray = Array.from(node.shadowRoot.childNodes);
         retVal.children = realArray.reduce(function(res, child) {
@@ -16655,7 +18844,7 @@ module.exports = {
           }
           var styl = window.getComputedStyle(node);
           if (false) {
-            retVal = new virtual_node_default(node, parent, shadowId);
+            retVal = createNode(node, parent, shadowId);
             retVal.children = realArray.reduce(function(res, child) {
               return reduceShadowDOM(res, child, retVal);
             }, []);
@@ -16667,14 +18856,14 @@ module.exports = {
           }
         } else {
           if (node.nodeType === 1) {
-            retVal = new virtual_node_default(node, parent, shadowId);
+            retVal = createNode(node, parent, shadowId);
             realArray = Array.from(node.childNodes);
             retVal.children = realArray.reduce(function(res, child) {
               return reduceShadowDOM(res, child, retVal);
             }, []);
             return [ retVal ];
           } else if (node.nodeType === 3) {
-            return [ new virtual_node_default(node, parent) ];
+            return [ createNode(node, parent) ];
           }
           return void 0;
         }
@@ -16684,8 +18873,11 @@ module.exports = {
       var node = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : document.documentElement;
       var shadowId = arguments.length > 1 ? arguments[1] : undefined;
       hasShadowRoot = false;
+      var selectorMap = {};
       cache_default.set('nodeMap', new WeakMap());
+      cache_default.set('selectorMap', selectorMap);
       var tree = flattenTree(node, shadowId, null);
+      tree[0]._selectorMap = selectorMap;
       tree[0]._hasShadowRoot = hasShadowRoot;
       return tree;
     }
@@ -16707,8 +18899,8 @@ module.exports = {
         }
         var sum = axe._audit.data.failureSummaries[key];
         if (sum && typeof sum.failureMessage === 'function') {
-          return sum.failureMessage(failingChecks[key].map(function(check4) {
-            return check4.message || '';
+          return sum.failureMessage(failingChecks[key].map(function(check) {
+            return check.message || '';
           }));
         }
       }).filter(function(i) {
@@ -16735,20 +18927,25 @@ module.exports = {
           return Array.isArray(checkRes.relatedNodes);
         }).forEach(function(checkRes) {
           checkRes.relatedNodes = checkRes.relatedNodes.map(function(relatedNode) {
+            var _relatedNode$source;
             var res = {
-              html: relatedNode.source
+              html: (_relatedNode$source = relatedNode === null || relatedNode === void 0 ? void 0 : relatedNode.source) !== null && _relatedNode$source !== void 0 ? _relatedNode$source : 'Undefined'
             };
-            if (options.elementRef && !relatedNode.fromFrame) {
-              res.element = relatedNode.element;
+            if (options.elementRef && !(relatedNode !== null && relatedNode !== void 0 && relatedNode.fromFrame)) {
+              var _relatedNode$element;
+              res.element = (_relatedNode$element = relatedNode === null || relatedNode === void 0 ? void 0 : relatedNode.element) !== null && _relatedNode$element !== void 0 ? _relatedNode$element : null;
             }
-            if (options.selectors !== false || relatedNode.fromFrame) {
-              res.target = relatedNode.selector;
+            if (options.selectors !== false || relatedNode !== null && relatedNode !== void 0 && relatedNode.fromFrame) {
+              var _relatedNode$selector;
+              res.target = (_relatedNode$selector = relatedNode === null || relatedNode === void 0 ? void 0 : relatedNode.selector) !== null && _relatedNode$selector !== void 0 ? _relatedNode$selector : [ ':root' ];
             }
             if (options.ancestry) {
-              res.ancestry = relatedNode.ancestry;
+              var _relatedNode$ancestry;
+              res.ancestry = (_relatedNode$ancestry = relatedNode === null || relatedNode === void 0 ? void 0 : relatedNode.ancestry) !== null && _relatedNode$ancestry !== void 0 ? _relatedNode$ancestry : [ ':root' ];
             }
             if (options.xpath) {
-              res.xpath = relatedNode.xpath;
+              var _relatedNode$xpath;
+              res.xpath = (_relatedNode$xpath = relatedNode === null || relatedNode === void 0 ? void 0 : relatedNode.xpath) !== null && _relatedNode$xpath !== void 0 ? _relatedNode$xpath : [ '/' ];
             }
             return res;
           });
@@ -16802,12 +18999,6 @@ module.exports = {
       return resultObject;
     }
     var process_aggregate_default = processAggregate;
-    axe._thisWillBeDeletedDoNotUse = axe._thisWillBeDeletedDoNotUse || {};
-    axe._thisWillBeDeletedDoNotUse.helpers = {
-      failureSummary: failure_summary_default,
-      incompleteFallbackMessage: incompleteFallbackMessage,
-      processAggregate: process_aggregate_default
-    };
     var dataRegex = /\$\{\s?data\s?\}/g;
     function substitute(str, data2) {
       if (typeof data2 === 'string') {
@@ -16849,21 +19040,21 @@ module.exports = {
     }
     var process_message_default = processMessage;
     function getCheckMessage(checkId, type, data2) {
-      var check4 = axe._audit.data.checks[checkId];
-      if (!check4) {
+      var check = axe._audit.data.checks[checkId];
+      if (!check) {
         throw new Error('Cannot get message for unknown check: '.concat(checkId, '.'));
       }
-      if (!check4.messages[type]) {
+      if (!check.messages[type]) {
         throw new Error('Check "'.concat(checkId, '"" does not have a "').concat(type, '" message.'));
       }
-      return process_message_default(check4.messages[type], data2);
+      return process_message_default(check.messages[type], data2);
     }
     var get_check_message_default = getCheckMessage;
-    function getCheckOption(check4, ruleID, options) {
-      var ruleCheckOption = ((options.rules && options.rules[ruleID] || {}).checks || {})[check4.id];
-      var checkOption = (options.checks || {})[check4.id];
-      var enabled = check4.enabled;
-      var opts = check4.options;
+    function getCheckOption(check, ruleID, options) {
+      var ruleCheckOption = ((options.rules && options.rules[ruleID] || {}).checks || {})[check.id];
+      var checkOption = (options.checks || {})[check.id];
+      var enabled = check.enabled;
+      var opts = check.options;
       if (checkOption) {
         if (checkOption.hasOwnProperty('enabled')) {
           enabled = checkOption.enabled;
@@ -16914,7 +19105,7 @@ module.exports = {
         return {};
       }
       var navigator = win.navigator, innerHeight = win.innerHeight, innerWidth = win.innerWidth;
-      var _ref17 = getOrientation(win) || {}, angle = _ref17.angle, type = _ref17.type;
+      var _ref44 = getOrientation(win) || {}, angle = _ref44.angle, type = _ref44.type;
       return {
         userAgent: navigator.userAgent,
         windowWidth: innerWidth,
@@ -16923,12 +19114,12 @@ module.exports = {
         orientationType: type
       };
     }
-    function getOrientation(_ref18) {
-      var screen = _ref18.screen;
+    function getOrientation(_ref45) {
+      var screen = _ref45.screen;
       return screen.orientation || screen.msOrientation || screen.mozOrientation;
     }
-    function createFrameContext(frame, _ref19) {
-      var focusable = _ref19.focusable, page = _ref19.page;
+    function createFrameContext(frame, _ref46) {
+      var focusable = _ref46.focusable, page = _ref46.page;
       return {
         node: frame,
         include: [],
@@ -16960,93 +19151,154 @@ module.exports = {
         height: height
       };
     }
-    function pushUniqueFrame(context5, frame) {
-      if (is_hidden_default(frame) || find_by_default(context5.frames, 'node', frame)) {
-        return;
-      }
-      context5.frames.push(createFrameContext(frame, context5));
-    }
-    function isPageContext(_ref20) {
-      var include = _ref20.include;
-      return include.length === 1 && include[0].actualNode === document.documentElement;
-    }
-    function pushUniqueFrameSelector(context5, type, selectorArray) {
-      context5.frames = context5.frames || [];
-      var frameSelector = selectorArray.shift();
-      var frames = document.querySelectorAll(frameSelector);
-      Array.from(frames).forEach(function(frame) {
-        context5.frames.forEach(function(contextFrame) {
-          if (contextFrame.node === frame) {
-            contextFrame[type].push(selectorArray);
-          }
-        });
-        if (!context5.frames.find(function(result) {
-          return result.node === frame;
-        })) {
-          var result = createFrameContext(frame, context5);
-          if (selectorArray) {
-            result[type].push(selectorArray);
-          }
-          context5.frames.push(result);
-        }
-      });
-    }
-    function normalizeContext(context5) {
-      if (context5 && _typeof(context5) === 'object' || context5 instanceof window.NodeList) {
-        if (context5 instanceof window.Node) {
-          return {
-            include: [ context5 ],
-            exclude: []
-          };
-        }
-        if (context5.hasOwnProperty('include') || context5.hasOwnProperty('exclude')) {
-          return {
-            include: context5.include && +context5.include.length ? context5.include : [ document ],
-            exclude: context5.exclude || []
-          };
-        }
-        if (context5.length === +context5.length) {
-          return {
-            include: context5,
-            exclude: []
-          };
-        }
-      }
-      if (typeof context5 === 'string') {
+    function normalizeContext(contextSpec) {
+      if (isContextObject(contextSpec)) {
+        var msg = ' must be used inside include or exclude. It should not be on the same object.';
+        assert2(!objectHasOwn(contextSpec, 'fromFrames'), 'fromFrames' + msg);
+        assert2(!objectHasOwn(contextSpec, 'fromShadowDom'), 'fromShadowDom' + msg);
+      } else if (isContextProp(contextSpec)) {
+        contextSpec = {
+          include: contextSpec,
+          exclude: []
+        };
+      } else {
         return {
-          include: [ context5 ],
+          include: [ document ],
           exclude: []
         };
       }
+      var include = normalizeContextList(contextSpec.include);
+      if (include.length === 0) {
+        include.push(document);
+      }
+      var exclude = normalizeContextList(contextSpec.exclude);
       return {
-        include: [ document ],
-        exclude: []
+        include: include,
+        exclude: exclude
       };
     }
-    function parseSelectorArray(context5, type) {
-      var item, result = [], nodeList;
-      for (var i = 0, l = context5[type].length; i < l; i++) {
-        item = context5[type][i];
-        if (typeof item === 'string') {
-          nodeList = Array.from(document.querySelectorAll(item));
-          result = result.concat(nodeList.map(function(node) {
-            return get_node_from_tree_default(node);
-          }));
-          break;
-        } else if (item && item.length && !(item instanceof window.Node)) {
-          if (item.length > 1) {
-            pushUniqueFrameSelector(context5, type, item);
-          } else {
-            nodeList = Array.from(document.querySelectorAll(item[0]));
-            result = result.concat(nodeList.map(function(node) {
-              return get_node_from_tree_default(node);
-            }));
+    function isContextSpec(contextSpec) {
+      return isContextObject(contextSpec) || isContextProp(contextSpec);
+    }
+    function normalizeContextList() {
+      var selectorList = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
+      var normalizedList = [];
+      if (!isArrayLike(selectorList)) {
+        selectorList = [ selectorList ];
+      }
+      for (var _i11 = 0; _i11 < selectorList.length; _i11++) {
+        var normalizedSelector = normalizeContextSelector(selectorList[_i11]);
+        if (normalizedSelector) {
+          normalizedList.push(normalizedSelector);
+        }
+      }
+      return normalizedList;
+    }
+    function normalizeContextSelector(selector) {
+      if (selector instanceof window.Node) {
+        return selector;
+      }
+      if (typeof selector === 'string') {
+        return [ selector ];
+      }
+      if (isLabelledFramesSelector(selector)) {
+        assertLabelledFrameSelector(selector);
+        selector = selector.fromFrames;
+      } else if (isLabelledShadowDomSelector(selector)) {
+        selector = [ selector ];
+      }
+      return normalizeFrameSelectors(selector);
+    }
+    function normalizeFrameSelectors(frameSelectors) {
+      if (!Array.isArray(frameSelectors)) {
+        return;
+      }
+      var normalizedSelectors = [];
+      var _iterator5 = _createForOfIteratorHelper(frameSelectors), _step5;
+      try {
+        for (_iterator5.s(); !(_step5 = _iterator5.n()).done; ) {
+          var selector = _step5.value;
+          if (isLabelledShadowDomSelector(selector)) {
+            assertLabelledShadowDomSelector(selector);
+            selector = selector.fromShadowDom;
           }
-        } else if (item instanceof window.Node) {
+          if (typeof selector !== 'string' && !isShadowSelector(selector)) {
+            return;
+          }
+          normalizedSelectors.push(selector);
+        }
+      } catch (err) {
+        _iterator5.e(err);
+      } finally {
+        _iterator5.f();
+      }
+      return normalizedSelectors;
+    }
+    function isContextObject(contextSpec) {
+      return [ 'include', 'exclude' ].some(function(prop) {
+        return objectHasOwn(contextSpec, prop) && isContextProp(contextSpec[prop]);
+      });
+    }
+    function isContextProp(contextList) {
+      return typeof contextList === 'string' || contextList instanceof window.Node || isLabelledFramesSelector(contextList) || isLabelledShadowDomSelector(contextList) || isArrayLike(contextList);
+    }
+    function isLabelledFramesSelector(selector) {
+      return objectHasOwn(selector, 'fromFrames');
+    }
+    function isLabelledShadowDomSelector(selector) {
+      return objectHasOwn(selector, 'fromShadowDom');
+    }
+    function assertLabelledFrameSelector(selector) {
+      assert2(Array.isArray(selector.fromFrames), 'fromFrames property must be an array');
+      assert2(selector.fromFrames.every(function(selector2) {
+        return !objectHasOwn(selector2, 'fromFrames');
+      }), 'Invalid context; fromFrames selector must be appended, rather than nested');
+      assert2(!objectHasOwn(selector, 'fromShadowDom'), 'fromFrames and fromShadowDom cannot be used on the same object');
+    }
+    function assertLabelledShadowDomSelector(selector) {
+      assert2(Array.isArray(selector.fromShadowDom), 'fromShadowDom property must be an array');
+      assert2(selector.fromShadowDom.every(function(selector2) {
+        return !objectHasOwn(selector2, 'fromFrames');
+      }), 'shadow selector must be inside fromFrame instead');
+      assert2(selector.fromShadowDom.every(function(selector2) {
+        return !objectHasOwn(selector2, 'fromShadowDom');
+      }), 'fromShadowDom selector must be appended, rather than nested');
+    }
+    function isShadowSelector(selector) {
+      return Array.isArray(selector) && selector.every(function(str) {
+        return typeof str === 'string';
+      });
+    }
+    function isArrayLike(arr) {
+      return arr && _typeof(arr) === 'object' && typeof arr.length === 'number' && arr instanceof window.Node === false;
+    }
+    function assert2(bool, str) {
+      assert_default(bool, 'Invalid context; '.concat(str, '\nSee: https://github.com/dequelabs/axe-core/blob/master/doc/context.md'));
+    }
+    function objectHasOwn(obj, prop) {
+      if (!obj || _typeof(obj) !== 'object') {
+        return false;
+      }
+      return Object.prototype.hasOwnProperty.call(obj, prop);
+    }
+    function parseSelectorArray(context, type) {
+      var result = [];
+      for (var _i12 = 0, l = context[type].length; _i12 < l; _i12++) {
+        var item = context[type][_i12];
+        if (item instanceof window.Node) {
           if (item.documentElement instanceof window.Node) {
-            result.push(context5.flatTree[0]);
+            result.push(context.flatTree[0]);
           } else {
             result.push(get_node_from_tree_default(item));
+          }
+        } else if (item && item.length) {
+          if (item.length > 1) {
+            pushUniqueFrameSelector(context, type, item);
+          } else {
+            var nodeList = _shadowSelectAll(item[0]);
+            result.push.apply(result, _toConsumableArray(nodeList.map(function(node) {
+              return get_node_from_tree_default(node);
+            })));
           }
         }
       }
@@ -17054,32 +19306,20 @@ module.exports = {
         return r;
       });
     }
-    function validateContext(context5) {
-      if (context5.include.length === 0) {
-        if (context5.frames.length === 0) {
-          var env = _respondable.isInFrame() ? 'frame' : 'page';
-          return new Error('No elements found for include in ' + env + ' Context');
-        }
-        context5.frames.forEach(function(frame, i) {
-          if (frame.include.length === 0) {
-            return new Error('No elements found for include in Context of frame ' + i);
-          }
+    function pushUniqueFrameSelector(context, type, selectorArray) {
+      context.frames = context.frames || [];
+      var frameSelector = selectorArray.shift();
+      var frames = _shadowSelectAll(frameSelector);
+      frames.forEach(function(frame) {
+        var frameContext = context.frames.find(function(result) {
+          return result.node === frame;
         });
-      }
-    }
-    function getRootNode2(_ref21) {
-      var include = _ref21.include, exclude = _ref21.exclude;
-      var selectors = Array.from(include).concat(Array.from(exclude));
-      for (var i = 0; i < selectors.length; ++i) {
-        var item = selectors[i];
-        if (item instanceof window.Element) {
-          return item.ownerDocument.documentElement;
+        if (!frameContext) {
+          frameContext = createFrameContext(frame, context);
+          context.frames.push(frameContext);
         }
-        if (item instanceof window.Document) {
-          return item.documentElement;
-        }
-      }
-      return document.documentElement;
+        frameContext[type].push(selectorArray);
+      });
     }
     function Context(spec, flatTree) {
       var _spec, _spec2, _spec3, _spec4, _this2 = this;
@@ -17095,8 +19335,8 @@ module.exports = {
       this.include = spec.include;
       this.include = parseSelectorArray(this, 'include');
       this.exclude = parseSelectorArray(this, 'exclude');
-      select_default('frame, iframe', this).forEach(function(frame) {
-        if (is_node_in_context_default(frame, _this2)) {
+      _select('frame, iframe', this).forEach(function(frame) {
+        if (_isNodeInContext(frame, _this2)) {
           pushUniqueFrame(_this2, frame.actualNode);
         }
       });
@@ -17106,23 +19346,50 @@ module.exports = {
           frame.page = _this2.page;
         });
       }
-      var err2 = validateContext(this);
-      if (err2 instanceof Error) {
-        throw err2;
-      }
+      validateContext(this);
       if (!Array.isArray(this.include)) {
         this.include = Array.from(this.include);
       }
       this.include.sort(node_sorter_default);
     }
-    function _getFrameContexts(context5) {
+    function pushUniqueFrame(context, frame) {
+      if (!_isVisibleToScreenReaders(frame) || find_by_default(context.frames, 'node', frame)) {
+        return;
+      }
+      context.frames.push(createFrameContext(frame, context));
+    }
+    function isPageContext(_ref47) {
+      var include = _ref47.include;
+      return include.length === 1 && include[0].actualNode === document.documentElement;
+    }
+    function validateContext(context) {
+      if (context.include.length === 0 && context.frames.length === 0) {
+        var env = _respondable.isInFrame() ? 'frame' : 'page';
+        throw new Error('No elements found for include in ' + env + ' Context');
+      }
+    }
+    function getRootNode2(_ref48) {
+      var include = _ref48.include, exclude = _ref48.exclude;
+      var selectors = Array.from(include).concat(Array.from(exclude));
+      for (var _i13 = 0; _i13 < selectors.length; _i13++) {
+        var item = selectors[_i13];
+        if (item instanceof window.Element) {
+          return item.ownerDocument.documentElement;
+        }
+        if (item instanceof window.Document) {
+          return item.documentElement;
+        }
+      }
+      return document.documentElement;
+    }
+    function _getFrameContexts(context) {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       if (options.iframes === false) {
         return [];
       }
-      var _Context = new Context(context5), frames = _Context.frames;
-      return frames.map(function(_ref22) {
-        var node = _ref22.node, frameContext = _objectWithoutProperties(_ref22, _excluded2);
+      var _Context = new Context(context), frames = _Context.frames;
+      return frames.map(function(_ref49) {
+        var node = _ref49.node, frameContext = _objectWithoutProperties(_ref49, _excluded7);
         frameContext.initiator = false;
         var frameSelector = _getAncestry(node);
         return {
@@ -17132,13 +19399,13 @@ module.exports = {
       });
     }
     function getRule(ruleId) {
-      var rule3 = axe._audit.rules.find(function(rule4) {
-        return rule4.id === ruleId;
+      var rule = axe._audit.rules.find(function(rule2) {
+        return rule2.id === ruleId;
       });
-      if (!rule3) {
+      if (!rule) {
         throw new Error('Cannot find rule by id: '.concat(ruleId));
       }
-      return rule3;
+      return rule;
     }
     var get_rule_default = getRule;
     function _getScroll(elm) {
@@ -17198,8 +19465,8 @@ module.exports = {
         var data2 = options.data, _options$isCrossOrigi = options.isCrossOrigin, isCrossOrigin = _options$isCrossOrigi === void 0 ? false : _options$isCrossOrigi, shadowId = options.shadowId, root = options.root, priority = options.priority, _options$isLink = options.isLink, isLink = _options$isLink === void 0 ? false : _options$isLink;
         var style = dynamicDoc.createElement('style');
         if (isLink) {
-          var text32 = dynamicDoc.createTextNode('@import "'.concat(data2.href, '"'));
-          style.appendChild(text32);
+          var text = dynamicDoc.createTextNode('@import "'.concat(data2.href, '"'));
+          style.appendChild(text);
         } else {
           style.appendChild(dynamicDoc.createTextNode(data2));
         }
@@ -17271,27 +19538,41 @@ module.exports = {
       return !!standards_default.htmlElms[nodeName2];
     }
     var is_html_element_default = isHtmlElement;
-    function getDeepest(collection) {
-      return collection.sort(function(a, b) {
-        if (_contains(a, b)) {
-          return 1;
-        }
-        return -1;
-      })[0];
-    }
-    function isNodeInContext(node, context5) {
-      var include = context5.include && getDeepest(context5.include.filter(function(candidate) {
+    function _isNodeInContext(node, _ref50) {
+      var _ref50$include = _ref50.include, include = _ref50$include === void 0 ? [] : _ref50$include, _ref50$exclude = _ref50.exclude, exclude = _ref50$exclude === void 0 ? [] : _ref50$exclude;
+      var filterInclude = include.filter(function(candidate) {
         return _contains(candidate, node);
-      }));
-      var exclude = context5.exclude && getDeepest(context5.exclude.filter(function(candidate) {
+      });
+      if (filterInclude.length === 0) {
+        return false;
+      }
+      var filterExcluded = exclude.filter(function(candidate) {
         return _contains(candidate, node);
-      }));
-      if (!exclude && include || exclude && _contains(exclude, include)) {
+      });
+      if (filterExcluded.length === 0) {
         return true;
       }
-      return false;
+      var deepestInclude = getDeepest(filterInclude);
+      var deepestExclude = getDeepest(filterExcluded);
+      return _contains(deepestExclude, deepestInclude);
     }
-    var is_node_in_context_default = isNodeInContext;
+    function getDeepest(collection) {
+      var deepest;
+      var _iterator6 = _createForOfIteratorHelper(collection), _step6;
+      try {
+        for (_iterator6.s(); !(_step6 = _iterator6.n()).done; ) {
+          var node = _step6.value;
+          if (!deepest || !_contains(node, deepest)) {
+            deepest = node;
+          }
+        }
+      } catch (err) {
+        _iterator6.e(err);
+      } finally {
+        _iterator6.f();
+      }
+      return deepest;
+    }
     function matchAncestry(ancestryA, ancestryB) {
       if (ancestryA.length !== ancestryB.length) {
         return false;
@@ -17310,14 +19591,6 @@ module.exports = {
       });
     }
     var match_ancestry_default = matchAncestry;
-    var memoizee = __toModule(require_memoizee());
-    axe._memoizedFns = [];
-    function memoizeImplementation(fn) {
-      var memoized = memoizee['default'](fn);
-      axe._memoizedFns.push(memoized);
-      return memoized;
-    }
-    var memoize_default = memoizeImplementation;
     function nodeSorter(nodeA, nodeB) {
       nodeA = nodeA.actualNode || nodeA;
       nodeB = nodeB.actualNode || nodeB;
@@ -17349,10 +19622,10 @@ module.exports = {
           sheet: sheet
         });
       }
-      var cssImportUrlsNotAlreadyImported = cssImportRules.filter(function(rule3) {
-        return rule3.href;
-      }).map(function(rule3) {
-        return rule3.href;
+      var cssImportUrlsNotAlreadyImported = cssImportRules.filter(function(rule) {
+        return rule.href;
+      }).map(function(rule) {
+        return rule.href;
       }).filter(function(url) {
         return !importedUrls.includes(url);
       });
@@ -17368,8 +19641,8 @@ module.exports = {
         return Promise.all(promises);
       }
       promises.push(Promise.resolve(options.convertDataToStylesheet({
-        data: nonImportCSSRules.map(function(rule3) {
-          return rule3.cssText;
+        data: nonImportCSSRules.map(function(rule) {
+          return rule.cssText;
         }).join(),
         isCrossOrigin: isCrossOrigin,
         priority: priority,
@@ -17402,7 +19675,7 @@ module.exports = {
     function parseCrossOriginStylesheet(url, options, priority, importedUrls, isCrossOrigin) {
       importedUrls.push(url);
       return new Promise(function(resolve, reject) {
-        var request = new XMLHttpRequest();
+        var request = new window.XMLHttpRequest();
         request.open('GET', url);
         request.timeout = constants_default.preload.timeout;
         request.addEventListener('error', reject);
@@ -17738,6 +20011,13 @@ module.exports = {
         writable: true
       });
     }
+    if (window.Node && !('isConnected' in window.Node.prototype)) {
+      Object.defineProperty(window.Node.prototype, 'isConnected', {
+        get: function get() {
+          return !this.ownerDocument || !(this.ownerDocument.compareDocumentPosition(this) & this.DOCUMENT_POSITION_DISCONNECTED);
+        }
+      });
+    }
     function uniqueArray(arr1, arr2) {
       return arr1.concat(arr2).filter(function(elem, pos, arr) {
         return arr.indexOf(elem) === pos;
@@ -17766,9 +20046,9 @@ module.exports = {
         var childAny = null;
         var combinedLength = (((_currentLevel$anyLeve = currentLevel.anyLevel) === null || _currentLevel$anyLeve === void 0 ? void 0 : _currentLevel$anyLeve.length) || 0) + (((_currentLevel$thisLev = currentLevel.thisLevel) === null || _currentLevel$thisLev === void 0 ? void 0 : _currentLevel$thisLev.length) || 0);
         var added = false;
-        for (var _i8 = 0; _i8 < combinedLength; _i8++) {
+        for (var _i14 = 0; _i14 < combinedLength; _i14++) {
           var _currentLevel$anyLeve2, _currentLevel$anyLeve3, _currentLevel$anyLeve4;
-          var exp = _i8 < (((_currentLevel$anyLeve2 = currentLevel.anyLevel) === null || _currentLevel$anyLeve2 === void 0 ? void 0 : _currentLevel$anyLeve2.length) || 0) ? currentLevel.anyLevel[_i8] : currentLevel.thisLevel[_i8 - (((_currentLevel$anyLeve3 = currentLevel.anyLevel) === null || _currentLevel$anyLeve3 === void 0 ? void 0 : _currentLevel$anyLeve3.length) || 0)];
+          var exp = _i14 < (((_currentLevel$anyLeve2 = currentLevel.anyLevel) === null || _currentLevel$anyLeve2 === void 0 ? void 0 : _currentLevel$anyLeve2.length) || 0) ? currentLevel.anyLevel[_i14] : currentLevel.thisLevel[_i14 - (((_currentLevel$anyLeve3 = currentLevel.anyLevel) === null || _currentLevel$anyLeve3 === void 0 ? void 0 : _currentLevel$anyLeve3.length) || 0)];
           if ((!exp[0].id || vNode.shadowId === currentLevel.parentShadowId) && _matchesExpression(vNode, exp[0])) {
             if (exp.length === 1) {
               if (!added && (!filter || filter(vNode))) {
@@ -17805,11 +20085,15 @@ module.exports = {
     function querySelectorAllFilter(domTree, selector, filter) {
       domTree = Array.isArray(domTree) ? domTree : [ domTree ];
       var expressions = _convertSelector(selector);
+      var nodes = getNodesMatchingExpression(domTree, expressions, filter);
+      if (nodes) {
+        return nodes;
+      }
       return matchExpressions(domTree, expressions, filter);
     }
     var query_selector_all_filter_default = querySelectorAllFilter;
-    function preloadCssom(_ref23) {
-      var _ref23$treeRoot = _ref23.treeRoot, treeRoot = _ref23$treeRoot === void 0 ? axe._tree[0] : _ref23$treeRoot;
+    function preloadCssom(_ref51) {
+      var _ref51$treeRoot = _ref51.treeRoot, treeRoot = _ref51$treeRoot === void 0 ? axe._tree[0] : _ref51$treeRoot;
       var rootNodes = getAllRootNodesInTree(treeRoot);
       if (!rootNodes.length) {
         return Promise.resolve();
@@ -17839,8 +20123,8 @@ module.exports = {
     }
     function getCssomForAllRootNodes(rootNodes, convertDataToStylesheet) {
       var promises = [];
-      rootNodes.forEach(function(_ref24, index) {
-        var rootNode = _ref24.rootNode, shadowId = _ref24.shadowId;
+      rootNodes.forEach(function(_ref52, index) {
+        var rootNode = _ref52.rootNode, shadowId = _ref52.shadowId;
         var sheets = getStylesheetsOfRootNode(rootNode, shadowId, convertDataToStylesheet);
         if (!sheets) {
           return Promise.all(promises);
@@ -17891,6 +20175,9 @@ module.exports = {
     }
     function getStylesheetsFromDocument(rootNode) {
       return Array.from(rootNode.styleSheets).filter(function(sheet) {
+        if (!sheet.media) {
+          return false;
+        }
         return filterMediaIsPrint(sheet.media.mediaText);
       });
     }
@@ -17921,10 +20208,10 @@ module.exports = {
         return true;
       });
     }
-    function preloadMedia(_ref25) {
-      var _ref25$treeRoot = _ref25.treeRoot, treeRoot = _ref25$treeRoot === void 0 ? axe._tree[0] : _ref25$treeRoot;
-      var mediaVirtualNodes = query_selector_all_filter_default(treeRoot, 'video, audio', function(_ref26) {
-        var actualNode = _ref26.actualNode;
+    function preloadMedia(_ref53) {
+      var _ref53$treeRoot = _ref53.treeRoot, treeRoot = _ref53$treeRoot === void 0 ? axe._tree[0] : _ref53$treeRoot;
+      var mediaVirtualNodes = query_selector_all_filter_default(treeRoot, 'video, audio', function(_ref54) {
+        var actualNode = _ref54.actualNode;
         if (actualNode.hasAttribute('src')) {
           return !!actualNode.getAttribute('src');
         }
@@ -17936,8 +20223,8 @@ module.exports = {
         }
         return true;
       });
-      return Promise.all(mediaVirtualNodes.map(function(_ref27) {
-        var actualNode = _ref27.actualNode;
+      return Promise.all(mediaVirtualNodes.map(function(_ref55) {
+        var actualNode = _ref55.actualNode;
         return isMediaElementReady(actualNode);
       }));
     }
@@ -17954,8 +20241,8 @@ module.exports = {
         elm.addEventListener('loadedmetadata', onMediaReady);
       });
     }
-    function isValidPreloadObject(preload3) {
-      return _typeof(preload3) === 'object' && Array.isArray(preload3.assets);
+    function isValidPreloadObject(preload2) {
+      return _typeof(preload2) === 'object' && Array.isArray(preload2.assets);
     }
     function _shouldPreload(options) {
       if (!options || options.preload === void 0 || options.preload === null) {
@@ -18050,35 +20337,35 @@ module.exports = {
         return getDefaultMsg(messages);
       }
     }
-    function extender(checksData, shouldBeTrue, rule3) {
-      return function(check4) {
-        var sourceData = checksData[check4.id] || {};
+    function extender(checksData, shouldBeTrue, rule) {
+      return function(check) {
+        var sourceData = checksData[check.id] || {};
         var messages = sourceData.messages || {};
         var data2 = Object.assign({}, sourceData);
         delete data2.messages;
-        if (!rule3.reviewOnFail && check4.result === void 0) {
-          if (_typeof(messages.incomplete) === 'object' && !Array.isArray(check4.data)) {
-            data2.message = getIncompleteReason(check4.data, messages);
+        if (!rule.reviewOnFail && check.result === void 0) {
+          if (_typeof(messages.incomplete) === 'object' && !Array.isArray(check.data)) {
+            data2.message = getIncompleteReason(check.data, messages);
           }
           if (!data2.message) {
             data2.message = messages.incomplete;
           }
         } else {
-          data2.message = check4.result === shouldBeTrue ? messages.pass : messages.fail;
+          data2.message = check.result === shouldBeTrue ? messages.pass : messages.fail;
         }
         if (typeof data2.message !== 'function') {
-          data2.message = process_message_default(data2.message, check4.data);
+          data2.message = process_message_default(data2.message, check.data);
         }
-        extend_meta_data_default(check4, data2);
+        extend_meta_data_default(check, data2);
       };
     }
     function publishMetaData(ruleResult) {
       var checksData = axe._audit.data.checks || {};
       var rulesData = axe._audit.data.rules || {};
-      var rule3 = find_by_default(axe._audit.rules, 'id', ruleResult.id) || {};
-      ruleResult.tags = clone_default(rule3.tags || []);
-      var shouldBeTrue = extender(checksData, true, rule3);
-      var shouldBeFalse = extender(checksData, false, rule3);
+      var rule = find_by_default(axe._audit.rules, 'id', ruleResult.id) || {};
+      ruleResult.tags = clone_default(rule.tags || []);
+      var shouldBeTrue = extender(checksData, true, rule);
+      var shouldBeFalse = extender(checksData, false, rule);
       ruleResult.nodes.forEach(function(detail) {
         detail.any.forEach(shouldBeTrue);
         detail.all.forEach(shouldBeTrue);
@@ -18091,7 +20378,7 @@ module.exports = {
       return query_selector_all_filter_default(domTree, selector);
     }
     var query_selector_all_default = querySelectorAll;
-    function matchTags(rule3, runOnly) {
+    function matchTags(rule, runOnly) {
       var include, exclude, matching;
       var defaultExclude = axe._audit && axe._audit.tagExclude ? axe._audit.tagExclude : [];
       if (runOnly.hasOwnProperty('include') || runOnly.hasOwnProperty('exclude')) {
@@ -18109,32 +20396,63 @@ module.exports = {
         });
       }
       matching = include.some(function(tag) {
-        return rule3.tags.indexOf(tag) !== -1;
+        return rule.tags.indexOf(tag) !== -1;
       });
-      if (matching || include.length === 0 && rule3.enabled !== false) {
+      if (matching || include.length === 0 && rule.enabled !== false) {
         return exclude.every(function(tag) {
-          return rule3.tags.indexOf(tag) === -1;
+          return rule.tags.indexOf(tag) === -1;
         });
       } else {
         return false;
       }
     }
-    function ruleShouldRun(rule3, context5, options) {
+    function ruleShouldRun(rule, context, options) {
       var runOnly = options.runOnly || {};
-      var ruleOptions = (options.rules || {})[rule3.id];
-      if (rule3.pageLevel && !context5.page) {
+      var ruleOptions = (options.rules || {})[rule.id];
+      if (rule.pageLevel && !context.page) {
         return false;
       } else if (runOnly.type === 'rule') {
-        return runOnly.values.indexOf(rule3.id) !== -1;
+        return runOnly.values.indexOf(rule.id) !== -1;
       } else if (ruleOptions && typeof ruleOptions.enabled === 'boolean') {
         return ruleOptions.enabled;
       } else if (runOnly.type === 'tag' && runOnly.values) {
-        return matchTags(rule3, runOnly.values);
+        return matchTags(rule, runOnly.values);
       } else {
-        return matchTags(rule3, []);
+        return matchTags(rule, []);
       }
     }
     var rule_should_run_default = ruleShouldRun;
+    function _filterHtmlAttrs(element, filterAttrs) {
+      if (!filterAttrs) {
+        return element;
+      }
+      var node = element.cloneNode(false);
+      var attributes2 = get_node_attributes_default(node);
+      if (node.nodeType === 1) {
+        var outerHTML = node.outerHTML;
+        node = cache_default.get(outerHTML, function() {
+          return setNodeAttributes(node, attributes2, element, filterAttrs);
+        });
+      } else {
+        node = setNodeAttributes(node, attributes2, element, filterAttrs);
+      }
+      Array.from(element.childNodes).forEach(function(child) {
+        node.appendChild(_filterHtmlAttrs(child, filterAttrs));
+      });
+      return node;
+    }
+    function setNodeAttributes(node, attributes2, element, filterAttrs) {
+      if (!attributes2) {
+        return node;
+      }
+      node = document.createElement(node.nodeName);
+      Array.from(attributes2).forEach(function(attr) {
+        if (!attributeMatches(element, attr.name, filterAttrs)) {
+          node.setAttribute(attr.name, attr.value);
+        }
+      });
+      return node;
+    }
     function attributeMatches(node, attrName, filterAttrs) {
       if (typeof filterAttrs[attrName] === 'undefined') {
         return false;
@@ -18144,44 +20462,29 @@ module.exports = {
       }
       return element_matches_default(node, filterAttrs[attrName]);
     }
-    function filterHtmlAttrs(element, filterAttrs) {
-      if (!filterAttrs) {
-        return element;
-      }
-      var node = element.cloneNode(false);
-      var outerHTML = node.outerHTML;
-      var attributes4 = get_node_attributes_default(node);
-      if (cache_default.get(outerHTML)) {
-        node = cache_default.get(outerHTML);
-      } else if (attributes4) {
-        node = document.createElement(node.nodeName);
-        Array.from(attributes4).forEach(function(attr) {
-          if (!attributeMatches(element, attr.name, filterAttrs)) {
-            node.setAttribute(attr.name, attr.value);
+    function _select(selector, context) {
+      var result = [];
+      var candidate;
+      if (axe._selectCache) {
+        for (var j = 0, l = axe._selectCache.length; j < l; j++) {
+          var item = axe._selectCache[j];
+          if (item.selector === selector) {
+            return item.result;
           }
-        });
-        cache_default.set(outerHTML, node);
-      }
-      Array.from(element.childNodes).forEach(function(child) {
-        node.appendChild(filterHtmlAttrs(child, filterAttrs));
-      });
-      return node;
-    }
-    var filter_html_attrs_default = filterHtmlAttrs;
-    function pushNode(result, nodes) {
-      var temp;
-      if (result.length === 0) {
-        return nodes;
-      }
-      if (result.length < nodes.length) {
-        temp = result;
-        result = nodes;
-        nodes = temp;
-      }
-      for (var _i9 = 0, l = nodes.length; _i9 < l; _i9++) {
-        if (!result.includes(nodes[_i9])) {
-          result.push(nodes[_i9]);
         }
+      }
+      var outerIncludes = getOuterIncludes(context.include);
+      var isInContext = getContextFilter(context);
+      for (var _i15 = 0; _i15 < outerIncludes.length; _i15++) {
+        candidate = outerIncludes[_i15];
+        var nodes = query_selector_all_filter_default(candidate, selector, isInContext);
+        result = mergeArrayUniques(result, nodes);
+      }
+      if (axe._selectCache) {
+        axe._selectCache.push({
+          selector: selector,
+          result: result
+        });
       }
       return result;
     }
@@ -18193,40 +20496,29 @@ module.exports = {
         return res;
       }, []);
     }
-    function select(selector, context5) {
-      var result = [];
-      var candidate;
-      if (axe._selectCache) {
-        for (var j = 0, l = axe._selectCache.length; j < l; j++) {
-          var item = axe._selectCache[j];
-          if (item.selector === selector) {
-            return item.result;
-          }
-        }
-      }
-      var outerIncludes = getOuterIncludes(context5.include);
-      var isInContext = getContextFilter(context5);
-      for (var _i10 = 0; _i10 < outerIncludes.length; _i10++) {
-        candidate = outerIncludes[_i10];
-        var nodes = query_selector_all_filter_default(candidate, selector, isInContext);
-        result = pushNode(result, nodes);
-      }
-      if (axe._selectCache) {
-        axe._selectCache.push({
-          selector: selector,
-          result: result
-        });
-      }
-      return result;
-    }
-    var select_default = select;
-    function getContextFilter(context5) {
-      if (!context5.exclude || context5.exclude.length === 0) {
+    function getContextFilter(context) {
+      if (!context.exclude || context.exclude.length === 0) {
         return null;
       }
       return function(node) {
-        return is_node_in_context_default(node, context5);
+        return _isNodeInContext(node, context);
       };
+    }
+    function mergeArrayUniques(arr1, arr2) {
+      if (arr1.length === 0) {
+        return arr2;
+      }
+      if (arr1.length < arr2.length) {
+        var temp = arr1;
+        arr1 = arr2;
+        arr2 = temp;
+      }
+      for (var _i16 = 0, l = arr2.length; _i16 < l; _i16++) {
+        if (!arr1.includes(arr2[_i16])) {
+          arr1.push(arr2[_i16]);
+        }
+      }
+      return arr1;
     }
     function setScroll(elm, top, left) {
       if (elm === window) {
@@ -18237,8 +20529,8 @@ module.exports = {
       }
     }
     function setScrollState(scrollState) {
-      scrollState.forEach(function(_ref29) {
-        var elm = _ref29.elm, top = _ref29.top, left = _ref29.left;
+      scrollState.forEach(function(_ref57) {
+        var elm = _ref57.elm, top = _ref57.top, left = _ref57.left;
         return setScroll(elm, top, left);
       });
     }
@@ -18258,10 +20550,36 @@ module.exports = {
       }
       return selectRecursive(selectors, elm.shadowRoot);
     }
-    function tokenList(str) {
-      return (str || '').trim().replace(/\s{2,}/g, ' ').split(' ');
+    function _shadowSelectAll(selectors) {
+      var doc = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : document;
+      var selectorArr = Array.isArray(selectors) ? _toConsumableArray(selectors) : [ selectors ];
+      if (selectors.length === 0) {
+        return [];
+      }
+      return selectAllRecursive(selectorArr, doc);
     }
-    var token_list_default = tokenList;
+    function selectAllRecursive(_ref58, doc) {
+      var _ref59 = _toArray(_ref58), selectorStr = _ref59[0], restSelector = _ref59.slice(1);
+      var elms = doc.querySelectorAll(selectorStr);
+      if (restSelector.length === 0) {
+        return Array.from(elms);
+      }
+      var selected = [];
+      var _iterator7 = _createForOfIteratorHelper(elms), _step7;
+      try {
+        for (_iterator7.s(); !(_step7 = _iterator7.n()).done; ) {
+          var elm = _step7.value;
+          if (elm !== null && elm !== void 0 && elm.shadowRoot) {
+            selected.push.apply(selected, _toConsumableArray(selectAllRecursive(restSelector, elm.shadowRoot)));
+          }
+        }
+      } catch (err) {
+        _iterator7.e(err);
+      } finally {
+        _iterator7.f();
+      }
+      return selected;
+    }
     function validInputTypes() {
       return [ 'hidden', 'text', 'search', 'tel', 'url', 'email', 'password', 'date', 'month', 'week', 'time', 'datetime-local', 'number', 'range', 'color', 'checkbox', 'radio', 'file', 'submit', 'image', 'reset', 'button' ];
     }
@@ -18272,8 +20590,8 @@ module.exports = {
       while (lang.length < 3) {
         lang += '`';
       }
-      for (var _i11 = 0; _i11 <= lang.length - 1; _i11++) {
-        var index = lang.charCodeAt(_i11) - 96;
+      for (var _i17 = 0; _i17 <= lang.length - 1; _i17++) {
+        var index = lang.charCodeAt(_i17) - 96;
         array = array[index];
         if (!array) {
           return false;
@@ -18285,22 +20603,18 @@ module.exports = {
       langArray = Array.isArray(langArray) ? langArray : langs;
       var codes = [];
       langArray.forEach(function(lang, index) {
-        var _char2 = String.fromCharCode(index + 96).replace('`', '');
+        var _char3 = String.fromCharCode(index + 96).replace('`', '');
         if (Array.isArray(lang)) {
           codes = codes.concat(_validLangs(lang).map(function(newLang) {
-            return _char2 + newLang;
+            return _char3 + newLang;
           }));
         } else {
-          codes.push(_char2);
+          codes.push(_char3);
         }
       });
       return codes;
     }
     var valid_langs_default = isValidLang;
-    axe._thisWillBeDeletedDoNotUse = axe._thisWillBeDeletedDoNotUse || {};
-    axe._thisWillBeDeletedDoNotUse.utils = {
-      setDefaultFrameMessenger: setDefaultFrameMessenger
-    };
     var SerialVirtualNode = function(_abstract_virtual_nod2) {
       _inherits(SerialVirtualNode, _abstract_virtual_nod2);
       var _super2 = _createSuper(SerialVirtualNode);
@@ -18349,9 +20663,9 @@ module.exports = {
       nodeTypeToName[nodeNamesToTypes[nodeName2]] = nodeName2;
     });
     function normaliseProps(serialNode) {
-      var _serialNode$nodeName, _ref30, _serialNode$nodeType;
+      var _serialNode$nodeName, _ref60, _serialNode$nodeType;
       var nodeName2 = (_serialNode$nodeName = serialNode.nodeName) !== null && _serialNode$nodeName !== void 0 ? _serialNode$nodeName : nodeTypeToName[serialNode.nodeType];
-      var nodeType = (_ref30 = (_serialNode$nodeType = serialNode.nodeType) !== null && _serialNode$nodeType !== void 0 ? _serialNode$nodeType : nodeNamesToTypes[serialNode.nodeName]) !== null && _ref30 !== void 0 ? _ref30 : 1;
+      var nodeType = (_ref60 = (_serialNode$nodeType = serialNode.nodeType) !== null && _serialNode$nodeType !== void 0 ? _serialNode$nodeType : nodeNamesToTypes[serialNode.nodeName]) !== null && _ref60 !== void 0 ? _ref60 : 1;
       assert_default(typeof nodeType === 'number', 'nodeType has to be a number, got \''.concat(nodeType, '\''));
       assert_default(typeof nodeName2 === 'string', 'nodeName has to be a string, got \''.concat(nodeName2, '\''));
       nodeName2 = nodeName2.toLowerCase();
@@ -18372,14 +20686,14 @@ module.exports = {
       delete props.attributes;
       return Object.freeze(props);
     }
-    function normaliseAttrs(_ref31) {
-      var _ref31$attributes = _ref31.attributes, attributes4 = _ref31$attributes === void 0 ? {} : _ref31$attributes;
+    function normaliseAttrs(_ref61) {
+      var _ref61$attributes = _ref61.attributes, attributes2 = _ref61$attributes === void 0 ? {} : _ref61$attributes;
       var attrMap = {
         htmlFor: 'for',
         className: 'class'
       };
-      return Object.keys(attributes4).reduce(function(attrs, attrName) {
-        var value = attributes4[attrName];
+      return Object.keys(attributes2).reduce(function(attrs, attrName) {
+        var value = attributes2[attrName];
         assert_default(_typeof(value) !== 'object' || value === null, 'expects attributes not to be an object, \''.concat(attrName, '\' was'));
         if (value !== void 0) {
           var mappedName = attrMap[attrName] || attrName;
@@ -18389,6 +20703,209 @@ module.exports = {
       }, {});
     }
     var serial_virtual_node_default = SerialVirtualNode;
+    var imports_exports = {};
+    __export(imports_exports, {
+      CssSelectorParser: function CssSelectorParser() {
+        return import_css_selector_parser2.CssSelectorParser;
+      },
+      doT: function doT() {
+        return import_dot['default'];
+      },
+      emojiRegexText: function emojiRegexText() {
+        return emoji_regex_default;
+      },
+      memoize: function memoize() {
+        return import_memoizee2['default'];
+      }
+    });
+    var import_css_selector_parser2 = __toModule(require_lib());
+    var import_dot = __toModule(require_doT());
+    var import_memoizee2 = __toModule(require_memoizee());
+    var import_es6_promise = __toModule(require_es6_promise());
+    var import_typedarray = __toModule(require_typedarray());
+    var import_weakmap_polyfill = __toModule(require_weakmap_polyfill());
+    import_dot['default'].templateSettings.strip = false;
+    if (!('Promise' in window)) {
+      import_es6_promise['default'].polyfill();
+    }
+    if (!('Uint32Array' in window)) {
+      window.Uint32Array = import_typedarray.Uint32Array;
+    }
+    if (window.Uint32Array) {
+      if (!('some' in window.Uint32Array.prototype)) {
+        Object.defineProperty(window.Uint32Array.prototype, 'some', {
+          value: Array.prototype.some
+        });
+      }
+      if (!('reduce' in window.Uint32Array.prototype)) {
+        Object.defineProperty(window.Uint32Array.prototype, 'reduce', {
+          value: Array.prototype.reduce
+        });
+      }
+    }
+    function cleanup(resolve, reject) {
+      resolve = resolve || function res() {};
+      reject = reject || axe.log;
+      if (!axe._audit) {
+        throw new Error('No audit configured');
+      }
+      var q = axe.utils.queue();
+      var cleanupErrors = [];
+      Object.keys(axe.plugins).forEach(function(key) {
+        q.defer(function(res) {
+          var rej = function rej2(err2) {
+            cleanupErrors.push(err2);
+            res();
+          };
+          try {
+            axe.plugins[key].cleanup(res, rej);
+          } catch (err2) {
+            rej(err2);
+          }
+        });
+      });
+      var flattenedTree = axe.utils.getFlattenedTree(document.body);
+      axe.utils.querySelectorAll(flattenedTree, 'iframe, frame').forEach(function(node) {
+        q.defer(function(res, rej) {
+          return axe.utils.sendCommandToFrame(node.actualNode, {
+            command: 'cleanup-plugin'
+          }, res, rej);
+        });
+      });
+      q.then(function(results) {
+        if (cleanupErrors.length === 0) {
+          resolve(results);
+        } else {
+          reject(cleanupErrors);
+        }
+      })['catch'](reject);
+    }
+    var cleanup_default = cleanup;
+    var reporters = {};
+    var defaultReporter;
+    function hasReporter(reporterName) {
+      return reporters.hasOwnProperty(reporterName);
+    }
+    function getReporter(reporter) {
+      if (typeof reporter === 'string' && reporters[reporter]) {
+        return reporters[reporter];
+      }
+      if (typeof reporter === 'function') {
+        return reporter;
+      }
+      return defaultReporter;
+    }
+    function addReporter(name, cb, isDefault) {
+      reporters[name] = cb;
+      if (isDefault) {
+        defaultReporter = cb;
+      }
+    }
+    function configure(spec) {
+      var audit;
+      audit = axe._audit;
+      if (!audit) {
+        throw new Error('No audit configured');
+      }
+      if (spec.axeVersion || spec.ver) {
+        var specVersion = spec.axeVersion || spec.ver;
+        if (!/^\d+\.\d+\.\d+(-canary)?/.test(specVersion)) {
+          throw new Error('Invalid configured version '.concat(specVersion));
+        }
+        var _specVersion$split = specVersion.split('-'), _specVersion$split2 = _slicedToArray(_specVersion$split, 2), version = _specVersion$split2[0], canary = _specVersion$split2[1];
+        var _version$split$map = version.split('.').map(Number), _version$split$map2 = _slicedToArray(_version$split$map, 3), major = _version$split$map2[0], minor = _version$split$map2[1], patch = _version$split$map2[2];
+        var _axe$version$split = axe.version.split('-'), _axe$version$split2 = _slicedToArray(_axe$version$split, 2), axeVersion = _axe$version$split2[0], axeCanary = _axe$version$split2[1];
+        var _axeVersion$split$map = axeVersion.split('.').map(Number), _axeVersion$split$map2 = _slicedToArray(_axeVersion$split$map, 3), axeMajor = _axeVersion$split$map2[0], axeMinor = _axeVersion$split$map2[1], axePatch = _axeVersion$split$map2[2];
+        if (major !== axeMajor || axeMinor < minor || axeMinor === minor && axePatch < patch || major === axeMajor && minor === axeMinor && patch === axePatch && canary && canary !== axeCanary) {
+          throw new Error('Configured version '.concat(specVersion, ' is not compatible with current axe version ').concat(axe.version));
+        }
+      }
+      if (spec.reporter && (typeof spec.reporter === 'function' || hasReporter(spec.reporter))) {
+        audit.reporter = spec.reporter;
+      }
+      if (spec.checks) {
+        if (!Array.isArray(spec.checks)) {
+          throw new TypeError('Checks property must be an array');
+        }
+        spec.checks.forEach(function(check) {
+          if (!check.id) {
+            throw new TypeError('Configured check '.concat(JSON.stringify(check), ' is invalid. Checks must be an object with at least an id property'));
+          }
+          audit.addCheck(check);
+        });
+      }
+      var modifiedRules = [];
+      if (spec.rules) {
+        if (!Array.isArray(spec.rules)) {
+          throw new TypeError('Rules property must be an array');
+        }
+        spec.rules.forEach(function(rule) {
+          if (!rule.id) {
+            throw new TypeError('Configured rule '.concat(JSON.stringify(rule), ' is invalid. Rules must be an object with at least an id property'));
+          }
+          modifiedRules.push(rule.id);
+          audit.addRule(rule);
+        });
+      }
+      if (spec.disableOtherRules) {
+        audit.rules.forEach(function(rule) {
+          if (modifiedRules.includes(rule.id) === false) {
+            rule.enabled = false;
+          }
+        });
+      }
+      if (typeof spec.branding !== 'undefined') {
+        audit.setBranding(spec.branding);
+      } else {
+        audit._constructHelpUrls();
+      }
+      if (spec.tagExclude) {
+        audit.tagExclude = spec.tagExclude;
+      }
+      if (spec.locale) {
+        audit.applyLocale(spec.locale);
+      }
+      if (spec.standards) {
+        configureStandards(spec.standards);
+      }
+      if (spec.noHtml) {
+        audit.noHtml = true;
+      }
+      if (spec.allowedOrigins) {
+        if (!Array.isArray(spec.allowedOrigins)) {
+          throw new TypeError('Allowed origins property must be an array');
+        }
+        if (spec.allowedOrigins.includes('*')) {
+          throw new Error('"*" is not allowed. Use "'.concat(constants_default.allOrigins, '" instead'));
+        }
+        audit.setAllowedOrigins(spec.allowedOrigins);
+      }
+    }
+    var configure_default = configure;
+    function frameMessenger2(frameHandler) {
+      _respondable.updateMessenger(frameHandler);
+    }
+    function getRules(tags) {
+      tags = tags || [];
+      var matchingRules = !tags.length ? axe._audit.rules : axe._audit.rules.filter(function(item) {
+        return !!tags.filter(function(tag) {
+          return item.tags.indexOf(tag) !== -1;
+        }).length;
+      });
+      var ruleData = axe._audit.data.rules || {};
+      return matchingRules.map(function(matchingRule) {
+        var rd = ruleData[matchingRule.id] || {};
+        return {
+          ruleId: matchingRule.id,
+          description: rd.description,
+          help: rd.help,
+          helpUrl: rd.helpUrl,
+          tags: matchingRule.tags,
+          actIds: matchingRule.actIds
+        };
+      });
+    }
+    var get_rules_default = getRules;
     var aria_exports = {};
     __export(aria_exports, {
       allowedAttr: function allowedAttr() {
@@ -18473,17 +20990,6 @@ module.exports = {
         return validate_attr_value_default;
       }
     });
-    function getGlobalAriaAttrs() {
-      if (cache_default.get('globalAriaAttrs')) {
-        return cache_default.get('globalAriaAttrs');
-      }
-      var globalAttrs = Object.keys(standards_default.ariaAttrs).filter(function(attrName) {
-        return standards_default.ariaAttrs[attrName].global;
-      });
-      cache_default.set('globalAriaAttrs', globalAttrs);
-      return globalAttrs;
-    }
-    var get_global_aria_attrs_default = getGlobalAriaAttrs;
     function allowedAttr(role) {
       var roleDef = standards_default.ariaRoles[role];
       var attrs = _toConsumableArray(get_global_aria_attrs_default());
@@ -18499,1348 +21005,6 @@ module.exports = {
       return attrs;
     }
     var allowed_attr_default = allowedAttr;
-    function arialabelText(vNode) {
-      if (!(vNode instanceof abstract_virtual_node_default)) {
-        if (vNode.nodeType !== 1) {
-          return '';
-        }
-        vNode = get_node_from_tree_default(vNode);
-      }
-      return vNode.attr('aria-label') || '';
-    }
-    var arialabel_text_default = arialabelText;
-    function isUnsupportedRole(role) {
-      var roleDefinition = standards_default.ariaRoles[role];
-      return roleDefinition ? !!roleDefinition.unsupported : false;
-    }
-    var is_unsupported_role_default = isUnsupportedRole;
-    function isValidRole(role) {
-      var _ref32 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, allowAbstract = _ref32.allowAbstract, _ref32$flagUnsupporte = _ref32.flagUnsupported, flagUnsupported = _ref32$flagUnsupporte === void 0 ? false : _ref32$flagUnsupporte;
-      var roleDefinition = standards_default.ariaRoles[role];
-      var isRoleUnsupported = is_unsupported_role_default(role);
-      if (!roleDefinition || flagUnsupported && isRoleUnsupported) {
-        return false;
-      }
-      return allowAbstract ? true : roleDefinition.type !== 'abstract';
-    }
-    var is_valid_role_default = isValidRole;
-    function getExplicitRole(vNode) {
-      var _ref33 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, fallback = _ref33.fallback, abstracts = _ref33.abstracts, dpub = _ref33.dpub;
-      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
-      if (vNode.props.nodeType !== 1) {
-        return null;
-      }
-      var roleAttr = (vNode.attr('role') || '').trim().toLowerCase();
-      var roleList = fallback ? token_list_default(roleAttr) : [ roleAttr ];
-      var firstValidRole = roleList.find(function(role) {
-        if (!dpub && role.substr(0, 4) === 'doc-') {
-          return false;
-        }
-        return is_valid_role_default(role, {
-          allowAbstract: abstracts
-        });
-      });
-      return firstValidRole || null;
-    }
-    var get_explicit_role_default = getExplicitRole;
-    function getElementsByContentType(type) {
-      return Object.keys(standards_default.htmlElms).filter(function(nodeName2) {
-        var elm = standards_default.htmlElms[nodeName2];
-        if (elm.contentTypes) {
-          return elm.contentTypes.includes(type);
-        }
-        if (!elm.variant) {
-          return false;
-        }
-        if (elm.variant['default'] && elm.variant['default'].contentTypes) {
-          return elm.variant['default'].contentTypes.includes(type);
-        }
-        return false;
-      });
-    }
-    var get_elements_by_content_type_default = getElementsByContentType;
-    function toGrid(node) {
-      var table5 = [];
-      var rows = node.rows;
-      for (var i = 0, rowLength = rows.length; i < rowLength; i++) {
-        var cells = rows[i].cells;
-        table5[i] = table5[i] || [];
-        var columnIndex = 0;
-        for (var j = 0, cellLength = cells.length; j < cellLength; j++) {
-          for (var colSpan = 0; colSpan < cells[j].colSpan; colSpan++) {
-            var rowspanAttr = cells[j].getAttribute('rowspan');
-            var rowspanValue = parseInt(rowspanAttr) === 0 || cells[j].rowspan === 0 ? rows.length : cells[j].rowSpan;
-            for (var rowSpan = 0; rowSpan < rowspanValue; rowSpan++) {
-              table5[i + rowSpan] = table5[i + rowSpan] || [];
-              while (table5[i + rowSpan][columnIndex]) {
-                columnIndex++;
-              }
-              table5[i + rowSpan][columnIndex] = cells[j];
-            }
-            columnIndex++;
-          }
-        }
-      }
-      return table5;
-    }
-    var to_grid_default = memoize_default(toGrid);
-    function getCellPosition(cell, tableGrid) {
-      var rowIndex, index;
-      if (!tableGrid) {
-        tableGrid = to_grid_default(find_up_default(cell, 'table'));
-      }
-      for (rowIndex = 0; rowIndex < tableGrid.length; rowIndex++) {
-        if (tableGrid[rowIndex]) {
-          index = tableGrid[rowIndex].indexOf(cell);
-          if (index !== -1) {
-            return {
-              x: index,
-              y: rowIndex
-            };
-          }
-        }
-      }
-    }
-    var get_cell_position_default = memoize_default(getCellPosition);
-    function getScope(cell) {
-      var scope = cell.getAttribute('scope');
-      var role = cell.getAttribute('role');
-      if (cell instanceof window.Element === false || [ 'TD', 'TH' ].indexOf(cell.nodeName.toUpperCase()) === -1) {
-        throw new TypeError('Expected TD or TH element');
-      }
-      if (role === 'columnheader') {
-        return 'col';
-      } else if (role === 'rowheader') {
-        return 'row';
-      } else if (scope === 'col' || scope === 'row') {
-        return scope;
-      } else if (cell.nodeName.toUpperCase() !== 'TH') {
-        return false;
-      }
-      var tableGrid = to_grid_default(find_up_default(cell, 'table'));
-      var pos = get_cell_position_default(cell, tableGrid);
-      var headerRow = tableGrid[pos.y].reduce(function(headerRow2, cell2) {
-        return headerRow2 && cell2.nodeName.toUpperCase() === 'TH';
-      }, true);
-      if (headerRow) {
-        return 'col';
-      }
-      var headerCol = tableGrid.map(function(col) {
-        return col[pos.x];
-      }).reduce(function(headerCol2, cell2) {
-        return headerCol2 && cell2 && cell2.nodeName.toUpperCase() === 'TH';
-      }, true);
-      if (headerCol) {
-        return 'row';
-      }
-      return 'auto';
-    }
-    var get_scope_default = getScope;
-    function isColumnHeader(element) {
-      return [ 'col', 'auto' ].indexOf(get_scope_default(element)) !== -1;
-    }
-    var is_column_header_default = isColumnHeader;
-    function isRowHeader(cell) {
-      return [ 'row', 'auto' ].includes(get_scope_default(cell));
-    }
-    var is_row_header_default = isRowHeader;
-    var sectioningElementSelector = get_elements_by_content_type_default('sectioning').map(function(nodeName2) {
-      return ''.concat(nodeName2, ':not([role])');
-    }).join(', ') + ' , main:not([role]), [role=article], [role=complementary], [role=main], [role=navigation], [role=region]';
-    function hasAccessibleName(vNode) {
-      var ariaLabelledby = sanitize_default(arialabelledby_text_default(vNode));
-      var ariaLabel = sanitize_default(arialabel_text_default(vNode));
-      return !!(ariaLabelledby || ariaLabel);
-    }
-    var implicitHtmlRoles = {
-      a: function a(vNode) {
-        return vNode.hasAttr('href') ? 'link' : null;
-      },
-      area: function area(vNode) {
-        return vNode.hasAttr('href') ? 'link' : null;
-      },
-      article: 'article',
-      aside: 'complementary',
-      body: 'document',
-      button: 'button',
-      datalist: 'listbox',
-      dd: 'definition',
-      dfn: 'term',
-      details: 'group',
-      dialog: 'dialog',
-      dt: 'term',
-      fieldset: 'group',
-      figure: 'figure',
-      footer: function footer(vNode) {
-        var sectioningElement = closest_default(vNode, sectioningElementSelector);
-        return !sectioningElement ? 'contentinfo' : null;
-      },
-      form: function form(vNode) {
-        return hasAccessibleName(vNode) ? 'form' : null;
-      },
-      h1: 'heading',
-      h2: 'heading',
-      h3: 'heading',
-      h4: 'heading',
-      h5: 'heading',
-      h6: 'heading',
-      header: function header(vNode) {
-        var sectioningElement = closest_default(vNode, sectioningElementSelector);
-        return !sectioningElement ? 'banner' : null;
-      },
-      hr: 'separator',
-      img: function img(vNode) {
-        var emptyAlt = vNode.hasAttr('alt') && !vNode.attr('alt');
-        var hasGlobalAria = get_global_aria_attrs_default().find(function(attr) {
-          return vNode.hasAttr(attr);
-        });
-        return emptyAlt && !hasGlobalAria && !is_focusable_default(vNode) ? 'presentation' : 'img';
-      },
-      input: function input(vNode) {
-        var suggestionsSourceElement;
-        if (vNode.hasAttr('list')) {
-          var listElement = idrefs_default(vNode.actualNode, 'list').filter(function(node) {
-            return !!node;
-          })[0];
-          suggestionsSourceElement = listElement && listElement.nodeName.toLowerCase() === 'datalist';
-        }
-        switch (vNode.props.type) {
-         case 'checkbox':
-          return 'checkbox';
-
-         case 'number':
-          return 'spinbutton';
-
-         case 'radio':
-          return 'radio';
-
-         case 'range':
-          return 'slider';
-
-         case 'search':
-          return !suggestionsSourceElement ? 'searchbox' : 'combobox';
-
-         case 'button':
-         case 'image':
-         case 'reset':
-         case 'submit':
-          return 'button';
-
-         case 'text':
-         case 'tel':
-         case 'url':
-         case 'email':
-         case '':
-          return !suggestionsSourceElement ? 'textbox' : 'combobox';
-
-         default:
-          return 'textbox';
-        }
-      },
-      li: 'listitem',
-      main: 'main',
-      math: 'math',
-      menu: 'list',
-      nav: 'navigation',
-      ol: 'list',
-      optgroup: 'group',
-      option: 'option',
-      output: 'status',
-      progress: 'progressbar',
-      section: function section(vNode) {
-        return hasAccessibleName(vNode) ? 'region' : null;
-      },
-      select: function select(vNode) {
-        return vNode.hasAttr('multiple') || parseInt(vNode.attr('size')) > 1 ? 'listbox' : 'combobox';
-      },
-      summary: 'button',
-      table: 'table',
-      tbody: 'rowgroup',
-      td: function td(vNode) {
-        var table5 = closest_default(vNode, 'table');
-        var role = get_explicit_role_default(table5);
-        return [ 'grid', 'treegrid' ].includes(role) ? 'gridcell' : 'cell';
-      },
-      textarea: 'textbox',
-      tfoot: 'rowgroup',
-      th: function th(vNode) {
-        if (is_column_header_default(vNode.actualNode)) {
-          return 'columnheader';
-        }
-        if (is_row_header_default(vNode.actualNode)) {
-          return 'rowheader';
-        }
-      },
-      thead: 'rowgroup',
-      tr: 'row',
-      ul: 'list'
-    };
-    var implicit_html_roles_default = implicitHtmlRoles;
-    function fromPrimative(someString, matcher) {
-      var matcherType = _typeof(matcher);
-      if (Array.isArray(matcher) && typeof someString !== 'undefined') {
-        return matcher.includes(someString);
-      }
-      if (matcherType === 'function') {
-        return !!matcher(someString);
-      }
-      if (someString !== null && someString !== void 0) {
-        if (matcher instanceof RegExp) {
-          return matcher.test(someString);
-        }
-        if (/^\/.*\/$/.test(matcher)) {
-          var pattern = matcher.substring(1, matcher.length - 1);
-          return new RegExp(pattern).test(someString);
-        }
-      }
-      return matcher === someString;
-    }
-    var from_primative_default = fromPrimative;
-    function hasAccessibleName2(vNode, matcher) {
-      return from_primative_default(!!accessible_text_virtual_default(vNode), matcher);
-    }
-    var has_accessible_name_default = hasAccessibleName2;
-    function fromFunction(getValue, matcher) {
-      var matcherType = _typeof(matcher);
-      if (matcherType !== 'object' || Array.isArray(matcher) || matcher instanceof RegExp) {
-        throw new Error('Expect matcher to be an object');
-      }
-      return Object.keys(matcher).every(function(propName) {
-        return from_primative_default(getValue(propName), matcher[propName]);
-      });
-    }
-    var from_function_default = fromFunction;
-    function attributes(vNode, matcher) {
-      if (!(vNode instanceof abstract_virtual_node_default)) {
-        vNode = get_node_from_tree_default(vNode);
-      }
-      return from_function_default(function(attrName) {
-        return vNode.attr(attrName);
-      }, matcher);
-    }
-    var attributes_default = attributes;
-    function condition(arg, condition4) {
-      return !!condition4(arg);
-    }
-    var condition_default = condition;
-    function explicitRole(vNode, matcher) {
-      return from_primative_default(get_explicit_role_default(vNode), matcher);
-    }
-    var explicit_role_default = explicitRole;
-    function implicitRole(vNode, matcher) {
-      return from_primative_default(implicit_role_default(vNode), matcher);
-    }
-    var implicit_role_default2 = implicitRole;
-    function nodeName(vNode, matcher) {
-      if (!(vNode instanceof abstract_virtual_node_default)) {
-        vNode = get_node_from_tree_default(vNode);
-      }
-      return from_primative_default(vNode.props.nodeName, matcher);
-    }
-    var node_name_default = nodeName;
-    function properties(vNode, matcher) {
-      if (!(vNode instanceof abstract_virtual_node_default)) {
-        vNode = get_node_from_tree_default(vNode);
-      }
-      return from_function_default(function(propName) {
-        return vNode.props[propName];
-      }, matcher);
-    }
-    var properties_default = properties;
-    function semanticRole(vNode, matcher) {
-      return from_primative_default(get_role_default(vNode), matcher);
-    }
-    var semantic_role_default = semanticRole;
-    var matchers = {
-      hasAccessibleName: has_accessible_name_default,
-      attributes: attributes_default,
-      condition: condition_default,
-      explicitRole: explicit_role_default,
-      implicitRole: implicit_role_default2,
-      nodeName: node_name_default,
-      properties: properties_default,
-      semanticRole: semantic_role_default
-    };
-    function fromDefinition(vNode, definition) {
-      if (!(vNode instanceof abstract_virtual_node_default)) {
-        vNode = get_node_from_tree_default(vNode);
-      }
-      if (Array.isArray(definition)) {
-        return definition.some(function(definitionItem) {
-          return fromDefinition(vNode, definitionItem);
-        });
-      }
-      if (typeof definition === 'string') {
-        return matches_default(vNode, definition);
-      }
-      return Object.keys(definition).every(function(matcherName) {
-        if (!matchers[matcherName]) {
-          throw new Error('Unknown matcher type "'.concat(matcherName, '"'));
-        }
-        var matchMethod = matchers[matcherName];
-        var matcher = definition[matcherName];
-        return matchMethod(vNode, matcher);
-      });
-    }
-    var from_definition_default = fromDefinition;
-    function matches5(vNode, definition) {
-      return from_definition_default(vNode, definition);
-    }
-    var matches_default2 = matches5;
-    matches_default2.hasAccessibleName = has_accessible_name_default;
-    matches_default2.attributes = attributes_default;
-    matches_default2.condition = condition_default;
-    matches_default2.explicitRole = explicit_role_default;
-    matches_default2.fromDefinition = from_definition_default;
-    matches_default2.fromFunction = from_function_default;
-    matches_default2.fromPrimative = from_primative_default;
-    matches_default2.implicitRole = implicit_role_default2;
-    matches_default2.nodeName = node_name_default;
-    matches_default2.properties = properties_default;
-    matches_default2.semanticRole = semantic_role_default;
-    var matches_default3 = matches_default2;
-    function getElementSpec(vNode) {
-      var _ref34 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref34$noMatchAccessi = _ref34.noMatchAccessibleName, noMatchAccessibleName = _ref34$noMatchAccessi === void 0 ? false : _ref34$noMatchAccessi;
-      var standard = standards_default.htmlElms[vNode.props.nodeName];
-      if (!standard) {
-        return {};
-      }
-      if (!standard.variant) {
-        return standard;
-      }
-      var variant = standard.variant, spec = _objectWithoutProperties(standard, _excluded3);
-      for (var variantName in variant) {
-        if (!variant.hasOwnProperty(variantName) || variantName === 'default') {
-          continue;
-        }
-        var _variant$variantName = variant[variantName], matches14 = _variant$variantName.matches, props = _objectWithoutProperties(_variant$variantName, _excluded4);
-        var matchProperties = Array.isArray(matches14) ? matches14 : [ matches14 ];
-        for (var _i12 = 0; _i12 < matchProperties.length && noMatchAccessibleName; _i12++) {
-          if (matchProperties[_i12].hasOwnProperty('hasAccessibleName')) {
-            return standard;
-          }
-        }
-        if (matches_default3(vNode, matches14)) {
-          for (var propName in props) {
-            if (props.hasOwnProperty(propName)) {
-              spec[propName] = props[propName];
-            }
-          }
-        }
-      }
-      for (var _propName in variant['default']) {
-        if (variant['default'].hasOwnProperty(_propName) && typeof spec[_propName] === 'undefined') {
-          spec[_propName] = variant['default'][_propName];
-        }
-      }
-      return spec;
-    }
-    var get_element_spec_default = getElementSpec;
-    function implicitRole2(node) {
-      var _ref35 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, chromium = _ref35.chromium;
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      node = vNode.actualNode;
-      if (!vNode) {
-        throw new ReferenceError('Cannot get implicit role of a node outside the current scope.');
-      }
-      var nodeName2 = vNode.props.nodeName;
-      var role = implicit_html_roles_default[nodeName2];
-      if (!role && chromium) {
-        var _get_element_spec_def = get_element_spec_default(vNode), chromiumRole = _get_element_spec_def.chromiumRole;
-        return chromiumRole || null;
-      }
-      if (typeof role === 'function') {
-        return role(vNode);
-      }
-      return role || null;
-    }
-    var implicit_role_default = implicitRole2;
-    var inheritsPresentationChain = {
-      td: [ 'tr' ],
-      th: [ 'tr' ],
-      tr: [ 'thead', 'tbody', 'tfoot', 'table' ],
-      thead: [ 'table' ],
-      tbody: [ 'table' ],
-      tfoot: [ 'table' ],
-      li: [ 'ol', 'ul' ],
-      dt: [ 'dl', 'div' ],
-      dd: [ 'dl', 'div' ],
-      div: [ 'dl' ]
-    };
-    function getInheritedRole(vNode, explicitRoleOptions) {
-      var parentNodeNames = inheritsPresentationChain[vNode.props.nodeName];
-      if (!parentNodeNames) {
-        return null;
-      }
-      if (!vNode.parent) {
-        throw new ReferenceError('Cannot determine role presentational inheritance of a required parent outside the current scope.');
-      }
-      if (!parentNodeNames.includes(vNode.parent.props.nodeName)) {
-        return null;
-      }
-      var parentRole = get_explicit_role_default(vNode.parent, explicitRoleOptions);
-      if ([ 'none', 'presentation' ].includes(parentRole) && !hasConflictResolution(vNode.parent)) {
-        return parentRole;
-      }
-      if (parentRole) {
-        return null;
-      }
-      return getInheritedRole(vNode.parent, explicitRoleOptions);
-    }
-    function resolveImplicitRole(vNode, _ref36) {
-      var chromium = _ref36.chromium, explicitRoleOptions = _objectWithoutProperties(_ref36, _excluded5);
-      var implicitRole3 = implicit_role_default(vNode, {
-        chromium: chromium
-      });
-      if (!implicitRole3) {
-        return null;
-      }
-      var presentationalRole = getInheritedRole(vNode, explicitRoleOptions);
-      if (presentationalRole) {
-        return presentationalRole;
-      }
-      return implicitRole3;
-    }
-    function hasConflictResolution(vNode) {
-      var hasGlobalAria = get_global_aria_attrs_default().some(function(attr) {
-        return vNode.hasAttr(attr);
-      });
-      return hasGlobalAria || is_focusable_default(vNode);
-    }
-    function resolveRole(node) {
-      var _ref37 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var noImplicit = _ref37.noImplicit, roleOptions = _objectWithoutProperties(_ref37, _excluded6);
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (vNode.props.nodeType !== 1) {
-        return null;
-      }
-      var explicitRole2 = get_explicit_role_default(vNode, roleOptions);
-      if (!explicitRole2) {
-        return noImplicit ? null : resolveImplicitRole(vNode, roleOptions);
-      }
-      if (![ 'presentation', 'none' ].includes(explicitRole2)) {
-        return explicitRole2;
-      }
-      if (hasConflictResolution(vNode)) {
-        return noImplicit ? null : resolveImplicitRole(vNode, roleOptions);
-      }
-      return explicitRole2;
-    }
-    function getRole(node) {
-      var _ref38 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var noPresentational = _ref38.noPresentational, options = _objectWithoutProperties(_ref38, _excluded7);
-      var role = resolveRole(node, options);
-      if (noPresentational && [ 'presentation', 'none' ].includes(role)) {
-        return null;
-      }
-      return role;
-    }
-    var get_role_default = getRole;
-    var alwaysTitleElements = [ 'iframe' ];
-    function titleText(node) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (vNode.props.nodeType !== 1 || !node.hasAttr('title')) {
-        return '';
-      }
-      if (!matches_default2(vNode, alwaysTitleElements) && [ 'none', 'presentation' ].includes(get_role_default(vNode))) {
-        return '';
-      }
-      return vNode.attr('title');
-    }
-    var title_text_default = titleText;
-    function namedFromContents(vNode) {
-      var _ref39 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, strict = _ref39.strict;
-      vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
-      if (vNode.props.nodeType !== 1) {
-        return false;
-      }
-      var role = get_role_default(vNode);
-      var roleDef = standards_default.ariaRoles[role];
-      if (roleDef && roleDef.nameFromContent) {
-        return true;
-      }
-      if (strict) {
-        return false;
-      }
-      return !roleDef || [ 'presentation', 'none' ].includes(role);
-    }
-    var named_from_contents_default = namedFromContents;
-    function getOwnedVirtual(virtualNode) {
-      var actualNode = virtualNode.actualNode, children = virtualNode.children;
-      if (!children) {
-        throw new Error('getOwnedVirtual requires a virtual node');
-      }
-      if (virtualNode.hasAttr('aria-owns')) {
-        var owns = idrefs_default(actualNode, 'aria-owns').filter(function(element) {
-          return !!element;
-        }).map(function(element) {
-          return axe.utils.getNodeFromTree(element);
-        });
-        return [].concat(_toConsumableArray(children), _toConsumableArray(owns));
-      }
-      return _toConsumableArray(children);
-    }
-    var get_owned_virtual_default = getOwnedVirtual;
-    function subtreeText(virtualNode) {
-      var context5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var alreadyProcessed2 = accessible_text_virtual_default.alreadyProcessed;
-      context5.startNode = context5.startNode || virtualNode;
-      var _context = context5, strict = _context.strict, inControlContext = _context.inControlContext, inLabelledByContext = _context.inLabelledByContext;
-      var _get_element_spec_def2 = get_element_spec_default(virtualNode, {
-        noMatchAccessibleName: true
-      }), contentTypes = _get_element_spec_def2.contentTypes;
-      if (alreadyProcessed2(virtualNode, context5) || virtualNode.props.nodeType !== 1 || contentTypes !== null && contentTypes !== void 0 && contentTypes.includes('embedded')) {
-        return '';
-      }
-      if (!named_from_contents_default(virtualNode, {
-        strict: strict
-      }) && !context5.subtreeDescendant) {
-        return '';
-      }
-      if (!strict) {
-        var subtreeDescendant = !inControlContext && !inLabelledByContext;
-        context5 = _extends({
-          subtreeDescendant: subtreeDescendant
-        }, context5);
-      }
-      return get_owned_virtual_default(virtualNode).reduce(function(contentText, child) {
-        return appendAccessibleText(contentText, child, context5);
-      }, '');
-    }
-    var phrasingElements = get_elements_by_content_type_default('phrasing').concat([ '#text' ]);
-    function appendAccessibleText(contentText, virtualNode, context5) {
-      var nodeName2 = virtualNode.props.nodeName;
-      var contentTextAdd = accessible_text_virtual_default(virtualNode, context5);
-      if (!contentTextAdd) {
-        return contentText;
-      }
-      if (!phrasingElements.includes(nodeName2)) {
-        if (contentTextAdd[0] !== ' ') {
-          contentTextAdd += ' ';
-        }
-        if (contentText && contentText[contentText.length - 1] !== ' ') {
-          contentTextAdd = ' ' + contentTextAdd;
-        }
-      }
-      return contentText + contentTextAdd;
-    }
-    var subtree_text_default = subtreeText;
-    function labelText(virtualNode) {
-      var context5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var alreadyProcessed2 = accessible_text_virtual_default.alreadyProcessed;
-      if (context5.inControlContext || context5.inLabelledByContext || alreadyProcessed2(virtualNode, context5)) {
-        return '';
-      }
-      if (!context5.startNode) {
-        context5.startNode = virtualNode;
-      }
-      var labelContext = _extends({
-        inControlContext: true
-      }, context5);
-      var explicitLabels = getExplicitLabels(virtualNode);
-      var implicitLabel = closest_default(virtualNode, 'label');
-      var labels;
-      if (implicitLabel) {
-        labels = [].concat(_toConsumableArray(explicitLabels), [ implicitLabel.actualNode ]);
-        labels.sort(node_sorter_default);
-      } else {
-        labels = explicitLabels;
-      }
-      return labels.map(function(label5) {
-        return accessible_text_default(label5, labelContext);
-      }).filter(function(text32) {
-        return text32 !== '';
-      }).join(' ');
-    }
-    function getExplicitLabels(virtualNode) {
-      if (!virtualNode.attr('id')) {
-        return [];
-      }
-      if (!virtualNode.actualNode) {
-        throw new TypeError('Cannot resolve explicit label reference for non-DOM nodes');
-      }
-      return find_elms_in_context_default({
-        elm: 'label',
-        attr: 'for',
-        value: virtualNode.attr('id'),
-        context: virtualNode.actualNode
-      });
-    }
-    var label_text_default = labelText;
-    var defaultButtonValues = {
-      submit: 'Submit',
-      image: 'Submit',
-      reset: 'Reset',
-      button: ''
-    };
-    var nativeTextMethods = {
-      valueText: function valueText(_ref40) {
-        var actualNode = _ref40.actualNode;
-        return actualNode.value || '';
-      },
-      buttonDefaultText: function buttonDefaultText(_ref41) {
-        var actualNode = _ref41.actualNode;
-        return defaultButtonValues[actualNode.type] || '';
-      },
-      tableCaptionText: descendantText.bind(null, 'caption'),
-      figureText: descendantText.bind(null, 'figcaption'),
-      svgTitleText: descendantText.bind(null, 'title'),
-      fieldsetLegendText: descendantText.bind(null, 'legend'),
-      altText: attrText.bind(null, 'alt'),
-      tableSummaryText: attrText.bind(null, 'summary'),
-      titleText: title_text_default,
-      subtreeText: subtree_text_default,
-      labelText: label_text_default,
-      singleSpace: function singleSpace() {
-        return ' ';
-      },
-      placeholderText: attrText.bind(null, 'placeholder')
-    };
-    function attrText(attr, vNode) {
-      return vNode.attr(attr) || '';
-    }
-    function descendantText(nodeName2, _ref42, context5) {
-      var actualNode = _ref42.actualNode;
-      nodeName2 = nodeName2.toLowerCase();
-      var nodeNames2 = [ nodeName2, actualNode.nodeName.toLowerCase() ].join(',');
-      var candidate = actualNode.querySelector(nodeNames2);
-      if (!candidate || candidate.nodeName.toLowerCase() !== nodeName2) {
-        return '';
-      }
-      return accessible_text_default(candidate, context5);
-    }
-    var native_text_methods_default = nativeTextMethods;
-    function nativeTextAlternative(virtualNode) {
-      var context5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var actualNode = virtualNode.actualNode;
-      if (virtualNode.props.nodeType !== 1 || [ 'presentation', 'none' ].includes(get_role_default(virtualNode))) {
-        return '';
-      }
-      var textMethods = findTextMethods(virtualNode);
-      var accName = textMethods.reduce(function(accName2, step) {
-        return accName2 || step(virtualNode, context5);
-      }, '');
-      if (context5.debug) {
-        axe.log(accName || '{empty-value}', actualNode, context5);
-      }
-      return accName;
-    }
-    function findTextMethods(virtualNode) {
-      var elmSpec = get_element_spec_default(virtualNode, {
-        noMatchAccessibleName: true
-      });
-      var methods = elmSpec.namingMethods || [];
-      return methods.map(function(methodName) {
-        return native_text_methods_default[methodName];
-      });
-    }
-    var native_text_alternative_default = nativeTextAlternative;
-    var unsupported = {
-      accessibleNameFromFieldValue: [ 'combobox', 'listbox', 'progressbar' ]
-    };
-    var unsupported_default = unsupported;
-    var nonTextInputTypes = [ 'button', 'checkbox', 'color', 'file', 'hidden', 'image', 'password', 'radio', 'reset', 'submit' ];
-    function isNativeTextbox(node) {
-      node = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      var nodeName2 = node.props.nodeName;
-      return nodeName2 === 'textarea' || nodeName2 === 'input' && !nonTextInputTypes.includes((node.attr('type') || '').toLowerCase());
-    }
-    var is_native_textbox_default = isNativeTextbox;
-    function isNativeSelect(node) {
-      node = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      var nodeName2 = node.props.nodeName;
-      return nodeName2 === 'select';
-    }
-    var is_native_select_default = isNativeSelect;
-    function isAriaTextbox(node) {
-      var role = get_explicit_role_default(node);
-      return role === 'textbox';
-    }
-    var is_aria_textbox_default = isAriaTextbox;
-    function isAriaListbox(node) {
-      var role = get_explicit_role_default(node);
-      return role === 'listbox';
-    }
-    var is_aria_listbox_default = isAriaListbox;
-    function isAriaCombobox(node) {
-      var role = get_explicit_role_default(node);
-      return role === 'combobox';
-    }
-    var is_aria_combobox_default = isAriaCombobox;
-    var rangeRoles = [ 'progressbar', 'scrollbar', 'slider', 'spinbutton' ];
-    function isAriaRange(node) {
-      var role = get_explicit_role_default(node);
-      return rangeRoles.includes(role);
-    }
-    var is_aria_range_default = isAriaRange;
-    var controlValueRoles = [ 'textbox', 'progressbar', 'scrollbar', 'slider', 'spinbutton', 'combobox', 'listbox' ];
-    var _formControlValueMethods = {
-      nativeTextboxValue: nativeTextboxValue,
-      nativeSelectValue: nativeSelectValue,
-      ariaTextboxValue: ariaTextboxValue,
-      ariaListboxValue: ariaListboxValue,
-      ariaComboboxValue: ariaComboboxValue,
-      ariaRangeValue: ariaRangeValue
-    };
-    function formControlValue(virtualNode) {
-      var context5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var actualNode = virtualNode.actualNode;
-      var unsupportedRoles = unsupported_default.accessibleNameFromFieldValue || [];
-      var role = get_role_default(virtualNode);
-      if (context5.startNode === virtualNode || !controlValueRoles.includes(role) || unsupportedRoles.includes(role)) {
-        return '';
-      }
-      var valueMethods = Object.keys(_formControlValueMethods).map(function(name) {
-        return _formControlValueMethods[name];
-      });
-      var valueString = valueMethods.reduce(function(accName, step) {
-        return accName || step(virtualNode, context5);
-      }, '');
-      if (context5.debug) {
-        log_default(valueString || '{empty-value}', actualNode, context5);
-      }
-      return valueString;
-    }
-    function nativeTextboxValue(node) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (is_native_textbox_default(vNode)) {
-        return vNode.props.value || '';
-      }
-      return '';
-    }
-    function nativeSelectValue(node) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (!is_native_select_default(vNode)) {
-        return '';
-      }
-      var options = query_selector_all_default(vNode, 'option');
-      var selectedOptions = options.filter(function(option) {
-        return option.props.selected;
-      });
-      if (!selectedOptions.length) {
-        selectedOptions.push(options[0]);
-      }
-      return selectedOptions.map(function(option) {
-        return visible_virtual_default(option);
-      }).join(' ') || '';
-    }
-    function ariaTextboxValue(node) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      var actualNode = vNode.actualNode;
-      if (!is_aria_textbox_default(vNode)) {
-        return '';
-      }
-      if (!actualNode || actualNode && !is_hidden_with_css_default(actualNode)) {
-        return visible_virtual_default(vNode, true);
-      } else {
-        return actualNode.textContent;
-      }
-    }
-    function ariaListboxValue(node, context5) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (!is_aria_listbox_default(vNode)) {
-        return '';
-      }
-      var selected = get_owned_virtual_default(vNode).filter(function(owned) {
-        return get_role_default(owned) === 'option' && owned.attr('aria-selected') === 'true';
-      });
-      if (selected.length === 0) {
-        return '';
-      }
-      return accessible_text_virtual_default(selected[0], context5);
-    }
-    function ariaComboboxValue(node, context5) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (!is_aria_combobox_default(vNode)) {
-        return '';
-      }
-      var listbox = get_owned_virtual_default(vNode).filter(function(elm) {
-        return get_role_default(elm) === 'listbox';
-      })[0];
-      return listbox ? ariaListboxValue(listbox, context5) : '';
-    }
-    function ariaRangeValue(node) {
-      var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
-      if (!is_aria_range_default(vNode) || !vNode.hasAttr('aria-valuenow')) {
-        return '';
-      }
-      var valueNow = +vNode.attr('aria-valuenow');
-      return !isNaN(valueNow) ? String(valueNow) : '0';
-    }
-    var form_control_value_default = formControlValue;
-    function getUnicodeNonBmpRegExp() {
-      return /[\u1D00-\u1D7F\u1D80-\u1DBF\u1DC0-\u1DFF\u20A0-\u20CF\u20D0-\u20FF\u2100-\u214F\u2150-\u218F\u2190-\u21FF\u2200-\u22FF\u2300-\u23FF\u2400-\u243F\u2440-\u245F\u2460-\u24FF\u2500-\u257F\u2580-\u259F\u25A0-\u25FF\u2600-\u26FF\u2700-\u27BF\uE000-\uF8FF]/g;
-    }
-    function getPunctuationRegExp() {
-      return /[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&\xa3\xa2\xa5\xa7\u20ac()*+,\-.\/:;<=>?@\[\]^_`{|}~\xb1]/g;
-    }
-    function getSupplementaryPrivateUseRegExp() {
-      return /[\uDB80-\uDBBF][\uDC00-\uDFFF]/g;
-    }
-    var emoji_regex = __toModule(require_emoji_regex());
-    function hasUnicode(str, options) {
-      var emoji = options.emoji, nonBmp = options.nonBmp, punctuations = options.punctuations;
-      if (emoji) {
-        return emoji_regex['default']().test(str);
-      }
-      if (nonBmp) {
-        return getUnicodeNonBmpRegExp().test(str) || getSupplementaryPrivateUseRegExp().test(str);
-      }
-      if (punctuations) {
-        return getPunctuationRegExp().test(str);
-      }
-      return false;
-    }
-    var has_unicode_default = hasUnicode;
-    function isIconLigature(textVNode) {
-      var differenceThreshold = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : .15;
-      var occuranceThreshold = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 3;
-      var nodeValue = textVNode.actualNode.nodeValue.trim();
-      if (!sanitize_default(nodeValue) || has_unicode_default(nodeValue, {
-        emoji: true,
-        nonBmp: true
-      })) {
-        return false;
-      }
-      if (!cache_default.get('canvasContext')) {
-        cache_default.set('canvasContext', document.createElement('canvas').getContext('2d'));
-      }
-      var canvasContext = cache_default.get('canvasContext');
-      var canvas = canvasContext.canvas;
-      if (!cache_default.get('fonts')) {
-        cache_default.set('fonts', {});
-      }
-      var fonts = cache_default.get('fonts');
-      var style = window.getComputedStyle(textVNode.parent.actualNode);
-      var fontFamily = style.getPropertyValue('font-family');
-      if (!fonts[fontFamily]) {
-        fonts[fontFamily] = {
-          occurances: 0,
-          numLigatures: 0
-        };
-      }
-      var font = fonts[fontFamily];
-      if (font.occurances >= occuranceThreshold) {
-        if (font.numLigatures / font.occurances === 1) {
-          return true;
-        } else if (font.numLigatures === 0) {
-          return false;
-        }
-      }
-      font.occurances++;
-      var fontSize = 30;
-      var fontStyle = ''.concat(fontSize, 'px ').concat(fontFamily);
-      canvasContext.font = fontStyle;
-      var firstChar = nodeValue.charAt(0);
-      var width = canvasContext.measureText(firstChar).width;
-      if (width < 30) {
-        var diff = 30 / width;
-        width *= diff;
-        fontSize *= diff;
-        fontStyle = ''.concat(fontSize, 'px ').concat(fontFamily);
-      }
-      canvas.width = width;
-      canvas.height = fontSize;
-      canvasContext.font = fontStyle;
-      canvasContext.textAlign = 'left';
-      canvasContext.textBaseline = 'top';
-      canvasContext.fillText(firstChar, 0, 0);
-      var compareData = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize).data.buffer);
-      if (!compareData.some(function(pixel) {
-        return pixel;
-      })) {
-        font.numLigatures++;
-        return true;
-      }
-      canvasContext.clearRect(0, 0, width, fontSize);
-      canvasContext.fillText(nodeValue, 0, 0);
-      var compareWith = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize).data.buffer);
-      var differences = compareData.reduce(function(diff, pixel, i) {
-        if (pixel === 0 && compareWith[i] === 0) {
-          return diff;
-        }
-        if (pixel !== 0 && compareWith[i] !== 0) {
-          return diff;
-        }
-        return ++diff;
-      }, 0);
-      var expectedWidth = nodeValue.split('').reduce(function(width2, _char3) {
-        return width2 + canvasContext.measureText(_char3).width;
-      }, 0);
-      var actualWidth = canvasContext.measureText(nodeValue).width;
-      var pixelDifference = differences / compareData.length;
-      var sizeDifference = 1 - actualWidth / expectedWidth;
-      if (pixelDifference >= differenceThreshold && sizeDifference >= differenceThreshold) {
-        font.numLigatures++;
-        return true;
-      }
-      return false;
-    }
-    var is_icon_ligature_default = isIconLigature;
-    function accessibleTextVirtual(virtualNode) {
-      var context5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var actualNode = virtualNode.actualNode;
-      context5 = prepareContext(virtualNode, context5);
-      if (shouldIgnoreHidden(virtualNode, context5)) {
-        return '';
-      }
-      if (shouldIgnoreIconLigature(virtualNode, context5)) {
-        return '';
-      }
-      var computationSteps = [ arialabelledby_text_default, arialabel_text_default, native_text_alternative_default, form_control_value_default, subtree_text_default, textNodeValue, title_text_default ];
-      var accName = computationSteps.reduce(function(accName2, step) {
-        if (context5.startNode === virtualNode) {
-          accName2 = sanitize_default(accName2);
-        }
-        if (accName2 !== '') {
-          return accName2;
-        }
-        return step(virtualNode, context5);
-      }, '');
-      if (context5.debug) {
-        axe.log(accName || '{empty-value}', actualNode, context5);
-      }
-      return accName;
-    }
-    function textNodeValue(virtualNode) {
-      if (virtualNode.props.nodeType !== 3) {
-        return '';
-      }
-      return virtualNode.props.nodeValue;
-    }
-    function shouldIgnoreHidden(_ref43, context5) {
-      var actualNode = _ref43.actualNode;
-      if (!actualNode) {
-        return false;
-      }
-      if (actualNode.nodeType !== 1 || context5.includeHidden) {
-        return false;
-      }
-      return !is_visible_default(actualNode, true);
-    }
-    function shouldIgnoreIconLigature(virtualNode, context5) {
-      var ignoreIconLigature = context5.ignoreIconLigature, pixelThreshold = context5.pixelThreshold, occuranceThreshold = context5.occuranceThreshold;
-      if (virtualNode.props.nodeType !== 3 || !ignoreIconLigature) {
-        return false;
-      }
-      return is_icon_ligature_default(virtualNode, pixelThreshold, occuranceThreshold);
-    }
-    function prepareContext(virtualNode, context5) {
-      var actualNode = virtualNode.actualNode;
-      if (!context5.startNode) {
-        context5 = _extends({
-          startNode: virtualNode
-        }, context5);
-      }
-      if (!actualNode) {
-        return context5;
-      }
-      if (actualNode.nodeType === 1 && context5.inLabelledByContext && context5.includeHidden === void 0) {
-        context5 = _extends({
-          includeHidden: !is_visible_default(actualNode, true)
-        }, context5);
-      }
-      return context5;
-    }
-    accessibleTextVirtual.alreadyProcessed = function alreadyProcessed(virtualnode, context5) {
-      context5.processed = context5.processed || [];
-      if (context5.processed.includes(virtualnode)) {
-        return true;
-      }
-      context5.processed.push(virtualnode);
-      return false;
-    };
-    var accessible_text_virtual_default = accessibleTextVirtual;
-    function accessibleText(element, context5) {
-      var virtualNode = get_node_from_tree_default(element);
-      return accessible_text_virtual_default(virtualNode, context5);
-    }
-    var accessible_text_default = accessibleText;
-    function arialabelledbyText(vNode) {
-      var context5 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      if (!(vNode instanceof abstract_virtual_node_default)) {
-        if (vNode.nodeType !== 1) {
-          return '';
-        }
-        vNode = get_node_from_tree_default(vNode);
-      }
-      if (vNode.props.nodeType !== 1 || context5.inLabelledByContext || context5.inControlContext || !vNode.attr('aria-labelledby')) {
-        return '';
-      }
-      var refs = idrefs_default(vNode, 'aria-labelledby').filter(function(elm) {
-        return elm;
-      });
-      return refs.reduce(function(accessibleName, elm) {
-        var accessibleNameAdd = accessible_text_default(elm, _extends({
-          inLabelledByContext: true,
-          startNode: context5.startNode || vNode
-        }, context5));
-        if (!accessibleName) {
-          return accessibleNameAdd;
-        } else {
-          return ''.concat(accessibleName, ' ').concat(accessibleNameAdd);
-        }
-      }, '');
-    }
-    var arialabelledby_text_default = arialabelledbyText;
-    var text_exports = {};
-    __export(text_exports, {
-      accessibleText: function accessibleText() {
-        return accessible_text_default;
-      },
-      accessibleTextVirtual: function accessibleTextVirtual() {
-        return accessible_text_virtual_default;
-      },
-      autocomplete: function autocomplete() {
-        return _autocomplete;
-      },
-      formControlValue: function formControlValue() {
-        return form_control_value_default;
-      },
-      formControlValueMethods: function formControlValueMethods() {
-        return _formControlValueMethods;
-      },
-      hasUnicode: function hasUnicode() {
-        return has_unicode_default;
-      },
-      isHumanInterpretable: function isHumanInterpretable() {
-        return is_human_interpretable_default;
-      },
-      isIconLigature: function isIconLigature() {
-        return is_icon_ligature_default;
-      },
-      isValidAutocomplete: function isValidAutocomplete() {
-        return is_valid_autocomplete_default;
-      },
-      label: function label() {
-        return label_default;
-      },
-      labelText: function labelText() {
-        return label_text_default;
-      },
-      labelVirtual: function labelVirtual() {
-        return label_virtual_default2;
-      },
-      nativeElementType: function nativeElementType() {
-        return native_element_type_default;
-      },
-      nativeTextAlternative: function nativeTextAlternative() {
-        return native_text_alternative_default;
-      },
-      nativeTextMethods: function nativeTextMethods() {
-        return native_text_methods_default;
-      },
-      removeUnicode: function removeUnicode() {
-        return remove_unicode_default;
-      },
-      sanitize: function sanitize() {
-        return sanitize_default;
-      },
-      subtreeText: function subtreeText() {
-        return subtree_text_default;
-      },
-      titleText: function titleText() {
-        return title_text_default;
-      },
-      unsupported: function unsupported() {
-        return unsupported_default;
-      },
-      visible: function visible() {
-        return visible_default;
-      },
-      visibleTextNodes: function visibleTextNodes() {
-        return visible_text_nodes_default;
-      },
-      visibleVirtual: function visibleVirtual() {
-        return visible_virtual_default;
-      }
-    });
-    var emoji_regex2 = __toModule(require_emoji_regex());
-    function removeUnicode(str, options) {
-      var emoji = options.emoji, nonBmp = options.nonBmp, punctuations = options.punctuations;
-      if (emoji) {
-        str = str.replace(emoji_regex2['default'](), '');
-      }
-      if (nonBmp) {
-        str = str.replace(getUnicodeNonBmpRegExp(), '');
-        str = str.replace(getSupplementaryPrivateUseRegExp(), '');
-      }
-      if (punctuations) {
-        str = str.replace(getPunctuationRegExp(), '');
-      }
-      return str;
-    }
-    var remove_unicode_default = removeUnicode;
-    function isHumanInterpretable(str) {
-      if (!str.length) {
-        return 0;
-      }
-      var alphaNumericIconMap = [ 'x', 'i' ];
-      if (alphaNumericIconMap.includes(str)) {
-        return 0;
-      }
-      var noUnicodeStr = remove_unicode_default(str, {
-        emoji: true,
-        nonBmp: true,
-        punctuations: true
-      });
-      if (!sanitize_default(noUnicodeStr)) {
-        return 0;
-      }
-      return 1;
-    }
-    var is_human_interpretable_default = isHumanInterpretable;
-    var _autocomplete = {
-      stateTerms: [ 'on', 'off' ],
-      standaloneTerms: [ 'name', 'honorific-prefix', 'given-name', 'additional-name', 'family-name', 'honorific-suffix', 'nickname', 'username', 'new-password', 'current-password', 'organization-title', 'organization', 'street-address', 'address-line1', 'address-line2', 'address-line3', 'address-level4', 'address-level3', 'address-level2', 'address-level1', 'country', 'country-name', 'postal-code', 'cc-name', 'cc-given-name', 'cc-additional-name', 'cc-family-name', 'cc-number', 'cc-exp', 'cc-exp-month', 'cc-exp-year', 'cc-csc', 'cc-type', 'transaction-currency', 'transaction-amount', 'language', 'bday', 'bday-day', 'bday-month', 'bday-year', 'sex', 'url', 'photo', 'one-time-code' ],
-      qualifiers: [ 'home', 'work', 'mobile', 'fax', 'pager' ],
-      qualifiedTerms: [ 'tel', 'tel-country-code', 'tel-national', 'tel-area-code', 'tel-local', 'tel-local-prefix', 'tel-local-suffix', 'tel-extension', 'email', 'impp' ],
-      locations: [ 'billing', 'shipping' ]
-    };
-    function isValidAutocomplete(autocompleteValue) {
-      var _ref44 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref44$looseTyped = _ref44.looseTyped, looseTyped = _ref44$looseTyped === void 0 ? false : _ref44$looseTyped, _ref44$stateTerms = _ref44.stateTerms, stateTerms = _ref44$stateTerms === void 0 ? [] : _ref44$stateTerms, _ref44$locations = _ref44.locations, locations = _ref44$locations === void 0 ? [] : _ref44$locations, _ref44$qualifiers = _ref44.qualifiers, qualifiers = _ref44$qualifiers === void 0 ? [] : _ref44$qualifiers, _ref44$standaloneTerm = _ref44.standaloneTerms, standaloneTerms = _ref44$standaloneTerm === void 0 ? [] : _ref44$standaloneTerm, _ref44$qualifiedTerms = _ref44.qualifiedTerms, qualifiedTerms = _ref44$qualifiedTerms === void 0 ? [] : _ref44$qualifiedTerms;
-      autocompleteValue = autocompleteValue.toLowerCase().trim();
-      stateTerms = stateTerms.concat(_autocomplete.stateTerms);
-      if (stateTerms.includes(autocompleteValue) || autocompleteValue === '') {
-        return true;
-      }
-      qualifiers = qualifiers.concat(_autocomplete.qualifiers);
-      locations = locations.concat(_autocomplete.locations);
-      standaloneTerms = standaloneTerms.concat(_autocomplete.standaloneTerms);
-      qualifiedTerms = qualifiedTerms.concat(_autocomplete.qualifiedTerms);
-      var autocompleteTerms = autocompleteValue.split(/\s+/g);
-      if (!looseTyped) {
-        if (autocompleteTerms[0].length > 8 && autocompleteTerms[0].substr(0, 8) === 'section-') {
-          autocompleteTerms.shift();
-        }
-        if (locations.includes(autocompleteTerms[0])) {
-          autocompleteTerms.shift();
-        }
-        if (qualifiers.includes(autocompleteTerms[0])) {
-          autocompleteTerms.shift();
-          standaloneTerms = [];
-        }
-        if (autocompleteTerms.length !== 1) {
-          return false;
-        }
-      }
-      var purposeTerm = autocompleteTerms[autocompleteTerms.length - 1];
-      return standaloneTerms.includes(purposeTerm) || qualifiedTerms.includes(purposeTerm);
-    }
-    var is_valid_autocomplete_default = isValidAutocomplete;
-    function visible(element, screenReader, noRecursing) {
-      element = get_node_from_tree_default(element);
-      return visible_virtual_default(element, screenReader, noRecursing);
-    }
-    var visible_default = visible;
-    function labelVirtual2(virtualNode) {
-      var ref, candidate, doc;
-      candidate = label_virtual_default(virtualNode);
-      if (candidate) {
-        return candidate;
-      }
-      if (virtualNode.attr('id')) {
-        if (!virtualNode.actualNode) {
-          throw new TypeError('Cannot resolve explicit label reference for non-DOM nodes');
-        }
-        var id = escape_selector_default(virtualNode.attr('id'));
-        doc = get_root_node_default2(virtualNode.actualNode);
-        ref = doc.querySelector('label[for="' + id + '"]');
-        candidate = ref && visible_default(ref, true);
-        if (candidate) {
-          return candidate;
-        }
-      }
-      ref = closest_default(virtualNode, 'label');
-      candidate = ref && visible_virtual_default(ref, true);
-      if (candidate) {
-        return candidate;
-      }
-      return null;
-    }
-    var label_virtual_default2 = labelVirtual2;
-    function label(node) {
-      node = get_node_from_tree_default(node);
-      return label_virtual_default2(node);
-    }
-    var label_default = label;
-    var nativeElementType = [ {
-      matches: [ {
-        nodeName: 'textarea'
-      }, {
-        nodeName: 'input',
-        properties: {
-          type: [ 'text', 'password', 'search', 'tel', 'email', 'url' ]
-        }
-      } ],
-      namingMethods: 'labelText'
-    }, {
-      matches: {
-        nodeName: 'input',
-        properties: {
-          type: [ 'button', 'submit', 'reset' ]
-        }
-      },
-      namingMethods: [ 'valueText', 'titleText', 'buttonDefaultText' ]
-    }, {
-      matches: {
-        nodeName: 'input',
-        properties: {
-          type: 'image'
-        }
-      },
-      namingMethods: [ 'altText', 'valueText', 'labelText', 'titleText', 'buttonDefaultText' ]
-    }, {
-      matches: 'button',
-      namingMethods: 'subtreeText'
-    }, {
-      matches: 'fieldset',
-      namingMethods: 'fieldsetLegendText'
-    }, {
-      matches: 'OUTPUT',
-      namingMethods: 'subtreeText'
-    }, {
-      matches: [ {
-        nodeName: 'select'
-      }, {
-        nodeName: 'input',
-        properties: {
-          type: /^(?!text|password|search|tel|email|url|button|submit|reset)/
-        }
-      } ],
-      namingMethods: 'labelText'
-    }, {
-      matches: 'summary',
-      namingMethods: 'subtreeText'
-    }, {
-      matches: 'figure',
-      namingMethods: [ 'figureText', 'titleText' ]
-    }, {
-      matches: 'img',
-      namingMethods: 'altText'
-    }, {
-      matches: 'table',
-      namingMethods: [ 'tableCaptionText', 'tableSummaryText' ]
-    }, {
-      matches: [ 'hr', 'br' ],
-      namingMethods: [ 'titleText', 'singleSpace' ]
-    } ];
-    var native_element_type_default = nativeElementType;
-    function visibleTextNodes(vNode) {
-      var parentVisible = is_visible_default(vNode.actualNode);
-      var nodes = [];
-      vNode.children.forEach(function(child) {
-        if (child.actualNode.nodeType === 3) {
-          if (parentVisible) {
-            nodes.push(child);
-          }
-        } else {
-          nodes = nodes.concat(visibleTextNodes(child));
-        }
-      });
-      return nodes;
-    }
-    var visible_text_nodes_default = visibleTextNodes;
     var idRefsRegex = /^idrefs?$/;
     function cacheIdRefs(node, idRefs, refAttrs) {
       if (node.hasAttribute) {
@@ -19849,8 +21013,8 @@ module.exports = {
           idRefs[id] = idRefs[id] || [];
           idRefs[id].push(node);
         }
-        for (var _i13 = 0; _i13 < refAttrs.length; ++_i13) {
-          var attr = refAttrs[_i13];
+        for (var _i18 = 0; _i18 < refAttrs.length; ++_i18) {
+          var attr = refAttrs[_i18];
           var attrValue = sanitize_default(node.getAttribute(attr) || '');
           if (!attrValue) {
             continue;
@@ -19862,9 +21026,9 @@ module.exports = {
           }
         }
       }
-      for (var _i14 = 0; _i14 < node.childNodes.length; _i14++) {
-        if (node.childNodes[_i14].nodeType === 1) {
-          cacheIdRefs(node.childNodes[_i14], idRefs, refAttrs);
+      for (var _i19 = 0; _i19 < node.childNodes.length; _i19++) {
+        if (node.childNodes[_i19].nodeType === 1) {
+          cacheIdRefs(node.childNodes[_i19], idRefs, refAttrs);
         }
       }
     }
@@ -19872,11 +21036,9 @@ module.exports = {
       node = node.actualNode || node;
       var root = get_root_node_default2(node);
       root = root.documentElement || root;
-      var idRefsByRoot = cache_default.get('idRefsByRoot');
-      if (!idRefsByRoot) {
-        idRefsByRoot = new WeakMap();
-        cache_default.set('idRefsByRoot', idRefsByRoot);
-      }
+      var idRefsByRoot = cache_default.get('idRefsByRoot', function() {
+        return new WeakMap();
+      });
       var idRefs = idRefsByRoot.get(root);
       if (!idRefs) {
         idRefs = {};
@@ -19890,14 +21052,6 @@ module.exports = {
       return idRefs[node.id] || [];
     }
     var get_accessible_refs_default = getAccessibleRefs;
-    function getRoleType(role) {
-      var roleDef = standards_default.ariaRoles[role];
-      if (!roleDef) {
-        return null;
-      }
-      return roleDef.type;
-    }
-    var get_role_type_default = getRoleType;
     function isAriaRoleAllowedOnElement(node, role) {
       var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
       var implicitRole3 = implicit_role_default(vNode);
@@ -19963,14 +21117,11 @@ module.exports = {
     }
     var get_roles_by_type_default = getRolesByType;
     function getAriaRolesSupportingNameFromContent() {
-      if (cache_default.get('ariaRolesNameFromContent')) {
-        return cache_default.get('ariaRolesNameFromContent');
-      }
-      var contentRoles = Object.keys(standards_default.ariaRoles).filter(function(roleName) {
-        return standards_default.ariaRoles[roleName].nameFromContent;
+      return cache_default.get('ariaRolesNameFromContent', function() {
+        return Object.keys(standards_default.ariaRoles).filter(function(roleName) {
+          return standards_default.ariaRoles[roleName].nameFromContent;
+        });
       });
-      cache_default.set('ariaRolesNameFromContent', contentRoles);
-      return contentRoles;
     }
     var get_aria_roles_supporting_name_from_content_default = getAriaRolesSupportingNameFromContent;
     function getRolesWithNameFromContents() {
@@ -21724,8 +22875,8 @@ module.exports = {
       nodeName: [ 'abbr', 'address', 'canvas', 'div', 'p', 'pre', 'blockquote', 'ins', 'del', 'output', 'span', 'table', 'tbody', 'thead', 'tfoot', 'td', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'br', 'wbr', 'th', 'tr' ]
     } ];
     lookupTable.evaluateRoleForElement = {
-      A: function A(_ref45) {
-        var node = _ref45.node, out = _ref45.out;
+      A: function A(_ref62) {
+        var node = _ref62.node, out = _ref62.out;
         if (node.namespaceURI === 'http://www.w3.org/2000/svg') {
           return true;
         }
@@ -21734,19 +22885,19 @@ module.exports = {
         }
         return true;
       },
-      AREA: function AREA(_ref46) {
-        var node = _ref46.node;
+      AREA: function AREA(_ref63) {
+        var node = _ref63.node;
         return !node.href;
       },
-      BUTTON: function BUTTON(_ref47) {
-        var node = _ref47.node, role = _ref47.role, out = _ref47.out;
+      BUTTON: function BUTTON(_ref64) {
+        var node = _ref64.node, role = _ref64.role, out = _ref64.out;
         if (node.getAttribute('type') === 'menu') {
           return role === 'menuitem';
         }
         return out;
       },
-      IMG: function IMG(_ref48) {
-        var node = _ref48.node, role = _ref48.role, out = _ref48.out;
+      IMG: function IMG(_ref65) {
+        var node = _ref65.node, role = _ref65.role, out = _ref65.out;
         switch (node.alt) {
          case null:
           return out;
@@ -21758,8 +22909,8 @@ module.exports = {
           return role !== 'presentation' && role !== 'none';
         }
       },
-      INPUT: function INPUT(_ref49) {
-        var node = _ref49.node, role = _ref49.role, out = _ref49.out;
+      INPUT: function INPUT(_ref66) {
+        var node = _ref66.node, role = _ref66.role, out = _ref66.out;
         switch (node.type) {
          case 'button':
          case 'image':
@@ -21789,32 +22940,32 @@ module.exports = {
           return false;
         }
       },
-      LI: function LI(_ref50) {
-        var node = _ref50.node, out = _ref50.out;
+      LI: function LI(_ref67) {
+        var node = _ref67.node, out = _ref67.out;
         var hasImplicitListitemRole = axe.utils.matchesSelector(node, 'ol li, ul li');
         if (hasImplicitListitemRole) {
           return out;
         }
         return true;
       },
-      MENU: function MENU(_ref51) {
-        var node = _ref51.node;
+      MENU: function MENU(_ref68) {
+        var node = _ref68.node;
         if (node.getAttribute('type') === 'context') {
           return false;
         }
         return true;
       },
-      OPTION: function OPTION(_ref52) {
-        var node = _ref52.node;
+      OPTION: function OPTION(_ref69) {
+        var node = _ref69.node;
         var withinOptionList = axe.utils.matchesSelector(node, 'select > option, datalist > option, optgroup > option');
         return !withinOptionList;
       },
-      SELECT: function SELECT(_ref53) {
-        var node = _ref53.node, role = _ref53.role;
+      SELECT: function SELECT(_ref70) {
+        var node = _ref70.node, role = _ref70.role;
         return !node.multiple && node.size <= 1 && role === 'menu';
       },
-      SVG: function SVG(_ref54) {
-        var node = _ref54.node, out = _ref54.out;
+      SVG: function SVG(_ref71) {
+        var node = _ref71.node, out = _ref71.out;
         if (node.parentNode && node.parentNode.namespaceURI === 'http://www.w3.org/2000/svg') {
           return true;
         }
@@ -21838,11 +22989,11 @@ module.exports = {
       return !!get_accessible_refs_default(node).length;
     }
     var is_accessible_ref_default = isAccessibleRef;
-    function label3(node) {
+    function label2(node) {
       node = get_node_from_tree_default(node);
       return label_virtual_default(node);
     }
-    var label_default2 = label3;
+    var label_default2 = label2;
     function requiredAttr(role) {
       var roleDef = standards_default.ariaRoles[role];
       if (!roleDef || !Array.isArray(roleDef.requiredAttrs)) {
@@ -21869,7 +23020,7 @@ module.exports = {
     var required_owned_default = requiredOwned;
     function validateAttrValue(vNode, attr) {
       vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
-      var matches14;
+      var matches4;
       var list;
       var value = vNode.attr(attr);
       var attrInfo = standards_default.ariaAttrs[attr];
@@ -21909,8 +23060,8 @@ module.exports = {
         return value.trim() !== '';
 
        case 'decimal':
-        matches14 = value.match(/^[-+]?([0-9]*)\.?([0-9]*)$/);
-        return !!(matches14 && (matches14[1] || matches14[2]));
+        matches4 = value.match(/^[-+]?([0-9]*)\.?([0-9]*)$/);
+        return !!(matches4 && (matches4[1] || matches4[2]));
 
        case 'int':
         var minValue = typeof attrInfo.minValue !== 'undefined' ? attrInfo.minValue : -Infinity;
@@ -21942,18 +23093,16 @@ module.exports = {
       if (Array.isArray(options[role])) {
         allowed = unique_array_default(options[role].concat(allowed));
       }
-      var tableMap = cache_default.get('aria-allowed-attr-table');
-      if (!tableMap) {
-        tableMap = new WeakMap();
-        cache_default.set('aria-allowed-attr-table', tableMap);
-      }
+      var tableMap = cache_default.get('aria-allowed-attr-table', function() {
+        return new WeakMap();
+      });
       function validateRowAttrs() {
         if (virtualNode.parent && role === 'row') {
-          var table5 = closest_default(virtualNode, 'table, [role="treegrid"], [role="table"], [role="grid"]');
-          var tableRole = tableMap.get(table5);
-          if (table5 && !tableRole) {
-            tableRole = get_role_default(table5);
-            tableMap.set(table5, tableRole);
+          var table = closest_default(virtualNode, 'table, [role="treegrid"], [role="table"], [role="grid"]');
+          var tableRole = tableMap.get(table);
+          if (table && !tableRole) {
+            tableRole = get_role_default(table);
+            tableMap.set(table, tableRole);
           }
           if ([ 'table', 'grid' ].includes(tableRole) && role === 'row') {
             return true;
@@ -21966,9 +23115,9 @@ module.exports = {
         preChecks[attr] = validateRowAttrs;
       });
       if (allowed) {
-        for (var _i15 = 0; _i15 < attrs.length; _i15++) {
+        for (var _i20 = 0; _i20 < attrs.length; _i20++) {
           var _preChecks$attrName;
-          var attrName = attrs[_i15];
+          var attrName = attrs[_i20];
           if (validate_attr_default(attrName) && (_preChecks$attrName = preChecks[attrName]) !== null && _preChecks$attrName !== void 0 && _preChecks$attrName.call(preChecks)) {
             invalid.push(attrName + '="' + virtualNode.attr(attrName) + '"');
           } else if (validate_attr_default(attrName) && !allowed.includes(attrName)) {
@@ -21978,14 +23127,13 @@ module.exports = {
       }
       if (invalid.length) {
         this.data(invalid);
-        if (!is_html_element_default(virtualNode) && !role && !is_focusable_default(virtualNode)) {
+        if (!is_html_element_default(virtualNode) && !role && !_isFocusable(virtualNode)) {
           return void 0;
         }
         return false;
       }
       return true;
     }
-    var aria_allowed_attr_evaluate_default = ariaAllowedAttrEvaluate;
     function ariaAllowedRoleEvaluate(node) {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       var virtualNode = arguments.length > 2 ? arguments[2] : undefined;
@@ -21999,7 +23147,7 @@ module.exports = {
       var unallowedRoles = get_element_unallowed_roles_default(virtualNode, allowImplicit);
       if (unallowedRoles.length) {
         this.data(unallowedRoles);
-        if (!is_visible_default(virtualNode, true)) {
+        if (!_isVisibleToScreenReaders(virtualNode)) {
           return void 0;
         }
         return false;
@@ -22007,6 +23155,9 @@ module.exports = {
       return true;
     }
     var aria_allowed_role_evaluate_default = ariaAllowedRoleEvaluate;
+    function ariaBusyEvaluate(node, options, virtualNode) {
+      return virtualNode.attr('aria-busy') === 'true';
+    }
     function ariaErrormessageEvaluate(node, options, virtualNode) {
       options = Array.isArray(options) ? options : [];
       var attr = virtualNode.attr('aria-errormessage');
@@ -22031,7 +23182,7 @@ module.exports = {
           return void 0;
         }
         if (idref) {
-          if (!is_visible_default(idref, true)) {
+          if (!_isVisibleToScreenReaders(idref)) {
             this.data({
               messageKey: 'hidden',
               values: token_list_default(attr2)
@@ -22130,64 +23281,82 @@ module.exports = {
     function ariaRequiredAttrEvaluate(node) {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       var virtualNode = arguments.length > 2 ? arguments[2] : undefined;
-      var missing = [];
-      var attrs = virtualNode.attrNames;
       var role = get_explicit_role_default(virtualNode);
-      if (attrs.length) {
-        var required = required_attr_default(role);
-        var elmSpec = get_element_spec_default(virtualNode);
-        if (Array.isArray(options[role])) {
-          required = unique_array_default(options[role], required);
-        }
-        if (role && required) {
-          for (var _i16 = 0, l = required.length; _i16 < l; _i16++) {
-            var attr = required[_i16];
-            if (!virtualNode.attr(attr) && !(elmSpec.implicitAttrs && typeof elmSpec.implicitAttrs[attr] !== 'undefined')) {
-              missing.push(attr);
-            }
-          }
-        }
+      var attrs = virtualNode.attrNames;
+      var requiredAttrs = required_attr_default(role);
+      if (Array.isArray(options[role])) {
+        requiredAttrs = unique_array_default(options[role], requiredAttrs);
       }
-      var comboboxMissingControls = role === 'combobox' && missing.includes('aria-controls');
-      if (comboboxMissingControls && (virtualNode.hasAttr('aria-owns') || virtualNode.attr('aria-expanded') !== 'true')) {
-        missing.splice(missing.indexOf('aria-controls', 1));
+      if (!role || !attrs.length || !requiredAttrs.length) {
+        return true;
       }
-      if (missing.length) {
-        this.data(missing);
+      if (isStaticSeparator(virtualNode, role) || isClosedCombobox(virtualNode, role)) {
+        return true;
+      }
+      var elmSpec = get_element_spec_default(virtualNode);
+      var missingAttrs = requiredAttrs.filter(function(requiredAttr2) {
+        return !virtualNode.attr(requiredAttr2) && !hasImplicitAttr(elmSpec, requiredAttr2);
+      });
+      if (missingAttrs.length) {
+        this.data(missingAttrs);
         return false;
       }
       return true;
     }
-    var aria_required_attr_evaluate_default = ariaRequiredAttrEvaluate;
+    function isStaticSeparator(vNode, role) {
+      return role === 'separator' && !_isFocusable(vNode);
+    }
+    function hasImplicitAttr(elmSpec, attr) {
+      var _elmSpec$implicitAttr;
+      return ((_elmSpec$implicitAttr = elmSpec.implicitAttrs) === null || _elmSpec$implicitAttr === void 0 ? void 0 : _elmSpec$implicitAttr[attr]) !== void 0;
+    }
+    function isClosedCombobox(vNode, role) {
+      return role === 'combobox' && vNode.attr('aria-expanded') === 'false';
+    }
     function getOwnedRoles(virtualNode, required) {
       var ownedRoles = [];
       var ownedElements = get_owned_virtual_default(virtualNode);
-      var _loop4 = function _loop4(_i17) {
-        var ownedElement = ownedElements[_i17];
+      var _loop5 = function _loop5(_i21) {
+        var ownedElement = ownedElements[_i21];
         var role = get_role_default(ownedElement, {
           noPresentational: true
         });
-        if (!role || [ 'group', 'rowgroup' ].includes(role) && required.some(function(requiredRole) {
+        var hasGlobalAria = get_global_aria_attrs_default().some(function(attr) {
+          return ownedElement.hasAttr(attr);
+        });
+        var hasGlobalAriaOrFocusable = hasGlobalAria || _isFocusable(ownedElement);
+        if (!role && !hasGlobalAriaOrFocusable || [ 'group', 'rowgroup' ].includes(role) && required.some(function(requiredRole) {
           return requiredRole === role;
         })) {
           ownedElements.push.apply(ownedElements, _toConsumableArray(ownedElement.children));
-        } else if (role) {
-          ownedRoles.push(role);
+        } else if (role || hasGlobalAriaOrFocusable) {
+          ownedRoles.push({
+            role: role,
+            ownedElement: ownedElement
+          });
         }
       };
-      for (var _i17 = 0; _i17 < ownedElements.length; _i17++) {
-        _loop4(_i17);
+      for (var _i21 = 0; _i21 < ownedElements.length; _i21++) {
+        _loop5(_i21);
       }
       return ownedRoles;
     }
     function missingRequiredChildren(virtualNode, role, required, ownedRoles) {
-      for (var _i18 = 0; _i18 < ownedRoles.length; _i18++) {
-        var ownedRole = ownedRoles[_i18];
-        if (required.includes(ownedRole)) {
+      var _loop6 = function _loop6(_i22) {
+        var role2 = ownedRoles[_i22].role;
+        if (required.includes(role2)) {
           required = required.filter(function(requiredRole) {
-            return requiredRole !== ownedRole;
+            return requiredRole !== role2;
           });
-          return null;
+          return {
+            v: null
+          };
+        }
+      };
+      for (var _i22 = 0; _i22 < ownedRoles.length; _i22++) {
+        var _ret2 = _loop6(_i22);
+        if (_typeof(_ret2) === 'object') {
+          return _ret2.v;
         }
       }
       if (required.length) {
@@ -22205,6 +23374,20 @@ module.exports = {
         return true;
       }
       var ownedRoles = getOwnedRoles(virtualNode, required);
+      var unallowed = ownedRoles.filter(function(_ref72) {
+        var role2 = _ref72.role;
+        return !required.includes(role2);
+      });
+      if (unallowed.length) {
+        this.relatedNodes(unallowed.map(function(_ref73) {
+          var ownedElement = _ref73.ownedElement;
+          return ownedElement;
+        }));
+        this.data({
+          messageKey: 'unallowed'
+        });
+        return false;
+      }
       var missing = missingRequiredChildren(virtualNode, role, required, ownedRoles);
       if (!missing) {
         return true;
@@ -22224,10 +23407,15 @@ module.exports = {
       if (!reqContext) {
         return null;
       }
+      var allowsGroup = reqContext.includes('group');
       var vNode = includeElement ? virtualNode : virtualNode.parent;
       while (vNode) {
-        var parentRole = get_role_default(vNode);
-        if (reqContext.includes('group') && parentRole === 'group') {
+        var role = get_role_default(vNode, {
+          noPresentational: true
+        });
+        if (!role) {
+          vNode = vNode.parent;
+        } else if (role === 'group' && allowsGroup) {
           if (ownGroupRoles.includes(explicitRole2)) {
             reqContext.push(explicitRole2);
           }
@@ -22235,14 +23423,11 @@ module.exports = {
             return r !== 'group';
           });
           vNode = vNode.parent;
-          continue;
-        }
-        if (reqContext.includes(parentRole)) {
+        } else if (reqContext.includes(role)) {
           return null;
-        } else if (parentRole && ![ 'presentation', 'none' ].includes(parentRole)) {
+        } else {
           return reqContext;
         }
-        vNode = vNode.parent;
       }
       return reqContext;
     }
@@ -22269,8 +23454,8 @@ module.exports = {
       }
       var owners = getAriaOwners(node);
       if (owners) {
-        for (var _i19 = 0, l = owners.length; _i19 < l; _i19++) {
-          missingParents = getMissingContext(get_node_from_tree_default(owners[_i19]), ownGroupRoles, missingParents, true);
+        for (var _i23 = 0, l = owners.length; _i23 < l; _i23++) {
+          missingParents = getMissingContext(get_node_from_tree_default(owners[_i23]), ownGroupRoles, missingParents, true);
           if (!missingParents) {
             return true;
           }
@@ -22282,7 +23467,8 @@ module.exports = {
     var aria_required_parent_evaluate_default = ariaRequiredParentEvaluate;
     function ariaRoledescriptionEvaluate(node) {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var role = get_role_default(node);
+      var virtualNode = arguments.length > 2 ? arguments[2] : undefined;
+      var role = get_role_default(virtualNode);
       var supportedRoles = options.supportedRoles || [];
       if (supportedRoles.includes(role)) {
         return true;
@@ -22299,11 +23485,11 @@ module.exports = {
         if (!validate_attr_default(name)) {
           return false;
         }
-        var unsupported4 = attribute.unsupported;
-        if (_typeof(unsupported4) !== 'object') {
-          return !!unsupported4;
+        var unsupported2 = attribute.unsupported;
+        if (_typeof(unsupported2) !== 'object') {
+          return !!unsupported2;
         }
-        return !matches_default3(node, unsupported4.exceptions);
+        return !matches_default3(node, unsupported2.exceptions);
       });
       if (unsupportedAttrs.length) {
         this.data(unsupportedAttrs);
@@ -22315,9 +23501,9 @@ module.exports = {
     function ariaValidAttrEvaluate(node, options, virtualNode) {
       options = Array.isArray(options.value) ? options.value : [];
       var invalid = [];
-      var aria49 = /^aria-/;
+      var aria = /^aria-/;
       virtualNode.attrNames.forEach(function(attr) {
-        if (options.indexOf(attr) === -1 && aria49.test(attr) && !validate_attr_default(attr)) {
+        if (options.indexOf(attr) === -1 && aria.test(attr) && !validate_attr_default(attr)) {
           invalid.push(attr);
         }
       });
@@ -22333,7 +23519,7 @@ module.exports = {
       var needsReview = '';
       var messageKey = '';
       var invalid = [];
-      var aria49 = /^aria-/;
+      var aria = /^aria-/;
       var skipAttrs = [ 'aria-errormessage' ];
       var preChecks = {
         'aria-controls': function ariaControls() {
@@ -22364,7 +23550,7 @@ module.exports = {
         }
       };
       virtualNode.attrNames.forEach(function(attrName) {
-        if (skipAttrs.includes(attrName) || options.includes(attrName) || !aria49.test(attrName)) {
+        if (skipAttrs.includes(attrName) || options.includes(attrName) || !aria.test(attrName)) {
           return;
         }
         var validValue;
@@ -22374,11 +23560,21 @@ module.exports = {
         } catch (e) {
           needsReview = ''.concat(attrName, '="').concat(attrValue, '"');
           messageKey = 'idrefs';
+          return;
         }
         if ((preChecks[attrName] ? preChecks[attrName](validValue) : true) && !validValue) {
-          invalid.push(''.concat(attrName, '="').concat(attrValue, '"'));
+          if (attrValue === '' && !isStringType(attrName)) {
+            needsReview = attrName;
+            messageKey = 'empty';
+          } else {
+            invalid.push(''.concat(attrName, '="').concat(attrValue, '"'));
+          }
         }
       });
+      if (invalid.length) {
+        this.data(invalid);
+        return false;
+      }
       if (needsReview) {
         this.data({
           messageKey: messageKey,
@@ -22386,13 +23582,12 @@ module.exports = {
         });
         return void 0;
       }
-      if (invalid.length) {
-        this.data(invalid);
-        return false;
-      }
       return true;
     }
-    var aria_valid_attr_value_evaluate_default = ariaValidAttrValueEvaluate;
+    function isStringType(attrName) {
+      var _standards_default$ar;
+      return ((_standards_default$ar = standards_default.ariaAttrs[attrName]) === null || _standards_default$ar === void 0 ? void 0 : _standards_default$ar.type) === 'string';
+    }
     function deprecatedroleEvaluate(node, options, virtualNode) {
       var role = get_role_default(virtualNode, {
         dpub: true,
@@ -22449,7 +23644,7 @@ module.exports = {
     }
     var invalidrole_evaluate_default = invalidroleEvaluate;
     function isElementFocusableEvaluate(node, options, virtualNode) {
-      return is_focusable_default(virtualNode);
+      return _isFocusable(virtualNode);
     }
     var is_element_focusable_evaluate_default = isElementFocusableEvaluate;
     function noImplicitExplicitLabelEvaluate(node, options, virtualNode) {
@@ -22457,28 +23652,36 @@ module.exports = {
         noImplicit: true
       });
       this.data(role);
-      var label5;
+      var label3;
       var accText;
       try {
-        label5 = sanitize_default(label_text_default(virtualNode)).toLowerCase();
+        label3 = sanitize_default(label_text_default(virtualNode)).toLowerCase();
         accText = sanitize_default(accessible_text_virtual_default(virtualNode)).toLowerCase();
       } catch (e) {
         return void 0;
       }
-      if (!accText && !label5) {
+      if (!accText && !label3) {
         return false;
       }
-      if (!accText && label5) {
+      if (!accText && label3) {
         return void 0;
       }
-      if (!accText.includes(label5)) {
+      if (!accText.includes(label3)) {
         return void 0;
       }
       return false;
     }
     var no_implicit_explicit_label_evaluate_default = noImplicitExplicitLabelEvaluate;
     function unsupportedroleEvaluate(node, options, virtualNode) {
-      return is_unsupported_role_default(get_role_default(virtualNode));
+      var role = get_role_default(virtualNode, {
+        dpub: true,
+        fallback: true
+      });
+      var isUnsupported = is_unsupported_role_default(role);
+      if (isUnsupported) {
+        this.data(role);
+      }
+      return isUnsupported;
     }
     var unsupportedrole_evaluate_default = unsupportedroleEvaluate;
     var VALID_TAG_NAMES_FOR_SCROLLABLE_REGIONS = {
@@ -22534,19 +23737,19 @@ module.exports = {
         return flatten_colors_default;
       },
       flattenShadowColors: function flattenShadowColors() {
-        return flatten_shadow_colors_default;
+        return _flattenShadowColors;
       },
       getBackgroundColor: function getBackgroundColor() {
-        return _getBackgroundColor;
+        return _getBackgroundColor2;
       },
       getBackgroundStack: function getBackgroundStack() {
-        return get_background_stack_default;
+        return _getBackgroundStack;
       },
       getContrast: function getContrast() {
         return get_contrast_default;
       },
       getForegroundColor: function getForegroundColor() {
-        return get_foreground_color_default;
+        return _getForegroundColor;
       },
       getOwnBackgroundColor: function getOwnBackgroundColor() {
         return get_own_background_color_default;
@@ -22708,13 +23911,16 @@ module.exports = {
       var g = simpleAlphaCompositing(fgColor.green, fgColor.alpha, bgColor.green, bgColor.alpha, blendMode);
       var b = simpleAlphaCompositing(fgColor.blue, fgColor.alpha, bgColor.blue, bgColor.alpha, blendMode);
       var \u03b1o = clamp(fgColor.alpha + bgColor.alpha * (1 - fgColor.alpha), 0, 1);
+      if (\u03b1o === 0) {
+        return new color_default(r, g, b, \u03b1o);
+      }
       var Cr = Math.round(r / \u03b1o);
       var Cg = Math.round(g / \u03b1o);
       var Cb = Math.round(b / \u03b1o);
       return new color_default(Cr, Cg, Cb, \u03b1o);
     }
     var flatten_colors_default = flattenColors;
-    function flattenColors2(fgColor, bgColor) {
+    function _flattenShadowColors(fgColor, bgColor) {
       var alpha = fgColor.alpha;
       var r = (1 - alpha) * bgColor.red + alpha * fgColor.red;
       var g = (1 - alpha) * bgColor.green + alpha * fgColor.green;
@@ -22722,28 +23928,24 @@ module.exports = {
       var a = fgColor.alpha + bgColor.alpha * (1 - fgColor.alpha);
       return new color_default(r, g, b, a);
     }
-    var flatten_shadow_colors_default = flattenColors2;
-    function isInlineDescendant(node, descendant) {
-      var CONTAINED_BY = Node.DOCUMENT_POSITION_CONTAINED_BY;
-      if (!(node.compareDocumentPosition(descendant) & CONTAINED_BY)) {
-        return false;
-      }
-      var style = window.getComputedStyle(descendant);
-      var display = style.getPropertyValue('display');
-      if (!display.includes('inline')) {
-        return false;
-      }
-      var position = style.getPropertyValue('position');
-      return position === 'static';
-    }
-    function calculateObscuringElement(elmIndex, elmStack, originalElm) {
-      for (var _i20 = elmIndex - 1; _i20 >= 0; _i20--) {
-        if (!isInlineDescendant(originalElm, elmStack[_i20])) {
-          return true;
+    function _getBackgroundStack(node) {
+      var stacks = get_text_element_stack_default(node).map(function(stack) {
+        stack = reduce_to_elements_below_floating_default(stack, node);
+        stack = sortPageBackground(stack);
+        return stack;
+      });
+      for (var index = 0; index < stacks.length; index++) {
+        var stack = stacks[index];
+        if (stack[0] !== node) {
+          incomplete_data_default.set('bgColor', 'bgOverlap');
+          return null;
         }
-        elmStack.splice(_i20, 1);
+        if (index !== 0 && !shallowArraysEqual(stack, stacks[0])) {
+          incomplete_data_default.set('bgColor', 'elmPartiallyObscuring');
+          return null;
+        }
       }
-      return false;
+      return stacks[0] || null;
     }
     function sortPageBackground(elmStack) {
       var bodyIndex = elmStack.indexOf(document.body);
@@ -22762,23 +23964,25 @@ module.exports = {
       }
       return bgNodes;
     }
-    function getBackgroundStack(elm) {
-      var elmStack = filtered_rect_stack_default(elm);
-      if (elmStack === null) {
-        return null;
+    function shallowArraysEqual(a, b) {
+      if (a === b) {
+        return true;
       }
-      elmStack = reduce_to_elements_below_floating_default(elmStack, elm);
-      elmStack = sortPageBackground(elmStack);
-      var elmIndex = elmStack.indexOf(elm);
-      if (calculateObscuringElement(elmIndex, elmStack, elm)) {
-        incomplete_data_default.set('bgColor', 'bgOverlap');
-        return null;
+      if (a === null || b === null) {
+        return false;
       }
-      return elmIndex !== -1 ? elmStack : null;
+      if (a.length !== b.length) {
+        return false;
+      }
+      for (var i = 0; i < a.length; ++i) {
+        if (a[i] !== b[i]) {
+          return false;
+        }
+      }
+      return true;
     }
-    var get_background_stack_default = getBackgroundStack;
     function getTextShadowColors(node) {
-      var _ref55 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, minRatio = _ref55.minRatio, maxRatio = _ref55.maxRatio;
+      var _ref74 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, minRatio = _ref74.minRatio, maxRatio = _ref74.maxRatio;
       var style = window.getComputedStyle(node);
       var textShadow = style.getPropertyValue('text-shadow');
       if (textShadow === 'none') {
@@ -22789,19 +23993,19 @@ module.exports = {
       assert_default(isNaN(fontSize) === false, 'Unable to determine font-size value '.concat(fontSizeStr));
       var shadowColors = [];
       var shadows = parseTextShadows(textShadow);
-      shadows.forEach(function(_ref56) {
-        var colorStr = _ref56.colorStr, pixels = _ref56.pixels;
+      shadows.forEach(function(_ref75) {
+        var colorStr = _ref75.colorStr, pixels = _ref75.pixels;
         colorStr = colorStr || style.getPropertyValue('color');
         var _pixels = _slicedToArray(pixels, 3), offsetY = _pixels[0], offsetX = _pixels[1], _pixels$ = _pixels[2], blurRadius = _pixels$ === void 0 ? 0 : _pixels$;
         if ((!minRatio || blurRadius >= fontSize * minRatio) && (!maxRatio || blurRadius < fontSize * maxRatio)) {
-          var color11 = textShadowColor({
+          var color = textShadowColor({
             colorStr: colorStr,
             offsetY: offsetY,
             offsetX: offsetX,
             blurRadius: blurRadius,
             fontSize: fontSize
           });
-          shadowColors.push(color11);
+          shadowColors.push(color);
         }
       });
       return shadowColors;
@@ -22840,8 +24044,8 @@ module.exports = {
       }
       return shadows;
     }
-    function textShadowColor(_ref57) {
-      var colorStr = _ref57.colorStr, offsetX = _ref57.offsetX, offsetY = _ref57.offsetY, blurRadius = _ref57.blurRadius, fontSize = _ref57.fontSize;
+    function textShadowColor(_ref76) {
+      var colorStr = _ref76.colorStr, offsetX = _ref76.offsetX, offsetY = _ref76.offsetY, blurRadius = _ref76.blurRadius, fontSize = _ref76.fontSize;
       if (offsetX > blurRadius || offsetY > blurRadius) {
         return new color_default(0, 0, 0, 0);
       }
@@ -22858,38 +24062,60 @@ module.exports = {
       return .185 / (relativeBlur + .4);
     }
     var get_text_shadow_colors_default = getTextShadowColors;
-    function _getBackgroundColor(elm) {
-      var _bgColors;
+    function _getBackgroundColor2(elm) {
       var bgElms = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
       var shadowOutlineEmMax = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : .1;
+      var vNode = get_node_from_tree_default(elm);
+      var bgColorCache = vNode._cache.getBackgroundColor;
+      if (bgColorCache) {
+        bgElms.push.apply(bgElms, _toConsumableArray(bgColorCache.bgElms));
+        incomplete_data_default.set('bgColor', bgColorCache.incompleteData);
+        return bgColorCache.bgColor;
+      }
+      var bgColor = _getBackgroundColor(elm, bgElms, shadowOutlineEmMax);
+      vNode._cache.getBackgroundColor = {
+        bgColor: bgColor,
+        bgElms: bgElms,
+        incompleteData: incomplete_data_default.get('bgColor')
+      };
+      return bgColor;
+    }
+    function _getBackgroundColor(elm, bgElms, shadowOutlineEmMax) {
+      var _bgColors;
       var bgColors = get_text_shadow_colors_default(elm, {
         minRatio: shadowOutlineEmMax
       });
       if (bgColors.length) {
         bgColors = [ {
-          color: bgColors.reduce(flatten_shadow_colors_default)
+          color: bgColors.reduce(_flattenShadowColors)
         } ];
       }
-      var elmStack = get_background_stack_default(elm);
+      var elmStack = _getBackgroundStack(elm);
+      var textRects = get_visible_child_text_rects_default(elm);
       (elmStack || []).some(function(bgElm) {
         var bgElmStyle = window.getComputedStyle(bgElm);
-        var bgColor = get_own_background_color_default(bgElmStyle);
-        if (elmPartiallyObscured(elm, bgElm, bgColor) || element_has_image_default(bgElm, bgElmStyle)) {
+        if (element_has_image_default(bgElm, bgElmStyle)) {
           bgColors = null;
           bgElms.push(bgElm);
           return true;
         }
-        if (bgColor.alpha !== 0) {
-          bgElms.push(bgElm);
-          var blendMode = bgElmStyle.getPropertyValue('mix-blend-mode');
-          bgColors.unshift({
-            color: bgColor,
-            blendMode: normalizeBlendMode(blendMode)
-          });
-          return bgColor.alpha === 1;
-        } else {
+        var bgColor = get_own_background_color_default(bgElmStyle);
+        if (bgColor.alpha === 0) {
           return false;
         }
+        if (bgElmStyle.getPropertyValue('display') !== 'inline' && !fullyEncompasses(bgElm, textRects)) {
+          bgColors = null;
+          bgElms.push(bgElm);
+          incomplete_data_default.set('bgColor', 'elmPartiallyObscured');
+          return true;
+        }
+        bgElms.push(bgElm);
+        var blendMode = bgElmStyle.getPropertyValue('mix-blend-mode');
+        bgColors.unshift({
+          color: bgColor,
+          blendMode: normalizeBlendMode(blendMode)
+        });
+        return bgColor.alpha === 1;
       });
       if (bgColors === null || elmStack === null) {
         return null;
@@ -22904,12 +24130,19 @@ module.exports = {
       });
       return flatten_colors_default(blendedColor.color instanceof color_default ? blendedColor.color : blendedColor, new color_default(255, 255, 255, 1));
     }
-    function elmPartiallyObscured(elm, bgElm, bgColor) {
-      var obscured = elm !== bgElm && !_visuallyContains(elm, bgElm) && bgColor.alpha !== 0;
-      if (obscured) {
-        incomplete_data_default.set('bgColor', 'elmPartiallyObscured');
+    function fullyEncompasses(node, rects) {
+      rects = Array.isArray(rects) ? rects : [ rects ];
+      var nodeRect = node.getBoundingClientRect();
+      var right = nodeRect.right, bottom = nodeRect.bottom;
+      var style = window.getComputedStyle(node);
+      var overflow = style.getPropertyValue('overflow');
+      if ([ 'scroll', 'auto' ].includes(overflow) || node instanceof window.HTMLHtmlElement) {
+        right = nodeRect.left + node.scrollWidth;
+        bottom = nodeRect.top + node.scrollHeight;
       }
-      return obscured;
+      return rects.every(function(rect) {
+        return rect.top >= nodeRect.top && rect.bottom <= bottom && rect.left >= nodeRect.left && rect.right <= right;
+      });
     }
     function normalizeBlendMode(blendmode) {
       return !!blendmode ? blendmode : void 0;
@@ -22923,7 +24156,7 @@ module.exports = {
         var bodyStyle = window.getComputedStyle(body);
         var htmlBgColor = get_own_background_color_default(htmlStyle);
         var bodyBgColor = get_own_background_color_default(bodyStyle);
-        var bodyBgColorApplies = bodyBgColor.alpha !== 0 && _visuallyContains(elm, body);
+        var bodyBgColorApplies = bodyBgColor.alpha !== 0 && fullyEncompasses(body, elm.getBoundingClientRect());
         if (bodyBgColor.alpha !== 0 && htmlBgColor.alpha === 0 || bodyBgColorApplies && bodyBgColor.alpha !== 1) {
           pageColors.unshift({
             color: bodyBgColor,
@@ -22951,7 +24184,60 @@ module.exports = {
       return (Math.max(fL, bL) + .05) / (Math.min(fL, bL) + .05);
     }
     var get_contrast_default = getContrast;
-    function getOpacity(node) {
+    function _getForegroundColor(node, _, bgColor) {
+      var _bgColor;
+      var options = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+      var nodeStyle = window.getComputedStyle(node);
+      var opacity = getOpacity(node, nodeStyle);
+      var strokeColor = getStrokeColor(nodeStyle, options);
+      if (strokeColor && strokeColor.alpha * opacity === 1) {
+        strokeColor.alpha = 1;
+        return strokeColor;
+      }
+      var textColor = getTextColor(nodeStyle);
+      var fgColor = strokeColor ? flatten_colors_default(strokeColor, textColor) : textColor;
+      if (fgColor.alpha * opacity === 1) {
+        fgColor.alpha = 1;
+        return fgColor;
+      }
+      var textShadowColors = get_text_shadow_colors_default(node, {
+        minRatio: 0
+      });
+      fgColor = textShadowColors.reduce(function(colorA, colorB) {
+        return flatten_colors_default(colorA, colorB);
+      }, fgColor);
+      if (fgColor.alpha * opacity === 1) {
+        fgColor.alpha = 1;
+        return fgColor;
+      }
+      (_bgColor = bgColor) !== null && _bgColor !== void 0 ? _bgColor : bgColor = _getBackgroundColor2(node, []);
+      if (bgColor === null) {
+        var reason = incomplete_data_default.get('bgColor');
+        incomplete_data_default.set('fgColor', reason);
+        return null;
+      }
+      fgColor.alpha = fgColor.alpha * opacity;
+      return flatten_colors_default(fgColor, bgColor);
+    }
+    function getTextColor(nodeStyle) {
+      return new color_default().parseString(nodeStyle.getPropertyValue('-webkit-text-fill-color') || nodeStyle.getPropertyValue('color'));
+    }
+    function getStrokeColor(nodeStyle, _ref77) {
+      var _ref77$textStrokeEmMi = _ref77.textStrokeEmMin, textStrokeEmMin = _ref77$textStrokeEmMi === void 0 ? 0 : _ref77$textStrokeEmMi;
+      var strokeWidth = parseFloat(nodeStyle.getPropertyValue('-webkit-text-stroke-width'));
+      if (strokeWidth === 0) {
+        return null;
+      }
+      var fontSize = nodeStyle.getPropertyValue('font-size');
+      var relativeStrokeWidth = strokeWidth / parseFloat(fontSize);
+      if (isNaN(relativeStrokeWidth) || relativeStrokeWidth < textStrokeEmMin) {
+        return null;
+      }
+      var strokeColor = nodeStyle.getPropertyValue('-webkit-text-stroke-color');
+      return new color_default().parseString(strokeColor);
+    }
+    function getOpacity(node, nodeStyle) {
+      var _nodeStyle;
       if (!node) {
         return 1;
       }
@@ -22959,7 +24245,7 @@ module.exports = {
       if (vNode && vNode._opacity !== void 0 && vNode._opacity !== null) {
         return vNode._opacity;
       }
-      var nodeStyle = window.getComputedStyle(node);
+      (_nodeStyle = nodeStyle) !== null && _nodeStyle !== void 0 ? _nodeStyle : nodeStyle = window.getComputedStyle(node);
       var opacity = nodeStyle.getPropertyValue('opacity');
       var finalOpacity = opacity * getOpacity(node.parentElement);
       if (vNode) {
@@ -22967,32 +24253,6 @@ module.exports = {
       }
       return finalOpacity;
     }
-    function getForegroundColor(node, _, bgColor) {
-      var nodeStyle = window.getComputedStyle(node);
-      var fgColor = new color_default();
-      fgColor.parseString(nodeStyle.getPropertyValue('color'));
-      var opacity = getOpacity(node);
-      fgColor.alpha = fgColor.alpha * opacity;
-      if (fgColor.alpha === 1) {
-        return fgColor;
-      }
-      if (!bgColor) {
-        bgColor = _getBackgroundColor(node, []);
-      }
-      if (bgColor === null) {
-        var reason = incomplete_data_default.get('bgColor');
-        incomplete_data_default.set('fgColor', reason);
-        return null;
-      }
-      if (fgColor.alpha < 1) {
-        var textShadowColors = get_text_shadow_colors_default(node, {
-          minRatio: 0
-        });
-        return [ fgColor ].concat(_toConsumableArray(textShadowColors), [ bgColor ]).reduce(flatten_shadow_colors_default);
-      }
-      return flatten_colors_default(fgColor, bgColor);
-    }
-    var get_foreground_color_default = getForegroundColor;
     function hasValidContrastRatio(bg, fg, fontSize, isBold) {
       var contrast = get_contrast_default(bg, fg);
       var isSmallFont = isBold && Math.ceil(fontSize * 72) / 96 < 14 || !isBold && Math.ceil(fontSize * 72) / 96 < 18;
@@ -23006,7 +24266,7 @@ module.exports = {
     var has_valid_contrast_ratio_default = hasValidContrastRatio;
     function colorContrastEvaluate(node, options, virtualNode) {
       var ignoreUnicode = options.ignoreUnicode, ignoreLength = options.ignoreLength, ignorePseudo = options.ignorePseudo, boldValue = options.boldValue, boldTextPt = options.boldTextPt, largeTextPt = options.largeTextPt, contrastRatio = options.contrastRatio, shadowOutlineEmMax = options.shadowOutlineEmMax, pseudoSizeThreshold = options.pseudoSizeThreshold;
-      if (!is_visible_default(node, false)) {
+      if (!_isVisibleOnScreen(node)) {
         this.data({
           messageKey: 'hidden'
         });
@@ -23025,7 +24285,7 @@ module.exports = {
       var bold = parseFloat(fontWeight) >= boldValue || fontWeight === 'bold';
       var ptSize = Math.ceil(fontSize * 72) / 96;
       var isSmallFont = bold && ptSize < boldTextPt || !bold && ptSize < largeTextPt;
-      var _ref58 = isSmallFont ? contrastRatio.normal : contrastRatio.large, expected = _ref58.expected, minThreshold = _ref58.minThreshold, maxThreshold = _ref58.maxThreshold;
+      var _ref78 = isSmallFont ? contrastRatio.normal : contrastRatio.large, expected = _ref78.expected, minThreshold = _ref78.minThreshold, maxThreshold = _ref78.maxThreshold;
       var pseudoElm = findPseudoElement(virtualNode, {
         ignorePseudo: ignorePseudo,
         pseudoSizeThreshold: pseudoSizeThreshold
@@ -23041,8 +24301,8 @@ module.exports = {
         return void 0;
       }
       var bgNodes = [];
-      var bgColor = _getBackgroundColor(node, bgNodes, shadowOutlineEmMax);
-      var fgColor = get_foreground_color_default(node, false, bgColor);
+      var bgColor = _getBackgroundColor2(node, bgNodes, shadowOutlineEmMax);
+      var fgColor = _getForegroundColor(node, false, bgColor, options);
       var shadowColors = get_text_shadow_colors_default(node, {
         minRatio: .001,
         maxRatio: shadowOutlineEmMax
@@ -23053,7 +24313,7 @@ module.exports = {
       if (shadowColors.length === 0) {
         contrast = get_contrast_default(bgColor, fgColor);
       } else if (fgColor && bgColor) {
-        shadowColor = [].concat(_toConsumableArray(shadowColors), [ bgColor ]).reduce(flatten_shadow_colors_default);
+        shadowColor = [].concat(_toConsumableArray(shadowColors), [ bgColor ]).reduce(_flattenShadowColors);
         var fgBgContrast = get_contrast_default(bgColor, fgColor);
         var bgShContrast = get_contrast_default(bgColor, shadowColor);
         var fgShContrast = get_contrast_default(shadowColor, fgColor);
@@ -23063,7 +24323,7 @@ module.exports = {
         }
       }
       var isValid = contrast > expected;
-      if (typeof minThreshold === 'number' && contrast < minThreshold || typeof maxThreshold === 'number' && contrast > maxThreshold) {
+      if (typeof minThreshold === 'number' && (typeof contrast !== 'number' || contrast < minThreshold) || typeof maxThreshold === 'number' && (typeof contrast !== 'number' || contrast > maxThreshold)) {
         this.data({
           contrastRatio: contrast
         });
@@ -23104,8 +24364,8 @@ module.exports = {
       }
       return isValid;
     }
-    function findPseudoElement(vNode, _ref59) {
-      var _ref59$pseudoSizeThre = _ref59.pseudoSizeThreshold, pseudoSizeThreshold = _ref59$pseudoSizeThre === void 0 ? .25 : _ref59$pseudoSizeThre, _ref59$ignorePseudo = _ref59.ignorePseudo, ignorePseudo = _ref59$ignorePseudo === void 0 ? false : _ref59$ignorePseudo;
+    function findPseudoElement(vNode, _ref79) {
+      var _ref79$pseudoSizeThre = _ref79.pseudoSizeThreshold, pseudoSizeThreshold = _ref79$pseudoSizeThre === void 0 ? .25 : _ref79$pseudoSizeThre, _ref79$ignorePseudo = _ref79.ignorePseudo, ignorePseudo = _ref79$ignorePseudo === void 0 ? false : _ref79$ignorePseudo;
       if (ignorePseudo) {
         return;
       }
@@ -23147,15 +24407,15 @@ module.exports = {
     }
     function parseUnit(str) {
       var unitRegex = /^([0-9.]+)([a-z]+)$/i;
-      var _ref60 = str.match(unitRegex) || [], _ref61 = _slicedToArray(_ref60, 3), _ref61$ = _ref61[1], value = _ref61$ === void 0 ? '' : _ref61$, _ref61$2 = _ref61[2], unit = _ref61$2 === void 0 ? '' : _ref61$2;
+      var _ref80 = str.match(unitRegex) || [], _ref81 = _slicedToArray(_ref80, 3), _ref81$ = _ref81[1], value = _ref81$ === void 0 ? '' : _ref81$, _ref81$2 = _ref81[2], unit = _ref81$2 === void 0 ? '' : _ref81$2;
       return {
         value: parseFloat(value),
         unit: unit.toLowerCase()
       };
     }
-    function getContrast2(color1, color22) {
+    function getContrast2(color1, color2) {
       var c1lum = color1.getRelativeLuminance();
-      var c2lum = color22.getRelativeLuminance();
+      var c2lum = color2.getRelativeLuminance();
       return (Math.max(c1lum, c2lum) + .05) / (Math.min(c1lum, c2lum) + .05);
     }
     var blockLike2 = [ 'block', 'list-item', 'table', 'flex', 'grid', 'inline-block' ];
@@ -23163,55 +24423,89 @@ module.exports = {
       var display = window.getComputedStyle(elm).getPropertyValue('display');
       return blockLike2.indexOf(display) !== -1 || display.substr(0, 6) === 'table-';
     }
-    function linkInTextBlockEvaluate(node) {
+    function linkInTextBlockEvaluate(node, options) {
+      var requiredContrastRatio = options.requiredContrastRatio;
       if (isBlock2(node)) {
         return false;
       }
       var parentBlock = get_composed_parent_default(node);
-      while (parentBlock.nodeType === 1 && !isBlock2(parentBlock)) {
+      while (parentBlock && parentBlock.nodeType === 1 && !isBlock2(parentBlock)) {
         parentBlock = get_composed_parent_default(parentBlock);
       }
-      this.relatedNodes([ parentBlock ]);
-      if (element_is_distinct_default(node, parentBlock)) {
-        return true;
-      } else {
-        var nodeColor, parentColor;
-        nodeColor = get_foreground_color_default(node);
-        parentColor = get_foreground_color_default(parentBlock);
-        if (!nodeColor || !parentColor) {
-          return void 0;
-        }
-        var contrast = getContrast2(nodeColor, parentColor);
-        if (contrast === 1) {
-          return true;
-        } else if (contrast >= 3) {
-          incomplete_data_default.set('fgColor', 'bgContrast');
-          this.data({
-            messageKey: incomplete_data_default.get('fgColor')
-          });
-          incomplete_data_default.clear();
-          return void 0;
-        }
-        nodeColor = _getBackgroundColor(node);
-        parentColor = _getBackgroundColor(parentBlock);
-        if (!nodeColor || !parentColor || getContrast2(nodeColor, parentColor) >= 3) {
-          var reason;
-          if (!nodeColor || !parentColor) {
-            reason = incomplete_data_default.get('bgColor');
-          } else {
-            reason = 'bgContrast';
-          }
-          incomplete_data_default.set('fgColor', reason);
-          this.data({
-            messageKey: incomplete_data_default.get('fgColor')
-          });
-          incomplete_data_default.clear();
-          return void 0;
-        }
+      if (!parentBlock) {
+        return void 0;
       }
+      this.relatedNodes([ parentBlock ]);
+      var nodeColor = _getForegroundColor(node);
+      var parentColor = _getForegroundColor(parentBlock);
+      var nodeBackgroundColor = _getBackgroundColor2(node);
+      var parentBackgroundColor = _getBackgroundColor2(parentBlock);
+      var textContrast = nodeColor && parentColor ? getContrast2(nodeColor, parentColor) : void 0;
+      if (textContrast) {
+        textContrast = Math.floor(textContrast * 100) / 100;
+      }
+      if (textContrast && textContrast >= requiredContrastRatio) {
+        return true;
+      }
+      var backgroundContrast = nodeBackgroundColor && parentBackgroundColor ? getContrast2(nodeBackgroundColor, parentBackgroundColor) : void 0;
+      if (backgroundContrast) {
+        backgroundContrast = Math.floor(backgroundContrast * 100) / 100;
+      }
+      if (backgroundContrast && backgroundContrast >= requiredContrastRatio) {
+        return true;
+      }
+      if (!backgroundContrast) {
+        var _incomplete_data_defa;
+        var reason = (_incomplete_data_defa = incomplete_data_default.get('bgColor')) !== null && _incomplete_data_defa !== void 0 ? _incomplete_data_defa : 'bgContrast';
+        this.data({
+          messageKey: reason
+        });
+        incomplete_data_default.clear();
+        return void 0;
+      }
+      if (!textContrast) {
+        return void 0;
+      }
+      if (textContrast === 1 && backgroundContrast > 1) {
+        this.data({
+          messageKey: 'bgContrast',
+          contrastRatio: backgroundContrast,
+          requiredContrastRatio: requiredContrastRatio,
+          nodeBackgroundColor: nodeBackgroundColor ? nodeBackgroundColor.toHexString() : void 0,
+          parentBackgroundColor: parentBackgroundColor ? parentBackgroundColor.toHexString() : void 0
+        });
+        return false;
+      }
+      this.data({
+        messageKey: 'fgContrast',
+        contrastRatio: textContrast,
+        requiredContrastRatio: requiredContrastRatio,
+        nodeColor: nodeColor ? nodeColor.toHexString() : void 0,
+        parentColor: parentColor ? parentColor.toHexString() : void 0
+      });
       return false;
     }
     var link_in_text_block_evaluate_default = linkInTextBlockEvaluate;
+    var blockLike3 = [ 'block', 'list-item', 'table', 'flex', 'grid', 'inline-block' ];
+    function isBlock3(elm) {
+      var display = window.getComputedStyle(elm).getPropertyValue('display');
+      return blockLike3.indexOf(display) !== -1 || display.substr(0, 6) === 'table-';
+    }
+    function linkInTextBlockStyleEvaluate(node) {
+      if (isBlock3(node)) {
+        return false;
+      }
+      var parentBlock = get_composed_parent_default(node);
+      while (parentBlock && parentBlock.nodeType === 1 && !isBlock3(parentBlock)) {
+        parentBlock = get_composed_parent_default(parentBlock);
+      }
+      if (!parentBlock) {
+        return void 0;
+      }
+      this.relatedNodes([ parentBlock ]);
+      return element_is_distinct_default(node, parentBlock);
+    }
+    var link_in_text_block_style_evaluate_default = linkInTextBlockStyleEvaluate;
     function autocompleteAppropriateEvaluate(node, options, virtualNode) {
       if (virtualNode.props.nodeName !== 'input') {
         return true;
@@ -23315,8 +24609,11 @@ module.exports = {
       if (!options || !options.selector || typeof options.selector !== 'string') {
         throw new TypeError('has-descendant requires options.selector to be a string');
       }
+      if (options.passForModal && is_modal_open_default()) {
+        return true;
+      }
       var matchingElms = query_selector_all_filter_default(virtualNode, options.selector, function(vNode) {
-        return is_visible_default(vNode.actualNode, true);
+        return _isVisibleToScreenReaders(vNode);
       });
       this.relatedNodes(matchingElms.map(function(vNode) {
         return vNode.actualNode;
@@ -23331,7 +24628,6 @@ module.exports = {
         return void 0;
       }
     }
-    var has_text_content_evaluate_default = hasTextContentEvaluate;
     function matchesDefinitionEvaluate(_, options, virtualNode) {
       return matches_default3(virtualNode, options.matcher);
     }
@@ -23353,7 +24649,7 @@ module.exports = {
       }
       cache_default.set(key, true);
       var elms = query_selector_all_filter_default(axe._tree[0], options.selector, function(elm) {
-        return is_visible_default(elm.actualNode, true);
+        return _isVisibleToScreenReaders(elm);
       });
       if (typeof options.nativeScopeFilter === 'string') {
         elms = elms.filter(function(elm) {
@@ -23388,9 +24684,9 @@ module.exports = {
       });
     }
     var accesskeys_after_default = accesskeysAfter;
-    function accesskeysEvaluate(node) {
-      if (is_visible_default(node, false)) {
-        this.data(node.getAttribute('accesskey'));
+    function accesskeysEvaluate(node, options, vNode) {
+      if (!_isHiddenForEveryone(vNode)) {
+        this.data(vNode.attr('accesskey'));
         this.relatedNodes([ node ]);
       }
       return true;
@@ -23408,25 +24704,25 @@ module.exports = {
     }
     var focusable_content_evaluate_default = focusableContentEvaluate;
     function focusableDisabledEvaluate(node, options, virtualNode) {
-      var elementsThatCanBeDisabled = [ 'BUTTON', 'FIELDSET', 'INPUT', 'SELECT', 'TEXTAREA' ];
+      var elementsThatCanBeDisabled = [ 'button', 'fieldset', 'input', 'select', 'textarea' ];
       var tabbableElements = virtualNode.tabbableElements;
       if (!tabbableElements || !tabbableElements.length) {
         return true;
       }
-      var relatedNodes = tabbableElements.reduce(function(out, _ref62) {
-        var el = _ref62.actualNode;
-        var nodeName2 = el.nodeName.toUpperCase();
-        if (elementsThatCanBeDisabled.includes(nodeName2)) {
-          out.push(el);
-        }
-        return out;
-      }, []);
-      this.relatedNodes(relatedNodes);
+      var relatedNodes = tabbableElements.filter(function(vNode) {
+        return elementsThatCanBeDisabled.includes(vNode.props.nodeName);
+      });
+      this.relatedNodes(relatedNodes.map(function(vNode) {
+        return vNode.actualNode;
+      }));
       if (relatedNodes.length === 0 || is_modal_open_default()) {
         return true;
       }
-      return relatedNodes.every(function(related) {
-        return related.onfocus;
+      return relatedNodes.every(function(vNode) {
+        var pointerEvents = vNode.getComputedStylePropertyValue('pointer-events');
+        var width = parseInt(vNode.getComputedStylePropertyValue('width'));
+        var height = parseInt(vNode.getComputedStylePropertyValue('height'));
+        return vNode.actualNode.onfocus || (width === 0 || height === 0) && pointerEvents === 'none';
       }) ? void 0 : false;
     }
     var focusable_disabled_evaluate_default = focusableDisabledEvaluate;
@@ -23434,10 +24730,7 @@ module.exports = {
       if (virtualNode.hasAttr('contenteditable') && isContenteditable(virtualNode)) {
         return true;
       }
-      var isFocusable2 = virtualNode.isFocusable;
-      var tabIndex = parseInt(virtualNode.attr('tabindex'), 10);
-      tabIndex = !isNaN(tabIndex) ? tabIndex : null;
-      return tabIndex ? isFocusable2 && tabIndex >= 0 : isFocusable2;
+      return _isInTabOrder(virtualNode);
       function isContenteditable(vNode) {
         var contenteditable = vNode.attr('contenteditable');
         if (contenteditable === 'true' || contenteditable === '') {
@@ -23455,8 +24748,8 @@ module.exports = {
     }
     var focusable_element_evaluate_default = focusableElementEvaluate;
     function focusableModalOpenEvaluate(node, options, virtualNode) {
-      var tabbableElements = virtualNode.tabbableElements.map(function(_ref63) {
-        var actualNode = _ref63.actualNode;
+      var tabbableElements = virtualNode.tabbableElements.map(function(_ref82) {
+        var actualNode = _ref82.actualNode;
         return actualNode;
       });
       if (!tabbableElements || !tabbableElements.length) {
@@ -23471,7 +24764,7 @@ module.exports = {
     var focusable_modal_open_evaluate_default = focusableModalOpenEvaluate;
     function focusableNoNameEvaluate(node, options, virtualNode) {
       var tabIndex = virtualNode.attr('tabindex');
-      var inFocusOrder = is_focusable_default(virtualNode) && tabIndex > -1;
+      var inFocusOrder = _isFocusable(virtualNode) && tabIndex > -1;
       if (!inFocusOrder) {
         return false;
       }
@@ -23483,42 +24776,28 @@ module.exports = {
     }
     var focusable_no_name_evaluate_default = focusableNoNameEvaluate;
     function focusableNotTabbableEvaluate(node, options, virtualNode) {
-      var elementsThatCanBeDisabled = [ 'BUTTON', 'FIELDSET', 'INPUT', 'SELECT', 'TEXTAREA' ];
+      var elementsThatCanBeDisabled = [ 'button', 'fieldset', 'input', 'select', 'textarea' ];
       var tabbableElements = virtualNode.tabbableElements;
       if (!tabbableElements || !tabbableElements.length) {
         return true;
       }
-      var relatedNodes = tabbableElements.reduce(function(out, _ref64) {
-        var el = _ref64.actualNode;
-        var nodeName2 = el.nodeName.toUpperCase();
-        if (!elementsThatCanBeDisabled.includes(nodeName2)) {
-          out.push(el);
-        }
-        return out;
-      }, []);
-      this.relatedNodes(relatedNodes);
+      var relatedNodes = tabbableElements.filter(function(vNode) {
+        return !elementsThatCanBeDisabled.includes(vNode.props.nodeName);
+      });
+      this.relatedNodes(relatedNodes.map(function(vNode) {
+        return vNode.actualNode;
+      }));
       if (relatedNodes.length === 0 || is_modal_open_default()) {
         return true;
       }
-      return relatedNodes.every(function(related) {
-        return related.onfocus;
+      return relatedNodes.every(function(vNode) {
+        var pointerEvents = vNode.getComputedStylePropertyValue('pointer-events');
+        var width = parseInt(vNode.getComputedStylePropertyValue('width'));
+        var height = parseInt(vNode.getComputedStylePropertyValue('height'));
+        return vNode.actualNode.onfocus || (width === 0 || height === 0) && pointerEvents === 'none';
       }) ? void 0 : false;
     }
     var focusable_not_tabbable_evaluate_default = focusableNotTabbableEvaluate;
-    function focusableDescendants(vNode) {
-      if (is_focusable_default(vNode)) {
-        return true;
-      }
-      if (!vNode.children) {
-        if (vNode.props.nodeType === 1) {
-          throw new Error('Cannot determine children');
-        }
-        return false;
-      }
-      return vNode.children.some(function(child) {
-        return focusableDescendants(child);
-      });
-    }
     function frameFocusableContentEvaluate(node, options, virtualNode) {
       if (!virtualNode.children) {
         return void 0;
@@ -23531,7 +24810,20 @@ module.exports = {
         return void 0;
       }
     }
-    var frame_focusable_content_evaluate_default = frameFocusableContentEvaluate;
+    function focusableDescendants(vNode) {
+      if (_isInTabOrder(vNode)) {
+        return true;
+      }
+      if (!vNode.children) {
+        if (vNode.props.nodeType === 1) {
+          throw new Error('Cannot determine children');
+        }
+        return false;
+      }
+      return vNode.children.some(function(child) {
+        return focusableDescendants(child);
+      });
+    }
     function landmarkIsTopLevelEvaluate(node) {
       var landmarks = get_aria_roles_by_type_default('landmark');
       var parent = get_composed_parent_default(node);
@@ -23584,8 +24876,7 @@ module.exports = {
       }
       var retVal = [];
       vNode.children.forEach(function(child) {
-        var role = get_role_default(child);
-        if (get_role_type_default(role) === 'widget' && is_focusable_default(child)) {
+        if (get_role_type_default(child) === 'widget' && _isFocusable(child)) {
           retVal.push(child);
         } else {
           retVal.push.apply(retVal, _toConsumableArray(getFocusableDescendants(child)));
@@ -23624,45 +24915,55 @@ module.exports = {
     }
     var duplicate_img_label_evaluate_default = duplicateImgLabelEvaluate;
     function explicitEvaluate(node, options, virtualNode) {
-      if (virtualNode.attr('id')) {
-        if (!virtualNode.actualNode) {
-          return void 0;
-        }
-        var root = get_root_node_default2(virtualNode.actualNode);
-        var id = escape_selector_default(virtualNode.attr('id'));
-        var labels = Array.from(root.querySelectorAll('label[for="'.concat(id, '"]')));
-        if (labels.length) {
-          try {
-            return labels.some(function(label5) {
-              if (!is_visible_default(label5)) {
-                return true;
-              } else {
-                return !!accessible_text_default(label5);
-              }
-            });
-          } catch (e) {
-            return void 0;
-          }
-        }
+      var _this4 = this;
+      if (!virtualNode.attr('id')) {
+        return false;
       }
-      return false;
+      if (!virtualNode.actualNode) {
+        return void 0;
+      }
+      var root = get_root_node_default2(virtualNode.actualNode);
+      var id = escape_selector_default(virtualNode.attr('id'));
+      var labels = Array.from(root.querySelectorAll('label[for="'.concat(id, '"]')));
+      this.relatedNodes(labels);
+      if (!labels.length) {
+        return false;
+      }
+      try {
+        return labels.some(function(label3) {
+          if (!_isVisibleOnScreen(label3)) {
+            return true;
+          } else {
+            var explicitLabel = sanitize_default(accessible_text_default(label3, {
+              inControlContext: true,
+              startNode: virtualNode
+            }));
+            _this4.data({
+              explicitLabel: explicitLabel
+            });
+            return !!explicitLabel;
+          }
+        });
+      } catch (e) {
+        return void 0;
+      }
     }
     var explicit_evaluate_default = explicitEvaluate;
     function helpSameAsLabelEvaluate(node, options, virtualNode) {
-      var labelText2 = label_virtual_default2(virtualNode), check4 = node.getAttribute('title');
+      var labelText2 = label_virtual_default2(virtualNode), check = node.getAttribute('title');
       if (!labelText2) {
         return false;
       }
-      if (!check4) {
-        check4 = '';
+      if (!check) {
+        check = '';
         if (node.getAttribute('aria-describedby')) {
           var ref = idrefs_default(node, 'aria-describedby');
-          check4 = ref.map(function(thing) {
+          check = ref.map(function(thing) {
             return thing ? accessible_text_default(thing) : '';
           }).join('');
         }
       }
-      return sanitize_default(check4) === sanitize_default(labelText2);
+      return sanitize_default(check) === sanitize_default(labelText2);
     }
     var help_same_as_label_evaluate_default = helpSameAsLabelEvaluate;
     function hiddenExplicitLabelEvaluate(node, options, virtualNode) {
@@ -23672,8 +24973,8 @@ module.exports = {
         }
         var root = get_root_node_default2(node);
         var id = escape_selector_default(node.getAttribute('id'));
-        var label5 = root.querySelector('label[for="'.concat(id, '"]'));
-        if (label5 && !is_visible_default(label5, true)) {
+        var label3 = root.querySelector('label[for="'.concat(id, '"]'));
+        if (label3 && !_isVisibleToScreenReaders(label3)) {
           var name;
           try {
             name = accessible_text_virtual_default(virtualNode).trim();
@@ -23689,11 +24990,19 @@ module.exports = {
     var hidden_explicit_label_evaluate_default = hiddenExplicitLabelEvaluate;
     function implicitEvaluate(node, options, virtualNode) {
       try {
-        var label5 = closest_default(virtualNode, 'label');
-        if (label5) {
-          return !!accessible_text_virtual_default(label5, {
-            inControlContext: true
+        var label3 = closest_default(virtualNode, 'label');
+        if (label3) {
+          var implicitLabel = sanitize_default(accessible_text_virtual_default(label3, {
+            inControlContext: true,
+            startNode: virtualNode
+          }));
+          if (label3.actualNode) {
+            this.relatedNodes([ label3.actualNode ]);
+          }
+          this.data({
+            implicitLabel: implicitLabel
           });
+          return !!implicitLabel;
         }
         return false;
       } catch (e) {
@@ -23718,7 +25027,9 @@ module.exports = {
       return sanitize_default(noUnicodeStr);
     }
     function labelContentNameMismatchEvaluate(node, options, virtualNode) {
-      var _ref65 = options || {}, pixelThreshold = _ref65.pixelThreshold, occuranceThreshold = _ref65.occuranceThreshold;
+      var _options$occurrenceTh;
+      var pixelThreshold = options === null || options === void 0 ? void 0 : options.pixelThreshold;
+      var occurrenceThreshold = (_options$occurrenceTh = options === null || options === void 0 ? void 0 : options.occurrenceThreshold) !== null && _options$occurrenceTh !== void 0 ? _options$occurrenceTh : options === null || options === void 0 ? void 0 : options.occuranceThreshold;
       var accText = accessible_text_default(node).toLowerCase();
       if (is_human_interpretable_default(accText) < 1) {
         return void 0;
@@ -23727,7 +25038,7 @@ module.exports = {
         subtreeDescendant: true,
         ignoreIconLigature: true,
         pixelThreshold: pixelThreshold,
-        occuranceThreshold: occuranceThreshold
+        occurrenceThreshold: occurrenceThreshold
       })).toLowerCase();
       if (!visibleText) {
         return true;
@@ -23748,8 +25059,8 @@ module.exports = {
       root = root.documentElement || root;
       var labels = Array.from(root.querySelectorAll('label[for="'.concat(id, '"]')));
       if (labels.length) {
-        labels = labels.filter(function(label5) {
-          return is_visible_default(label5);
+        labels = labels.filter(function(label3) {
+          return !_isHiddenForEveryone(label3);
         });
       }
       while (parent) {
@@ -23760,8 +25071,8 @@ module.exports = {
       }
       this.relatedNodes(labels);
       if (labels.length > 1) {
-        var ATVisibleLabels = labels.filter(function(label5) {
-          return is_visible_default(label5, true);
+        var ATVisibleLabels = labels.filter(function(label3) {
+          return _isVisibleToScreenReaders(label3);
         });
         if (ATVisibleLabels.length > 1) {
           return void 0;
@@ -23845,11 +25156,14 @@ module.exports = {
           invalid.push(langAttr + '="' + virtualNode.attr(langAttr) + '"');
         }
       });
-      if (invalid.length) {
-        this.data(invalid);
-        return true;
+      if (!invalid.length) {
+        return false;
       }
-      return false;
+      if (virtualNode.props.nodeName !== 'html' && !_hasLangText(virtualNode)) {
+        return false;
+      }
+      this.data(invalid);
+      return true;
     }
     var valid_lang_evaluate_default = validLangEvaluate;
     function xmlLangMismatchEvaluate(node, options, vNode) {
@@ -23876,6 +25190,75 @@ module.exports = {
       return false;
     }
     var dlitem_evaluate_default = dlitemEvaluate;
+    function invalidChildrenEvaluate(node) {
+      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var virtualNode = arguments.length > 2 ? arguments[2] : undefined;
+      var relatedNodes = [];
+      var issues = [];
+      if (!virtualNode.children) {
+        return void 0;
+      }
+      var vChildren = mapWithNested(virtualNode.children);
+      while (vChildren.length) {
+        var _vChild$actualNode;
+        var _vChildren$shift = vChildren.shift(), vChild = _vChildren$shift.vChild, nested = _vChildren$shift.nested;
+        if (options.divGroups && !nested && isDivGroup(vChild)) {
+          if (!vChild.children) {
+            return void 0;
+          }
+          var vGrandChildren = mapWithNested(vChild.children, true);
+          vChildren.push.apply(vChildren, _toConsumableArray(vGrandChildren));
+          continue;
+        }
+        var issue = getInvalidSelector(vChild, nested, options);
+        if (!issue) {
+          continue;
+        }
+        if (!issues.includes(issue)) {
+          issues.push(issue);
+        }
+        if ((vChild === null || vChild === void 0 ? void 0 : (_vChild$actualNode = vChild.actualNode) === null || _vChild$actualNode === void 0 ? void 0 : _vChild$actualNode.nodeType) === 1) {
+          relatedNodes.push(vChild.actualNode);
+        }
+      }
+      if (issues.length === 0) {
+        return false;
+      }
+      this.data({
+        values: issues.join(', ')
+      });
+      this.relatedNodes(relatedNodes);
+      return true;
+    }
+    function getInvalidSelector(vChild, nested, _ref83) {
+      var _ref83$validRoles = _ref83.validRoles, validRoles = _ref83$validRoles === void 0 ? [] : _ref83$validRoles, _ref83$validNodeNames = _ref83.validNodeNames, validNodeNames = _ref83$validNodeNames === void 0 ? [] : _ref83$validNodeNames;
+      var _vChild$props = vChild.props, nodeName2 = _vChild$props.nodeName, nodeType = _vChild$props.nodeType, nodeValue = _vChild$props.nodeValue;
+      var selector = nested ? 'div > ' : '';
+      if (nodeType === 3 && nodeValue.trim() !== '') {
+        return selector + '#text';
+      }
+      if (nodeType !== 1 || !_isVisibleToScreenReaders(vChild)) {
+        return false;
+      }
+      var role = get_explicit_role_default(vChild);
+      if (role) {
+        return validRoles.includes(role) ? false : selector + '[role='.concat(role, ']');
+      } else {
+        return validNodeNames.includes(nodeName2) ? false : selector + nodeName2;
+      }
+    }
+    function isDivGroup(vNode) {
+      return vNode.props.nodeName === 'div' && get_explicit_role_default(vNode) === null;
+    }
+    function mapWithNested(vNodes) {
+      var nested = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+      return vNodes.map(function(vChild) {
+        return {
+          vChild: vChild,
+          nested: nested
+        };
+      });
+    }
     function listitemEvaluate(node, options, virtualNode) {
       var parent = virtualNode.parent;
       if (!parent) {
@@ -23910,7 +25293,7 @@ module.exports = {
       var result = content.reduce(function(out, childNode) {
         var actualNode = childNode.actualNode;
         var tagName = actualNode.nodeName.toUpperCase();
-        if (actualNode.nodeType === 1 && is_visible_default(actualNode, true, false)) {
+        if (actualNode.nodeType === 1 && _isVisibleToScreenReaders(actualNode)) {
           var explicitRole2 = get_explicit_role_default(actualNode);
           if (tagName !== 'DT' && tagName !== 'DD' || explicitRole2) {
             if (!ALLOWED_ROLES.includes(explicitRole2)) {
@@ -23941,7 +25324,7 @@ module.exports = {
           hasNonEmptyTextNode = true;
           return;
         }
-        if (actualNode.nodeType !== 1 || !is_visible_default(actualNode, true, false)) {
+        if (actualNode.nodeType !== 1 || !_isVisibleToScreenReaders(actualNode)) {
           return;
         }
         isEmpty = false;
@@ -24080,24 +25463,24 @@ module.exports = {
       }
     }
     var no_autoplay_audio_evaluate_default = noAutoplayAudioEvaluate;
-    function cssOrientationLockEvaluate(node, options, virtualNode, context5) {
-      var _ref66 = context5 || {}, _ref66$cssom = _ref66.cssom, cssom = _ref66$cssom === void 0 ? void 0 : _ref66$cssom;
-      var _ref67 = options || {}, _ref67$degreeThreshol = _ref67.degreeThreshold, degreeThreshold = _ref67$degreeThreshol === void 0 ? 0 : _ref67$degreeThreshol;
+    function cssOrientationLockEvaluate(node, options, virtualNode, context) {
+      var _ref84 = context || {}, _ref84$cssom = _ref84.cssom, cssom = _ref84$cssom === void 0 ? void 0 : _ref84$cssom;
+      var _ref85 = options || {}, _ref85$degreeThreshol = _ref85.degreeThreshold, degreeThreshold = _ref85$degreeThreshol === void 0 ? 0 : _ref85$degreeThreshol;
       if (!cssom || !cssom.length) {
         return void 0;
       }
       var isLocked = false;
       var relatedElements = [];
       var rulesGroupByDocumentFragment = groupCssomByDocument(cssom);
-      var _loop5 = function _loop5() {
-        var key = _Object$keys2[_i21];
+      var _loop7 = function _loop7() {
+        var key = _Object$keys2[_i24];
         var _rulesGroupByDocument = rulesGroupByDocumentFragment[key], root = _rulesGroupByDocument.root, rules = _rulesGroupByDocument.rules;
         var orientationRules = rules.filter(isMediaRuleWithOrientation);
         if (!orientationRules.length) {
           return 'continue';
         }
-        orientationRules.forEach(function(_ref68) {
-          var cssRules = _ref68.cssRules;
+        orientationRules.forEach(function(_ref86) {
+          var cssRules = _ref86.cssRules;
           Array.from(cssRules).forEach(function(cssRule) {
             var locked = getIsOrientationLocked(cssRule);
             if (locked && cssRule.selectorText.toUpperCase() !== 'HTML') {
@@ -24108,9 +25491,9 @@ module.exports = {
           });
         });
       };
-      for (var _i21 = 0, _Object$keys2 = Object.keys(rulesGroupByDocumentFragment); _i21 < _Object$keys2.length; _i21++) {
-        var _ret2 = _loop5();
-        if (_ret2 === 'continue') {
+      for (var _i24 = 0, _Object$keys2 = Object.keys(rulesGroupByDocumentFragment); _i24 < _Object$keys2.length; _i24++) {
+        var _ret3 = _loop7();
+        if (_ret3 === 'continue') {
           continue;
         }
       }
@@ -24122,8 +25505,8 @@ module.exports = {
       }
       return false;
       function groupCssomByDocument(cssObjectModel) {
-        return cssObjectModel.reduce(function(out, _ref69) {
-          var sheet = _ref69.sheet, root = _ref69.root, shadowId = _ref69.shadowId;
+        return cssObjectModel.reduce(function(out, _ref87) {
+          var sheet = _ref87.sheet, root = _ref87.root, shadowId = _ref87.shadowId;
           var key = shadowId ? shadowId : 'topDocument';
           if (!out[key]) {
             out[key] = {
@@ -24139,15 +25522,15 @@ module.exports = {
           return out;
         }, {});
       }
-      function isMediaRuleWithOrientation(_ref70) {
-        var type = _ref70.type, cssText = _ref70.cssText;
+      function isMediaRuleWithOrientation(_ref88) {
+        var type = _ref88.type, cssText = _ref88.cssText;
         if (type !== 4) {
           return false;
         }
         return /orientation:\s*landscape/i.test(cssText) || /orientation:\s*portrait/i.test(cssText);
       }
-      function getIsOrientationLocked(_ref71) {
-        var selectorText = _ref71.selectorText, style = _ref71.style;
+      function getIsOrientationLocked(_ref89) {
+        var selectorText = _ref89.selectorText, style = _ref89.style;
         if (!selectorText || style.length <= 0) {
           return false;
         }
@@ -24155,11 +25538,11 @@ module.exports = {
         if (!transformStyle) {
           return false;
         }
-        var matches14 = transformStyle.match(/(rotate|rotateZ|rotate3d|matrix|matrix3d)\(([^)]+)\)(?!.*(rotate|rotateZ|rotate3d|matrix|matrix3d))/);
-        if (!matches14) {
+        var matches4 = transformStyle.match(/(rotate|rotateZ|rotate3d|matrix|matrix3d)\(([^)]+)\)(?!.*(rotate|rotateZ|rotate3d|matrix|matrix3d))/);
+        if (!matches4) {
           return false;
         }
-        var _matches = _slicedToArray(matches14, 3), transformFn = _matches[1], transformFnValue = _matches[2];
+        var _matches = _slicedToArray(matches4, 3), transformFn = _matches[1], transformFnValue = _matches[2];
         var degrees = getRotationInDegrees(transformFn, transformFnValue);
         if (!degrees) {
           return false;
@@ -24194,7 +25577,7 @@ module.exports = {
         }
       }
       function getAngleInDegrees(angleWithUnit) {
-        var _ref72 = angleWithUnit.match(/(deg|grad|rad|turn)/) || [], _ref73 = _slicedToArray(_ref72, 1), unit = _ref73[0];
+        var _ref90 = angleWithUnit.match(/(deg|grad|rad|turn)/) || [], _ref91 = _slicedToArray(_ref90, 1), unit = _ref91[0];
         if (!unit) {
           return;
         }
@@ -24243,7 +25626,7 @@ module.exports = {
     }
     var css_orientation_lock_evaluate_default = cssOrientationLockEvaluate;
     function metaViewportScaleEvaluate(node, options, virtualNode) {
-      var _ref74 = options || {}, _ref74$scaleMinimum = _ref74.scaleMinimum, scaleMinimum = _ref74$scaleMinimum === void 0 ? 2 : _ref74$scaleMinimum, _ref74$lowerBound = _ref74.lowerBound, lowerBound = _ref74$lowerBound === void 0 ? false : _ref74$lowerBound;
+      var _ref92 = options || {}, _ref92$scaleMinimum = _ref92.scaleMinimum, scaleMinimum = _ref92$scaleMinimum === void 0 ? 2 : _ref92$scaleMinimum, _ref92$lowerBound = _ref92.lowerBound, lowerBound = _ref92$lowerBound === void 0 ? false : _ref92$lowerBound;
       var content = virtualNode.attr('content') || '';
       if (!content) {
         return true;
@@ -24287,6 +25670,194 @@ module.exports = {
       return true;
     }
     var meta_viewport_scale_evaluate_default = metaViewportScaleEvaluate;
+    var roundingMargin = .05;
+    function targetOffsetEvaluate(node, options, vNode) {
+      var minOffset = (options === null || options === void 0 ? void 0 : options.minOffset) || 24;
+      var closeNeighbors = [];
+      var closestOffset = minOffset;
+      var _iterator8 = _createForOfIteratorHelper(_findNearbyElms(vNode, minOffset)), _step8;
+      try {
+        for (_iterator8.s(); !(_step8 = _iterator8.n()).done; ) {
+          var vNeighbor = _step8.value;
+          if (get_role_type_default(vNeighbor) !== 'widget' || !_isFocusable(vNeighbor)) {
+            continue;
+          }
+          var offset = roundToSingleDecimal(_getOffset(vNode, vNeighbor));
+          if (offset + roundingMargin >= minOffset) {
+            continue;
+          }
+          closestOffset = Math.min(closestOffset, offset);
+          closeNeighbors.push(vNeighbor);
+        }
+      } catch (err) {
+        _iterator8.e(err);
+      } finally {
+        _iterator8.f();
+      }
+      if (closeNeighbors.length === 0) {
+        this.data({
+          closestOffset: closestOffset,
+          minOffset: minOffset
+        });
+        return true;
+      }
+      this.relatedNodes(closeNeighbors.map(function(_ref93) {
+        var actualNode = _ref93.actualNode;
+        return actualNode;
+      }));
+      if (!closeNeighbors.some(_isInTabOrder)) {
+        this.data({
+          messageKey: 'nonTabbableNeighbor',
+          closestOffset: closestOffset,
+          minOffset: minOffset
+        });
+        return void 0;
+      }
+      this.data({
+        closestOffset: closestOffset,
+        minOffset: minOffset
+      });
+      return _isInTabOrder(vNode) ? false : void 0;
+    }
+    function roundToSingleDecimal(num) {
+      return Math.round(num * 10) / 10;
+    }
+    var roundingMargin2 = .05;
+    function targetSize(node, options, vNode) {
+      var minSize = (options === null || options === void 0 ? void 0 : options.minSize) || 24;
+      var nodeRect = vNode.boundingClientRect;
+      var hasMinimumSize = rectHasMinimumSize.bind(null, minSize);
+      var nearbyElms = _findNearbyElms(vNode);
+      var overflowingContent = filterOverflowingContent(vNode, nearbyElms);
+      var _filterByElmsOverlap = filterByElmsOverlap(vNode, nearbyElms), fullyObscuringElms = _filterByElmsOverlap.fullyObscuringElms, partialObscuringElms = _filterByElmsOverlap.partialObscuringElms;
+      if (fullyObscuringElms.length && !overflowingContent.length) {
+        this.relatedNodes(mapActualNodes(fullyObscuringElms));
+        this.data({
+          messageKey: 'obscured'
+        });
+        return true;
+      }
+      var negativeOutcome = _isInTabOrder(vNode) ? false : void 0;
+      if (!hasMinimumSize(nodeRect) && !overflowingContent.length) {
+        this.data(_extends({
+          minSize: minSize
+        }, toDecimalSize(nodeRect)));
+        return negativeOutcome;
+      }
+      var obscuredWidgets = filterFocusableWidgets(partialObscuringElms);
+      var largestInnerRect = getLargestUnobscuredArea(vNode, obscuredWidgets);
+      if (overflowingContent.length) {
+        if (fullyObscuringElms.length || !hasMinimumSize(largestInnerRect || nodeRect)) {
+          this.data({
+            minSize: minSize,
+            messageKey: 'contentOverflow'
+          });
+          this.relatedNodes(mapActualNodes(overflowingContent));
+          return void 0;
+        }
+      }
+      if (obscuredWidgets.length !== 0 && !hasMinimumSize(largestInnerRect)) {
+        var allTabbable = obscuredWidgets.every(_isInTabOrder);
+        var messageKey = 'partiallyObscured'.concat(allTabbable ? '' : 'NonTabbable');
+        this.data(_extends({
+          messageKey: messageKey,
+          minSize: minSize
+        }, toDecimalSize(largestInnerRect)));
+        this.relatedNodes(mapActualNodes(obscuredWidgets));
+        return allTabbable ? negativeOutcome : void 0;
+      }
+      this.data(_extends({
+        minSize: minSize
+      }, toDecimalSize(largestInnerRect || nodeRect)));
+      this.relatedNodes(mapActualNodes(obscuredWidgets));
+      return true;
+    }
+    function filterOverflowingContent(vNode, nearbyElms) {
+      return nearbyElms.filter(function(nearbyElm) {
+        return !isEnclosedRect(nearbyElm, vNode) && isDescendantNotInTabOrder(vNode, nearbyElm);
+      });
+    }
+    function filterByElmsOverlap(vNode, nearbyElms) {
+      var fullyObscuringElms = [];
+      var partialObscuringElms = [];
+      var _iterator9 = _createForOfIteratorHelper(nearbyElms), _step9;
+      try {
+        for (_iterator9.s(); !(_step9 = _iterator9.n()).done; ) {
+          var vNeighbor = _step9.value;
+          if (!isDescendantNotInTabOrder(vNode, vNeighbor) && _hasVisualOverlap(vNode, vNeighbor) && getCssPointerEvents(vNeighbor) !== 'none') {
+            if (isEnclosedRect(vNode, vNeighbor)) {
+              fullyObscuringElms.push(vNeighbor);
+            } else {
+              partialObscuringElms.push(vNeighbor);
+            }
+          }
+        }
+      } catch (err) {
+        _iterator9.e(err);
+      } finally {
+        _iterator9.f();
+      }
+      return {
+        fullyObscuringElms: fullyObscuringElms,
+        partialObscuringElms: partialObscuringElms
+      };
+    }
+    function getLargestUnobscuredArea(vNode, obscuredNodes) {
+      var nodeRect = vNode.boundingClientRect;
+      if (obscuredNodes.length === 0) {
+        return null;
+      }
+      var obscuringRects = obscuredNodes.map(function(_ref94) {
+        var rect = _ref94.boundingClientRect;
+        return rect;
+      });
+      var unobscuredRects = _splitRects(nodeRect, obscuringRects);
+      return getLargestRect(unobscuredRects);
+    }
+    function getLargestRect(rects, minSize) {
+      return rects.reduce(function(rectA, rectB) {
+        var rectAisMinimum = rectHasMinimumSize(minSize, rectA);
+        var rectBisMinimum = rectHasMinimumSize(minSize, rectB);
+        if (rectAisMinimum !== rectBisMinimum) {
+          return rectAisMinimum ? rectA : rectB;
+        }
+        var areaA = rectA.width * rectA.height;
+        var areaB = rectB.width * rectB.height;
+        return areaA > areaB ? rectA : rectB;
+      });
+    }
+    function filterFocusableWidgets(vNodes) {
+      return vNodes.filter(function(vNode) {
+        return get_role_type_default(vNode) === 'widget' && _isFocusable(vNode);
+      });
+    }
+    function isEnclosedRect(vNodeA, vNodeB) {
+      var rectA = vNodeA.boundingClientRect;
+      var rectB = vNodeB.boundingClientRect;
+      return rectA.top >= rectB.top && rectA.left >= rectB.left && rectA.bottom <= rectB.bottom && rectA.right <= rectB.right;
+    }
+    function getCssPointerEvents(vNode) {
+      return vNode.getComputedStylePropertyValue('pointer-events');
+    }
+    function toDecimalSize(rect) {
+      return {
+        width: Math.round(rect.width * 10) / 10,
+        height: Math.round(rect.height * 10) / 10
+      };
+    }
+    function isDescendantNotInTabOrder(vAncestor, vNode) {
+      return vAncestor.actualNode.contains(vNode.actualNode) && !_isInTabOrder(vNode);
+    }
+    function rectHasMinimumSize(minSize, _ref95) {
+      var width = _ref95.width, height = _ref95.height;
+      return width + roundingMargin2 >= minSize && height + roundingMargin2 >= minSize;
+    }
+    function mapActualNodes(vNodes) {
+      return vNodes.map(function(_ref96) {
+        var actualNode = _ref96.actualNode;
+        return actualNode;
+      });
+    }
     function headingOrderAfter(results) {
       var headingOrder = getHeadingOrder(results);
       results.forEach(function(result) {
@@ -24309,14 +25880,14 @@ module.exports = {
     }
     function getHeadingOrder(results) {
       results = _toConsumableArray(results);
-      results.sort(function(_ref75, _ref76) {
-        var nodeA = _ref75.node;
-        var nodeB = _ref76.node;
+      results.sort(function(_ref97, _ref98) {
+        var nodeA = _ref97.node;
+        var nodeB = _ref98.node;
         return nodeA.ancestry.length - nodeB.ancestry.length;
       });
       var headingOrder = results.reduce(mergeHeadingOrder, []);
-      return headingOrder.filter(function(_ref77) {
-        var level = _ref77.level;
+      return headingOrder.filter(function(_ref99) {
+        var level = _ref99.level;
         return level !== -1;
       });
     }
@@ -24367,7 +25938,7 @@ module.exports = {
       var headingRole = role && role.includes('heading');
       var ariaHeadingLevel = vNode.attr('aria-level');
       var ariaLevel = parseInt(ariaHeadingLevel, 10);
-      var _ref78 = vNode.props.nodeName.match(/h(\d)/) || [], _ref79 = _slicedToArray(_ref78, 2), headingLevel = _ref79[1];
+      var _ref100 = vNode.props.nodeName.match(/h(\d)/) || [], _ref101 = _slicedToArray(_ref100, 2), headingLevel = _ref101[1];
       if (!headingRole) {
         return -1;
       }
@@ -24391,9 +25962,7 @@ module.exports = {
         return true;
       }
       var selector = 'h1, h2, h3, h4, h5, h6, [role=heading], iframe, frame';
-      var vNodes = query_selector_all_filter_default(axe._tree[0], selector, function(vNode) {
-        return is_visible_default(vNode.actualNode, true);
-      });
+      var vNodes = query_selector_all_filter_default(axe._tree[0], selector, _isVisibleToScreenReaders);
       headingOrder = vNodes.map(function(vNode) {
         return {
           ancestry: [ _getAncestry(vNode.actualNode) ],
@@ -24422,7 +25991,7 @@ module.exports = {
         if (_typeof(aValue) !== _typeof(bValue)) {
           return false;
         }
-        if (typeof aValue === 'object' || typeof bValue === 'object') {
+        if (_typeof(aValue) === 'object' || _typeof(bValue) === 'object') {
           return isIdenticalObject(aValue, bValue);
         }
         return aValue === bValue;
@@ -24433,25 +26002,25 @@ module.exports = {
       if (results.length < 2) {
         return results;
       }
-      var incompleteResults = results.filter(function(_ref80) {
-        var result = _ref80.result;
+      var incompleteResults = results.filter(function(_ref102) {
+        var result = _ref102.result;
         return result !== void 0;
       });
       var uniqueResults = [];
       var nameMap = {};
-      var _loop6 = function _loop6(index) {
+      var _loop8 = function _loop8(index) {
         var _currentResult$relate;
         var currentResult = incompleteResults[index];
         var _currentResult$data = currentResult.data, name = _currentResult$data.name, urlProps = _currentResult$data.urlProps;
         if (nameMap[name]) {
           return 'continue';
         }
-        var sameNameResults = incompleteResults.filter(function(_ref81, resultNum) {
-          var data2 = _ref81.data;
+        var sameNameResults = incompleteResults.filter(function(_ref103, resultNum) {
+          var data2 = _ref103.data;
           return data2.name === name && resultNum !== index;
         });
-        var isSameUrl = sameNameResults.every(function(_ref82) {
-          var data2 = _ref82.data;
+        var isSameUrl = sameNameResults.every(function(_ref104) {
+          var data2 = _ref104.data;
           return isIdenticalObject(data2.urlProps, urlProps);
         });
         if (sameNameResults.length && !isSameUrl) {
@@ -24465,8 +26034,8 @@ module.exports = {
         uniqueResults.push(currentResult);
       };
       for (var index = 0; index < incompleteResults.length; index++) {
-        var _ret3 = _loop6(index);
-        if (_ret3 === 'continue') {
+        var _ret4 = _loop8(index);
+        if (_ret4 === 'continue') {
           continue;
         }
       }
@@ -24489,6 +26058,9 @@ module.exports = {
       },
       matches: function matches() {
         return matches_default3;
+      },
+      math: function math() {
+        return math_exports;
       },
       standards: function standards() {
         return standards_exports;
@@ -24665,7 +26237,7 @@ module.exports = {
     var is_data_cell_default = isDataCell;
     function isDataTable(node) {
       var role = (node.getAttribute('role') || '').toLowerCase();
-      if ((role === 'presentation' || role === 'none') && !is_focusable_default(node)) {
+      if ((role === 'presentation' || role === 'none') && !_isFocusable(node)) {
         return false;
       }
       if (node.getAttribute('contenteditable') === 'true' || find_up_default(node, '[contenteditable="true"]')) {
@@ -24838,17 +26410,6 @@ module.exports = {
       }, tableGrid, callback);
     }
     var traverse_default = traverse;
-    var commons = {
-      aria: aria_exports,
-      color: color_exports,
-      dom: dom_exports,
-      forms: forms_exports,
-      matches: matches_default3,
-      standards: standards_exports,
-      table: table_exports,
-      text: text_exports,
-      utils: utils_exports
-    };
     function identicalLinksSamePurposeEvaluate(node, options, virtualNode) {
       var accText = text_exports.accessibleTextVirtual(virtualNode);
       var name = text_exports.sanitize(text_exports.removeUnicode(accText, {
@@ -24875,11 +26436,27 @@ module.exports = {
       });
     }
     var internal_link_present_evaluate_default = internalLinkPresentEvaluate;
+    var separatorRegex = /[;,\s]/;
+    var validRedirectNumRegex = /^[0-9.]+$/;
     function metaRefreshEvaluate(node, options, virtualNode) {
-      var content = virtualNode.attr('content') || '', parsedParams = content.split(/[;,]/);
-      return content === '' || parsedParams[0] === '0';
+      var _ref105 = options || {}, minDelay = _ref105.minDelay, maxDelay = _ref105.maxDelay;
+      var content = (virtualNode.attr('content') || '').trim();
+      var _content$split = content.split(separatorRegex), _content$split2 = _slicedToArray(_content$split, 1), redirectStr = _content$split2[0];
+      if (!redirectStr.match(validRedirectNumRegex)) {
+        return true;
+      }
+      var redirectDelay = parseFloat(redirectStr);
+      this.data({
+        redirectDelay: redirectDelay
+      });
+      if (typeof minDelay === 'number' && redirectDelay <= options.minDelay) {
+        return true;
+      }
+      if (typeof maxDelay === 'number' && redirectDelay > options.maxDelay) {
+        return true;
+      }
+      return false;
     }
-    var meta_refresh_evaluate_default = metaRefreshEvaluate;
     function normalizeFontWeight(weight) {
       switch (weight) {
        case 'lighter':
@@ -24902,16 +26479,16 @@ module.exports = {
       var outerText = elm.textContent.trim();
       var innerText = outerText;
       while (innerText === outerText && nextNode !== void 0) {
-        var _i22 = -1;
+        var _i25 = -1;
         elm = nextNode;
         if (elm.children.length === 0) {
           return elm;
         }
         do {
-          _i22++;
-          innerText = elm.children[_i22].textContent.trim();
-        } while (innerText === '' && _i22 + 1 < elm.children.length);
-        nextNode = elm.children[_i22];
+          _i25++;
+          innerText = elm.children[_i25].textContent.trim();
+        } while (innerText === '' && _i25 + 1 < elm.children.length);
+        nextNode = elm.children[_i25];
       }
       return elm;
     }
@@ -24974,19 +26551,19 @@ module.exports = {
           return;
         }
         var frameAncestry = r.node.ancestry.slice(0, -1);
-        var _iterator2 = _createForOfIteratorHelper(iframeResults), _step2;
+        var _iterator10 = _createForOfIteratorHelper(iframeResults), _step10;
         try {
-          for (_iterator2.s(); !(_step2 = _iterator2.n()).done; ) {
-            var iframeResult = _step2.value;
+          for (_iterator10.s(); !(_step10 = _iterator10.n()).done; ) {
+            var iframeResult = _step10.value;
             if (match_ancestry_default(frameAncestry, iframeResult.node.ancestry)) {
               r.result = iframeResult.result;
               break;
             }
           }
         } catch (err) {
-          _iterator2.e(err);
+          _iterator10.e(err);
         } finally {
-          _iterator2.f();
+          _iterator10.f();
         }
       });
       iframeResults.forEach(function(r) {
@@ -24999,6 +26576,51 @@ module.exports = {
     var region_after_default = regionAfter;
     var landmarkRoles2 = get_aria_roles_by_type_default('landmark');
     var implicitAriaLiveRoles = [ 'alert', 'log', 'status' ];
+    function regionEvaluate(node, options, virtualNode) {
+      this.data({
+        isIframe: [ 'iframe', 'frame' ].includes(virtualNode.props.nodeName)
+      });
+      var regionlessNodes = cache_default.get('regionlessNodes', function() {
+        return getRegionlessNodes(options);
+      });
+      return !regionlessNodes.includes(virtualNode);
+    }
+    function getRegionlessNodes(options) {
+      var regionlessNodes = findRegionlessElms(axe._tree[0], options).map(function(vNode) {
+        while (vNode.parent && !vNode.parent._hasRegionDescendant && vNode.parent.actualNode !== document.body) {
+          vNode = vNode.parent;
+        }
+        return vNode;
+      }).filter(function(vNode, index, array) {
+        return array.indexOf(vNode) === index;
+      });
+      return regionlessNodes;
+    }
+    function findRegionlessElms(virtualNode, options) {
+      var node = virtualNode.actualNode;
+      if (get_role_default(virtualNode) === 'button' || isRegion(virtualNode, options) || [ 'iframe', 'frame' ].includes(virtualNode.props.nodeName) || _isSkipLink(virtualNode.actualNode) && get_element_by_reference_default(virtualNode.actualNode, 'href') || !_isVisibleToScreenReaders(node)) {
+        var vNode = virtualNode;
+        while (vNode) {
+          vNode._hasRegionDescendant = true;
+          vNode = vNode.parent;
+        }
+        if ([ 'iframe', 'frame' ].includes(virtualNode.props.nodeName)) {
+          return [ virtualNode ];
+        }
+        return [];
+      } else if (node !== document.body && has_content_default(node, true)) {
+        return [ virtualNode ];
+      } else {
+        return virtualNode.children.filter(function(_ref106) {
+          var actualNode = _ref106.actualNode;
+          return actualNode.nodeType === 1;
+        }).map(function(vNode) {
+          return findRegionlessElms(vNode, options);
+        }).reduce(function(a, b) {
+          return a.concat(b);
+        }, []);
+      }
+    }
     function isRegion(virtualNode, options) {
       var node = virtualNode.actualNode;
       var role = get_role_default(virtualNode);
@@ -25014,56 +26636,10 @@ module.exports = {
       }
       return false;
     }
-    function findRegionlessElms(virtualNode, options) {
-      var node = virtualNode.actualNode;
-      if (get_role_default(virtualNode) === 'button' || isRegion(virtualNode, options) || [ 'iframe', 'frame' ].includes(virtualNode.props.nodeName) || _isSkipLink(virtualNode.actualNode) && get_element_by_reference_default(virtualNode.actualNode, 'href') || !is_visible_default(node, true)) {
-        var vNode = virtualNode;
-        while (vNode) {
-          vNode._hasRegionDescendant = true;
-          vNode = vNode.parent;
-        }
-        if ([ 'iframe', 'frame' ].includes(virtualNode.props.nodeName)) {
-          return [ virtualNode ];
-        }
-        return [];
-      } else if (node !== document.body && has_content_default(node, true)) {
-        return [ virtualNode ];
-      } else {
-        return virtualNode.children.filter(function(_ref83) {
-          var actualNode = _ref83.actualNode;
-          return actualNode.nodeType === 1;
-        }).map(function(vNode) {
-          return findRegionlessElms(vNode, options);
-        }).reduce(function(a, b) {
-          return a.concat(b);
-        }, []);
-      }
-    }
-    function regionEvaluate(node, options, virtualNode) {
-      var regionlessNodes = cache_default.get('regionlessNodes');
-      this.data({
-        isIframe: [ 'iframe', 'frame' ].includes(virtualNode.props.nodeName)
-      });
-      if (regionlessNodes) {
-        return !regionlessNodes.includes(virtualNode);
-      }
-      var tree = axe._tree;
-      regionlessNodes = findRegionlessElms(tree[0], options).map(function(vNode) {
-        while (vNode.parent && !vNode.parent._hasRegionDescendant && vNode.parent.actualNode !== document.body) {
-          vNode = vNode.parent;
-        }
-        return vNode;
-      }).filter(function(vNode, index, array) {
-        return array.indexOf(vNode) === index;
-      });
-      cache_default.set('regionlessNodes', regionlessNodes);
-      return !regionlessNodes.includes(virtualNode);
-    }
-    var region_evaluate_default = regionEvaluate;
     function skipLinkEvaluate(node) {
       var target = get_element_by_reference_default(node, 'href');
       if (target) {
-        return is_visible_default(target, true) || void 0;
+        return _isVisibleToScreenReaders(target) || void 0;
       }
       return false;
     }
@@ -25154,28 +26730,88 @@ module.exports = {
       return virtualNode.hasAttr('alt');
     }
     var has_alt_evaluate_default = hasAltEvaluate;
+    function inlineStyleProperty(node, options) {
+      var cssProperty = options.cssProperty, absoluteValues = options.absoluteValues, minValue = options.minValue, maxValue = options.maxValue, _options$normalValue = options.normalValue, normalValue = _options$normalValue === void 0 ? 0 : _options$normalValue, noImportant = options.noImportant, multiLineOnly = options.multiLineOnly;
+      if (!noImportant && node.style.getPropertyPriority(cssProperty) !== 'important' || multiLineOnly && !_isMultiline(node)) {
+        return true;
+      }
+      var data2 = {};
+      if (typeof minValue === 'number') {
+        data2.minValue = minValue;
+      }
+      if (typeof maxValue === 'number') {
+        data2.maxValue = maxValue;
+      }
+      var declaredPropValue = node.style.getPropertyValue(cssProperty);
+      if ([ 'inherit', 'unset', 'revert', 'revert-layer' ].includes(declaredPropValue)) {
+        this.data(_extends({
+          value: declaredPropValue
+        }, data2));
+        return true;
+      }
+      var value = getNumberValue(node, {
+        absoluteValues: absoluteValues,
+        cssProperty: cssProperty,
+        normalValue: normalValue
+      });
+      this.data(_extends({
+        value: value
+      }, data2));
+      if (typeof value !== 'number') {
+        return void 0;
+      }
+      if ((typeof minValue !== 'number' || value >= minValue) && (typeof maxValue !== 'number' || value <= maxValue)) {
+        return true;
+      }
+      return false;
+    }
+    function getNumberValue(domNode, _ref107) {
+      var cssProperty = _ref107.cssProperty, absoluteValues = _ref107.absoluteValues, normalValue = _ref107.normalValue;
+      var computedStyle = window.getComputedStyle(domNode);
+      var cssPropValue = computedStyle.getPropertyValue(cssProperty);
+      if (cssPropValue === 'normal') {
+        return normalValue;
+      }
+      var parsedValue = parseFloat(cssPropValue);
+      if (absoluteValues) {
+        return parsedValue;
+      }
+      var fontSize = parseFloat(computedStyle.getPropertyValue('font-size'));
+      var value = Math.round(parsedValue / fontSize * 100) / 100;
+      if (isNaN(value)) {
+        return cssPropValue;
+      }
+      return value;
+    }
     function isOnScreenEvaluate(node) {
-      return is_visible_default(node, false) && !is_offscreen_default(node);
+      return _isVisibleOnScreen(node);
     }
     var is_on_screen_evaluate_default = isOnScreenEvaluate;
     function nonEmptyIfPresentEvaluate(node, options, virtualNode) {
       var nodeName2 = virtualNode.props.nodeName;
       var type = (virtualNode.attr('type') || '').toLowerCase();
-      var label5 = virtualNode.attr('value');
-      if (label5) {
+      var label3 = virtualNode.attr('value');
+      if (label3) {
         this.data({
           messageKey: 'has-label'
         });
       }
       if (nodeName2 === 'input' && [ 'submit', 'reset' ].includes(type)) {
-        return label5 === null;
+        return label3 === null;
       }
       return false;
     }
     var non_empty_if_present_evaluate_default = nonEmptyIfPresentEvaluate;
     function presentationalRoleEvaluate(node, options, virtualNode) {
-      var role = get_role_default(virtualNode);
       var explicitRole2 = get_explicit_role_default(virtualNode);
+      if ([ 'presentation', 'none' ].includes(explicitRole2) && [ 'iframe', 'frame' ].includes(virtualNode.props.nodeName) && virtualNode.hasAttr('title')) {
+        this.data({
+          messageKey: 'iframe',
+          nodeName: virtualNode.props.nodeName
+        });
+        return false;
+      }
+      var role = get_role_default(virtualNode);
       if ([ 'presentation', 'none' ].includes(role)) {
         this.data({
           role: role
@@ -25188,7 +26824,7 @@ module.exports = {
       var hasGlobalAria = get_global_aria_attrs_default().some(function(attr) {
         return virtualNode.hasAttr(attr);
       });
-      var focusable = is_focusable_default(virtualNode);
+      var focusable = _isFocusable(virtualNode);
       var messageKey;
       if (hasGlobalAria && !focusable) {
         messageKey = 'globalAria';
@@ -25203,13 +26839,12 @@ module.exports = {
       });
       return false;
     }
-    var presentational_role_evaluate_default = presentationalRoleEvaluate;
     function svgNonEmptyTitleEvaluate(node, options, virtualNode) {
       if (!virtualNode.children) {
         return void 0;
       }
-      var titleNode = virtualNode.children.find(function(_ref84) {
-        var props = _ref84.props;
+      var titleNode = virtualNode.children.find(function(_ref108) {
+        var props = _ref108.props;
         return props.nodeName === 'title';
       });
       if (!titleNode) {
@@ -25219,7 +26854,10 @@ module.exports = {
         return false;
       }
       try {
-        if (visible_virtual_default(titleNode) === '') {
+        var titleText2 = subtree_text_default(titleNode, {
+          includeHidden: true
+        }).trim();
+        if (titleText2 === '') {
           this.data({
             messageKey: 'emptyTitle'
           });
@@ -25232,9 +26870,9 @@ module.exports = {
     }
     var svg_non_empty_title_evaluate_default = svgNonEmptyTitleEvaluate;
     function captionFakedEvaluate(node) {
-      var table5 = to_grid_default(node);
-      var firstRow = table5[0];
-      if (table5.length <= 1 || firstRow.length <= 1 || node.rows.length <= 1) {
+      var table = to_grid_default(node);
+      var firstRow = table[0];
+      if (table.length <= 1 || firstRow.length <= 1 || node.rows.length <= 1) {
         return true;
       }
       return firstRow.reduce(function(out, curr, i) {
@@ -25249,10 +26887,22 @@ module.exports = {
       return node.nodeName.toUpperCase() === 'TH';
     }
     var html5_scope_evaluate_default = html5ScopeEvaluate;
-    function sameCaptionSummaryEvaluate(node) {
-      return !!(node.summary && node.caption) && node.summary.toLowerCase() === accessible_text_default(node.caption).toLowerCase();
-    }
     var same_caption_summary_evaluate_default = sameCaptionSummaryEvaluate;
+    function sameCaptionSummaryEvaluate(node, options, virtualNode) {
+      if (virtualNode.children === void 0) {
+        return void 0;
+      }
+      var summary = virtualNode.attr('summary');
+      var captionNode = virtualNode.children.find(isCaptionNode);
+      var caption = captionNode ? sanitize_default(subtree_text_default(captionNode)) : false;
+      if (!caption || !summary) {
+        return false;
+      }
+      return sanitize_default(summary).toLowerCase() === sanitize_default(caption).toLowerCase();
+    }
+    function isCaptionNode(virtualNode) {
+      return virtualNode.props.nodeName === 'caption';
+    }
     function scopeValueEvaluate(node, options) {
       var value = node.getAttribute('scope').toLowerCase();
       return options.values.indexOf(value) !== -1;
@@ -25298,7 +26948,7 @@ module.exports = {
       cells.forEach(function(cell) {
         var isSelf = false;
         var notOfTable = false;
-        if (!cell.hasAttribute('headers')) {
+        if (!cell.hasAttribute('headers') || !_isVisibleToScreenReaders(cell)) {
           return;
         }
         var headersAttr = cell.getAttribute('headers').trim();
@@ -25393,11 +27043,11 @@ module.exports = {
     }
     var hidden_content_evaluate_default = hiddenContentEvaluate;
     function ariaAllowedAttrMatches(node, virtualNode) {
-      var aria49 = /^aria-/;
+      var aria = /^aria-/;
       var attrs = virtualNode.attrNames;
       if (attrs.length) {
-        for (var _i23 = 0, l = attrs.length; _i23 < l; _i23++) {
-          if (aria49.test(attrs[_i23])) {
+        for (var _i26 = 0, l = attrs.length; _i26 < l; _i26++) {
+          if (aria.test(attrs[_i26])) {
             return true;
           }
         }
@@ -25413,9 +27063,9 @@ module.exports = {
     }
     var aria_allowed_role_matches_default = ariaAllowedRoleMatches;
     function ariaHasAttrMatches(node, virtualNode) {
-      var aria49 = /^aria-/;
+      var aria = /^aria-/;
       return virtualNode.attrNames.some(function(attr) {
-        return aria49.test(attr);
+        return aria.test(attr);
       });
     }
     var aria_has_attr_matches_default = ariaHasAttrMatches;
@@ -25469,18 +27119,18 @@ module.exports = {
           return false;
         }
       }
-      if (tabIndex === '-1' && virtualNode.actualNode && !is_visible_default(virtualNode.actualNode, false) && !is_visible_default(virtualNode.actualNode, true)) {
+      if (tabIndex === '-1' && virtualNode.actualNode && !_isVisibleOnScreen(virtualNode) && !_isVisibleToScreenReaders(virtualNode)) {
         return false;
       }
       return true;
     }
     var autocomplete_matches_default = autocompleteMatches;
-    function isInitiatorMatches(node, virtualNode, context5) {
-      return context5.initiator;
+    function isInitiatorMatches(node, virtualNode, context) {
+      return context.initiator;
     }
     var is_initiator_matches_default = isInitiatorMatches;
-    function bypassMatches(node, virtualNode, context5) {
-      if (is_initiator_matches_default(node, virtualNode, context5)) {
+    function bypassMatches(node, virtualNode, context) {
+      if (is_initiator_matches_default(node, virtualNode, context)) {
         return !!node.querySelector('a[href]');
       }
       return true;
@@ -25571,8 +27221,8 @@ module.exports = {
         }
       }
       var rects = range.getClientRects();
-      for (var _index = 0; _index < rects.length; _index++) {
-        if (visually_overlaps_default(rects[_index], node)) {
+      for (var _index2 = 0; _index2 < rects.length; _index2++) {
+        if (visually_overlaps_default(rects[_index2], node)) {
           return true;
         }
       }
@@ -25595,7 +27245,7 @@ module.exports = {
       var id = node.getAttribute('id').trim();
       var idSelector = '*[id="'.concat(escape_selector_default(id), '"]');
       var idMatchingElms = Array.from(get_root_node_default2(node).querySelectorAll(idSelector));
-      return !is_accessible_ref_default(node) && idMatchingElms.some(is_focusable_default);
+      return !is_accessible_ref_default(node) && idMatchingElms.some(_isFocusable);
     }
     var duplicate_id_active_matches_default = duplicateIdActiveMatches;
     function duplicateIdAriaMatches(node) {
@@ -25607,13 +27257,13 @@ module.exports = {
       var idSelector = '*[id="'.concat(escape_selector_default(id), '"]');
       var idMatchingElms = Array.from(get_root_node_default2(node).querySelectorAll(idSelector));
       return !is_accessible_ref_default(node) && idMatchingElms.every(function(elm) {
-        return !is_focusable_default(elm);
+        return !_isFocusable(elm);
       });
     }
     var duplicate_id_misc_matches_default = duplicateIdMiscMatches;
-    function frameFocusableContentMatches(node, virtualNode, context5) {
-      var _context5$size, _context5$size2;
-      return !context5.initiator && !context5.focusable && ((_context5$size = context5.size) === null || _context5$size === void 0 ? void 0 : _context5$size.width) * ((_context5$size2 = context5.size) === null || _context5$size2 === void 0 ? void 0 : _context5$size2.height) > 1;
+    function frameFocusableContentMatches(node, virtualNode, context) {
+      var _context$size, _context$size2;
+      return !context.initiator && !context.focusable && ((_context$size = context.size) === null || _context$size === void 0 ? void 0 : _context$size.width) * ((_context$size2 = context.size) === null || _context$size2 === void 0 ? void 0 : _context$size2.height) > 1;
     }
     var frame_focusable_content_matches_default = frameFocusableContentMatches;
     function frameTitleHasTextMatches(node) {
@@ -25627,18 +27277,9 @@ module.exports = {
       }) !== null;
     }
     var has_implicit_chromium_role_matches_default = hasImplicitChromiumRoleMatches;
-    function headingMatches(node) {
-      var explicitRoles;
-      if (node.hasAttribute('role')) {
-        explicitRoles = node.getAttribute('role').split(/\s+/i).filter(axe.commons.aria.isValidRole);
-      }
-      if (explicitRoles && explicitRoles.length > 0) {
-        return explicitRoles.includes('heading');
-      } else {
-        return axe.commons.aria.implicitRole(node) === 'heading';
-      }
+    function headingMatches(node, virtualNode) {
+      return get_role_default(virtualNode) === 'heading';
     }
-    var heading_matches_default = headingMatches;
     function svgNamespaceMatches(node, virtualNode) {
       try {
         var nodeName2 = virtualNode.props.nodeName;
@@ -25671,14 +27312,20 @@ module.exports = {
       return inserted_into_focus_order_default(node);
     }
     var inserted_into_focus_order_matches_default = insertedIntoFocusOrderMatches;
+    function hasVisibleTextMatches(node) {
+      return _isVisibleOnScreen(node);
+    }
+    function isVisibleOnScreenMatches(node, virtualNode) {
+      return _isVisibleOnScreen(virtualNode);
+    }
     function labelContentNameMismatchMatches(node, virtualNode) {
       var role = get_role_default(node);
       if (!role) {
         return false;
       }
       var widgetRoles = get_aria_roles_by_type_default('widget');
-      var isWidgetType = widgetRoles.includes(role);
-      if (!isWidgetType) {
+      var isWidgetType2 = widgetRoles.includes(role);
+      if (!isWidgetType2) {
         return false;
       }
       var rolesWithNameFromContents = get_aria_roles_supporting_name_from_content_default();
@@ -25710,7 +27357,7 @@ module.exports = {
     function landmarkUniqueMatches(node, virtualNode) {
       var excludedParentsForHeaderFooterLandmarks = [ 'article', 'aside', 'main', 'nav', 'section' ].join(',');
       function isHeaderFooterLandmark(headerFooterElement) {
-        return !find_up_virtual_default(headerFooterElement, excludedParentsForHeaderFooterLandmarks);
+        return !closest_default(headerFooterElement, excludedParentsForHeaderFooterLandmarks);
       }
       function isLandmarkVirtual(virtualNode2) {
         var actualNode = virtualNode2.actualNode;
@@ -25729,23 +27376,23 @@ module.exports = {
         }
         return landmarkRoles3.indexOf(role) >= 0 || role === 'region';
       }
-      return isLandmarkVirtual(virtualNode) && is_visible_default(node, true);
+      return isLandmarkVirtual(virtualNode) && _isVisibleToScreenReaders(node);
     }
     var landmark_unique_matches_default = landmarkUniqueMatches;
     function dataTableMatches2(node) {
-      return !is_data_table_default(node) && !is_focusable_default(node);
+      return !is_data_table_default(node) && !_isFocusable(node);
     }
     var layout_table_matches_default = dataTableMatches2;
     function linkInTextBlockMatches(node) {
-      var text32 = sanitize_default(node.textContent);
+      var text = sanitize_default(node.innerText);
       var role = node.getAttribute('role');
       if (role && role !== 'link') {
         return false;
       }
-      if (!text32) {
+      if (!text) {
         return false;
       }
-      if (!is_visible_default(node, false)) {
+      if (!_isVisibleOnScreen(node)) {
         return false;
       }
       return is_in_text_block_default(node);
@@ -25784,8 +27431,8 @@ module.exports = {
       if (!role || [ 'none', 'presentation' ].includes(role)) {
         return true;
       }
-      var _ref85 = aria_roles_default[role] || {}, accessibleNameRequired = _ref85.accessibleNameRequired;
-      if (accessibleNameRequired || is_focusable_default(virtualNode)) {
+      var _ref109 = aria_roles_default[role] || {}, accessibleNameRequired = _ref109.accessibleNameRequired;
+      if (accessibleNameRequired || _isFocusable(virtualNode)) {
         return true;
       }
       return false;
@@ -25802,14 +27449,34 @@ module.exports = {
       return true;
     }
     var no_naming_method_matches_default = noNamingMethodMatches;
-    function noRoleMatches(node) {
-      return !node.getAttribute('role');
+    function noNegativeTabindexMatches(node, virtualNode) {
+      var tabindex = parseInt(virtualNode.attr('tabindex'), 10);
+      return isNaN(tabindex) || tabindex >= 0;
+    }
+    var no_negative_tabindex_matches_default = noNegativeTabindexMatches;
+    function noRoleMatches(node, vNode) {
+      return !vNode.attr('role');
     }
     var no_role_matches_default = noRoleMatches;
     function notHtmlMatches(node, virtualNode) {
       return virtualNode.props.nodeName !== 'html';
     }
     var not_html_matches_default = notHtmlMatches;
+    var object_is_loaded_matches_default = function object_is_loaded_matches_default(node, vNode) {
+      return [ no_explicit_name_required_matches_default, objectHasLoaded ].every(function(fn) {
+        return fn(node, vNode);
+      });
+    };
+    function objectHasLoaded(node) {
+      var _node$ownerDocument;
+      if (!(node !== null && node !== void 0 && (_node$ownerDocument = node.ownerDocument) !== null && _node$ownerDocument !== void 0 && _node$ownerDocument.createRange)) {
+        return true;
+      }
+      var range = node.ownerDocument.createRange();
+      range.setStart(node, 0);
+      range.setEnd(node, node.childNodes.length);
+      return range.getClientRects().length === 0;
+    }
     function pAsHeadingMatches(node) {
       var children = Array.from(node.parentNode.childNodes);
       var nodeText = node.textContent.trim();
@@ -25865,6 +27532,45 @@ module.exports = {
       return _isSkipLink(node) && is_offscreen_default(node);
     }
     var skip_link_matches_default = skipLinkMatches;
+    function tableOrGridRoleMatches(_, vNode) {
+      var role = get_role_default(vNode);
+      return [ 'treegrid', 'grid', 'table' ].includes(role);
+    }
+    function widgetNotInline(node, vNode) {
+      return matchesFns.every(function(fn) {
+        return fn(node, vNode);
+      });
+    }
+    var matchesFns = [ function(node, vNode) {
+      return isWidgetType(vNode);
+    }, function(node, vNode) {
+      return isNotAreaElement(vNode);
+    }, function(node, vNode) {
+      return !svg_namespace_matches_default(node, vNode);
+    }, function(node, vNode) {
+      return _isFocusable(vNode);
+    }, function(node, vNode) {
+      return _isInTabOrder(vNode) || !hasWidgetAncestorInTabOrder(vNode);
+    }, function(node) {
+      return !is_in_text_block_default(node, {
+        noLengthCompare: true
+      });
+    } ];
+    function isWidgetType(vNode) {
+      return get_role_type_default(vNode) === 'widget';
+    }
+    function isNotAreaElement(vNode) {
+      return vNode.props.nodeName !== 'area';
+    }
+    var hasWidgetAncestorInTabOrder = memoize_default(function hasWidgetAncestorInTabOrderMemoized(vNode) {
+      if (!(vNode !== null && vNode !== void 0 && vNode.parent)) {
+        return false;
+      }
+      if (isWidgetType(vNode.parent) && _isInTabOrder(vNode.parent)) {
+        return true;
+      }
+      return hasWidgetAncestorInTabOrderMemoized(vNode.parent);
+    });
     function windowIsTopMatches(node) {
       return node.ownerDocument.defaultView.self === node.ownerDocument.defaultView.top;
     }
@@ -25880,10 +27586,11 @@ module.exports = {
       'accesskeys-after': accesskeys_after_default,
       'accesskeys-evaluate': accesskeys_evaluate_default,
       'alt-space-value-evaluate': alt_space_value_evaluate_default,
-      'aria-allowed-attr-evaluate': aria_allowed_attr_evaluate_default,
+      'aria-allowed-attr-evaluate': ariaAllowedAttrEvaluate,
       'aria-allowed-attr-matches': aria_allowed_attr_matches_default,
       'aria-allowed-role-evaluate': aria_allowed_role_evaluate_default,
       'aria-allowed-role-matches': aria_allowed_role_matches_default,
+      'aria-busy-evaluate': ariaBusyEvaluate,
       'aria-errormessage-evaluate': aria_errormessage_evaluate_default,
       'aria-has-attr-matches': aria_has_attr_matches_default,
       'aria-hidden-body-evaluate': aria_hidden_body_evaluate_default,
@@ -25892,7 +27599,7 @@ module.exports = {
       'aria-labelledby-evaluate': aria_labelledby_evaluate_default,
       'aria-level-evaluate': aria_level_evaluate_default,
       'aria-prohibited-attr-evaluate': ariaProhibitedAttrEvaluate,
-      'aria-required-attr-evaluate': aria_required_attr_evaluate_default,
+      'aria-required-attr-evaluate': ariaRequiredAttrEvaluate,
       'aria-required-children-evaluate': aria_required_children_evaluate_default,
       'aria-required-children-matches': aria_required_children_matches_default,
       'aria-required-parent-evaluate': aria_required_parent_evaluate_default,
@@ -25900,7 +27607,7 @@ module.exports = {
       'aria-roledescription-evaluate': aria_roledescription_evaluate_default,
       'aria-unsupported-attr-evaluate': aria_unsupported_attr_evaluate_default,
       'aria-valid-attr-evaluate': aria_valid_attr_evaluate_default,
-      'aria-valid-attr-value-evaluate': aria_valid_attr_value_evaluate_default,
+      'aria-valid-attr-value-evaluate': ariaValidAttrValueEvaluate,
       'attr-non-space-content-evaluate': attr_non_space_content_evaluate_default,
       'autocomplete-appropriate-evaluate': autocomplete_appropriate_evaluate_default,
       'autocomplete-matches': autocomplete_matches_default,
@@ -25932,7 +27639,7 @@ module.exports = {
       'focusable-modal-open-evaluate': focusable_modal_open_evaluate_default,
       'focusable-no-name-evaluate': focusable_no_name_evaluate_default,
       'focusable-not-tabbable-evaluate': focusable_not_tabbable_evaluate_default,
-      'frame-focusable-content-evaluate': frame_focusable_content_evaluate_default,
+      'frame-focusable-content-evaluate': frameFocusableContentEvaluate,
       'frame-focusable-content-matches': frame_focusable_content_matches_default,
       'frame-tested-after': frame_tested_after_default,
       'frame-tested-evaluate': frame_tested_evaluate_default,
@@ -25943,9 +27650,9 @@ module.exports = {
       'has-global-aria-attribute-evaluate': has_global_aria_attribute_evaluate_default,
       'has-implicit-chromium-role-matches': has_implicit_chromium_role_matches_default,
       'has-lang-evaluate': has_lang_evaluate_default,
-      'has-text-content-evaluate': has_text_content_evaluate_default,
+      'has-text-content-evaluate': hasTextContentEvaluate,
       'has-widget-role-evaluate': has_widget_role_evaluate_default,
-      'heading-matches': heading_matches_default,
+      'heading-matches': headingMatches,
       'heading-order-after': headingOrderAfter,
       'heading-order-evaluate': heading_order_evaluate_default,
       'help-same-as-label-evaluate': help_same_as_label_evaluate_default,
@@ -25957,12 +27664,16 @@ module.exports = {
       'identical-links-same-purpose-evaluate': identical_links_same_purpose_evaluate_default,
       'identical-links-same-purpose-matches': identical_links_same_purpose_matches_default,
       'implicit-evaluate': implicit_evaluate_default,
+      'inline-style-property-evaluate': inlineStyleProperty,
       'inserted-into-focus-order-matches': inserted_into_focus_order_matches_default,
       'internal-link-present-evaluate': internal_link_present_evaluate_default,
+      'invalid-children-evaluate': invalidChildrenEvaluate,
       'invalidrole-evaluate': invalidrole_evaluate_default,
       'is-element-focusable-evaluate': is_element_focusable_evaluate_default,
       'is-initiator-matches': is_initiator_matches_default,
       'is-on-screen-evaluate': is_on_screen_evaluate_default,
+      'is-visible-matches': hasVisibleTextMatches,
+      'is-visible-on-screen-matches': isVisibleOnScreenMatches,
       'label-content-name-mismatch-evaluate': label_content_name_mismatch_evaluate_default,
       'label-content-name-mismatch-matches': label_content_name_mismatch_matches_default,
       'label-matches': label_matches_default,
@@ -25974,9 +27685,10 @@ module.exports = {
       'layout-table-matches': layout_table_matches_default,
       'link-in-text-block-evaluate': link_in_text_block_evaluate_default,
       'link-in-text-block-matches': link_in_text_block_matches_default,
+      'link-in-text-block-style-evaluate': link_in_text_block_style_evaluate_default,
       'listitem-evaluate': listitemEvaluate,
       'matches-definition-evaluate': matches_definition_evaluate_default,
-      'meta-refresh-evaluate': meta_refresh_evaluate_default,
+      'meta-refresh-evaluate': metaRefreshEvaluate,
       'meta-viewport-scale-evaluate': meta_viewport_scale_evaluate_default,
       'multiple-label-evaluate': multiple_label_evaluate_default,
       'nested-interactive-matches': nested_interactive_matches_default,
@@ -25987,9 +27699,11 @@ module.exports = {
       'no-focusable-content-evaluate': noFocusableContentEvaluate,
       'no-implicit-explicit-label-evaluate': no_implicit_explicit_label_evaluate_default,
       'no-naming-method-matches': no_naming_method_matches_default,
+      'no-negative-tabindex-matches': no_negative_tabindex_matches_default,
       'no-role-matches': no_role_matches_default,
       'non-empty-if-present-evaluate': non_empty_if_present_evaluate_default,
       'not-html-matches': not_html_matches_default,
+      'object-is-loaded-matches': object_is_loaded_matches_default,
       'only-dlitems-evaluate': only_dlitems_evaluate_default,
       'only-listitems-evaluate': only_listitems_evaluate_default,
       'p-as-heading-evaluate': p_as_heading_evaluate_default,
@@ -25997,9 +27711,9 @@ module.exports = {
       'page-no-duplicate-after': page_no_duplicate_after_default,
       'page-no-duplicate-evaluate': page_no_duplicate_evaluate_default,
       'presentation-role-conflict-matches': presentation_role_conflict_matches_default,
-      'presentational-role-evaluate': presentational_role_evaluate_default,
+      'presentational-role-evaluate': presentationalRoleEvaluate,
       'region-after': region_after_default,
-      'region-evaluate': region_evaluate_default,
+      'region-evaluate': regionEvaluate,
       'same-caption-summary-evaluate': same_caption_summary_evaluate_default,
       'scope-value-evaluate': scope_value_evaluate_default,
       'scrollable-region-focusable-matches': scrollable_region_focusable_matches_default,
@@ -26009,6 +27723,9 @@ module.exports = {
       'svg-namespace-matches': svg_namespace_matches_default,
       'svg-non-empty-title-evaluate': svg_non_empty_title_evaluate_default,
       'tabindex-evaluate': tabindex_evaluate_default,
+      'table-or-grid-role-matches': tableOrGridRoleMatches,
+      'target-offset-evaluate': targetOffsetEvaluate,
+      'target-size-evaluate': targetSize,
       'td-has-header-evaluate': td_has_header_evaluate_default,
       'td-headers-attr-evaluate': td_headers_attr_evaluate_default,
       'th-has-data-cells-evaluate': th_has_data_cells_evaluate_default,
@@ -26018,13 +27735,14 @@ module.exports = {
       'unsupportedrole-evaluate': unsupportedrole_evaluate_default,
       'valid-lang-evaluate': valid_lang_evaluate_default,
       'valid-scrollable-semantics-evaluate': valid_scrollable_semantics_evaluate_default,
+      'widget-not-inline-matches': widgetNotInline,
       'window-is-top-matches': window_is_top_matches_default,
       'xml-lang-mismatch-evaluate': xml_lang_mismatch_evaluate_default,
       'xml-lang-mismatch-matches': xml_lang_mismatch_matches_default
     };
     var metadata_function_map_default = metadataFunctionMap;
-    function CheckResult(check4) {
-      this.id = check4.id;
+    function CheckResult(check) {
+      this.id = check.id;
       this.data = null;
       this.relatedNodes = [];
       this.result = null;
@@ -26058,7 +27776,7 @@ module.exports = {
       }
     }
     Check.prototype.enabled = true;
-    Check.prototype.run = function run(node, options, context5, resolve, reject) {
+    Check.prototype.run = function run(node, options, context, resolve, reject) {
       options = options || {};
       var enabled = options.hasOwnProperty('enabled') ? options.enabled : this.enabled;
       var checkOptions = this.getOptions(options.options);
@@ -26067,7 +27785,7 @@ module.exports = {
         var helper = check_helper_default(checkResult, options, resolve, reject);
         var result;
         try {
-          result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context5);
+          result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
         } catch (e) {
           if (node && node.actualNode) {
             e.errorNode = new dq_element_default(node).toJSON();
@@ -26083,7 +27801,7 @@ module.exports = {
         resolve(null);
       }
     };
-    Check.prototype.runSync = function runSync(node, options, context5) {
+    Check.prototype.runSync = function runSync(node, options, context) {
       options = options || {};
       var _options = options, _options$enabled = _options.enabled, enabled = _options$enabled === void 0 ? this.enabled : _options$enabled;
       if (!enabled) {
@@ -26097,7 +27815,7 @@ module.exports = {
       };
       var result;
       try {
-        result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context5);
+        result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
       } catch (e) {
         if (node && node.actualNode) {
           e.errorNode = new dq_element_default(node).toJSON();
@@ -26107,8 +27825,8 @@ module.exports = {
       checkResult.result = result;
       return checkResult;
     };
-    Check.prototype.configure = function configure(spec) {
-      var _this4 = this;
+    Check.prototype.configure = function configure2(spec) {
+      var _this5 = this;
       if (!spec.evaluate || metadata_function_map_default[spec.evaluate]) {
         this._internalCheck = true;
       }
@@ -26125,7 +27843,7 @@ module.exports = {
       [ 'evaluate', 'after' ].filter(function(prop) {
         return spec.hasOwnProperty(prop);
       }).forEach(function(prop) {
-        return _this4[prop] = createExecutionContext(spec[prop]);
+        return _this5[prop] = createExecutionContext(spec[prop]);
       });
     };
     Check.prototype.getOptions = function getOptions(options) {
@@ -26136,10 +27854,10 @@ module.exports = {
       }
     };
     var check_default = Check;
-    function RuleResult(rule3) {
-      this.id = rule3.id;
+    function RuleResult(rule) {
+      this.id = rule.id;
       this.result = constants_default.NA;
-      this.pageLevel = rule3.pageLevel;
+      this.pageLevel = rule.pageLevel;
       this.impact = null;
       this.nodes = [];
     }
@@ -26161,33 +27879,34 @@ module.exports = {
       this.none = spec.none || [];
       this.tags = spec.tags || [];
       this.preload = spec.preload ? true : false;
+      this.actIds = spec.actIds;
       if (spec.matches) {
         this.matches = createExecutionContext(spec.matches);
       }
     }
-    Rule.prototype.matches = function matches13() {
+    Rule.prototype.matches = function matches3() {
       return true;
     };
-    Rule.prototype.gather = function gather(context5) {
+    Rule.prototype.gather = function gather(context) {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       var markStart = 'mark_gather_start_' + this.id;
       var markEnd = 'mark_gather_end_' + this.id;
-      var markHiddenStart = 'mark_isHidden_start_' + this.id;
-      var markHiddenEnd = 'mark_isHidden_end_' + this.id;
+      var markHiddenStart = 'mark_isVisibleToScreenReaders_start_' + this.id;
+      var markHiddenEnd = 'mark_isVisibleToScreenReaders_end_' + this.id;
       if (options.performanceTimer) {
         performance_timer_default.mark(markStart);
       }
-      var elements = select_default(this.selector, context5);
+      var elements = _select(this.selector, context);
       if (this.excludeHidden) {
         if (options.performanceTimer) {
           performance_timer_default.mark(markHiddenStart);
         }
         elements = elements.filter(function(element) {
-          return !is_hidden_default(element.actualNode);
+          return _isVisibleToScreenReaders(element);
         });
         if (options.performanceTimer) {
           performance_timer_default.mark(markHiddenEnd);
-          performance_timer_default.measure('rule_' + this.id + '#gather_axe.utils.isHidden', markHiddenStart, markHiddenEnd);
+          performance_timer_default.measure('rule_' + this.id + '#gather_axe.utils.isVisibleToScreenReaders', markHiddenStart, markHiddenEnd);
         }
       }
       if (options.performanceTimer) {
@@ -26196,19 +27915,19 @@ module.exports = {
       }
       return elements;
     };
-    Rule.prototype.runChecks = function runChecks(type, node, options, context5, resolve, reject) {
+    Rule.prototype.runChecks = function runChecks(type, node, options, context, resolve, reject) {
       var self2 = this;
       var checkQueue = queue_default();
       this[type].forEach(function(c) {
-        var check4 = self2._audit.checks[c.id || c];
-        var option = get_check_option_default(check4, self2.id, options);
+        var check = self2._audit.checks[c.id || c];
+        var option = get_check_option_default(check, self2.id, options);
         checkQueue.defer(function(res, rej) {
-          check4.run(node, option, context5, res, rej);
+          check.run(node, option, context, res, rej);
         });
       });
       checkQueue.then(function(results) {
-        results = results.filter(function(check4) {
-          return check4;
+        results = results.filter(function(check) {
+          return check;
         });
         resolve({
           type: type,
@@ -26216,24 +27935,24 @@ module.exports = {
         });
       })['catch'](reject);
     };
-    Rule.prototype.runChecksSync = function runChecksSync(type, node, options, context5) {
+    Rule.prototype.runChecksSync = function runChecksSync(type, node, options, context) {
       var self2 = this;
       var results = [];
       this[type].forEach(function(c) {
-        var check4 = self2._audit.checks[c.id || c];
-        var option = get_check_option_default(check4, self2.id, options);
-        results.push(check4.runSync(node, option, context5));
+        var check = self2._audit.checks[c.id || c];
+        var option = get_check_option_default(check, self2.id, options);
+        results.push(check.runSync(node, option, context));
       });
-      results = results.filter(function(check4) {
-        return check4;
+      results = results.filter(function(check) {
+        return check;
       });
       return {
         type: type,
         results: results
       };
     };
-    Rule.prototype.run = function run2(context5) {
-      var _this5 = this;
+    Rule.prototype.run = function run2(context) {
+      var _this6 = this;
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       var resolve = arguments.length > 2 ? arguments[2] : undefined;
       var reject = arguments.length > 3 ? arguments[3] : undefined;
@@ -26244,7 +27963,7 @@ module.exports = {
       var ruleResult = new rule_result_default(this);
       var nodes;
       try {
-        nodes = this.gatherAndMatchNodes(context5, options);
+        nodes = this.gatherAndMatchNodes(context, options);
       } catch (error) {
         reject(new SupportError({
           cause: error,
@@ -26260,7 +27979,7 @@ module.exports = {
           var checkQueue = queue_default();
           [ 'any', 'all', 'none' ].forEach(function(type) {
             checkQueue.defer(function(res, rej) {
-              _this5.runChecks(type, node, options, context5, res, rej);
+              _this6.runChecks(type, node, options, context, res, rej);
             });
           });
           checkQueue.then(function(results) {
@@ -26268,7 +27987,7 @@ module.exports = {
             if (result) {
               result.node = new dq_element_default(node, options);
               ruleResult.nodes.push(result);
-              if (_this5.reviewOnFail) {
+              if (_this6.reviewOnFail) {
                 [ 'any', 'all' ].forEach(function(type) {
                   result[type].forEach(function(checkResult) {
                     if (checkResult.result === false) {
@@ -26301,8 +28020,8 @@ module.exports = {
         return reject(error);
       });
     };
-    Rule.prototype.runSync = function runSync2(context5) {
-      var _this6 = this;
+    Rule.prototype.runSync = function runSync2(context) {
+      var _this7 = this;
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       if (options.performanceTimer) {
         this._trackPerformance();
@@ -26310,7 +28029,7 @@ module.exports = {
       var ruleResult = new rule_result_default(this);
       var nodes;
       try {
-        nodes = this.gatherAndMatchNodes(context5, options);
+        nodes = this.gatherAndMatchNodes(context, options);
       } catch (error) {
         throw new SupportError({
           cause: error,
@@ -26323,13 +28042,13 @@ module.exports = {
       nodes.forEach(function(node) {
         var results = [];
         [ 'any', 'all', 'none' ].forEach(function(type) {
-          results.push(_this6.runChecksSync(type, node, options, context5));
+          results.push(_this7.runChecksSync(type, node, options, context));
         });
         var result = getResult(results);
         if (result) {
           result.node = node.actualNode ? new dq_element_default(node, options) : null;
           ruleResult.nodes.push(result);
-          if (_this6.reviewOnFail) {
+          if (_this7.reviewOnFail) {
             [ 'any', 'all' ].forEach(function(type) {
               result[type].forEach(function(checkResult) {
                 if (checkResult.result === false) {
@@ -26385,16 +28104,16 @@ module.exports = {
         return null;
       }
     }
-    Rule.prototype.gatherAndMatchNodes = function gatherAndMatchNodes(context5, options) {
-      var _this7 = this;
+    Rule.prototype.gatherAndMatchNodes = function gatherAndMatchNodes(context, options) {
+      var _this8 = this;
       var markMatchesStart = 'mark_matches_start_' + this.id;
       var markMatchesEnd = 'mark_matches_end_' + this.id;
-      var nodes = this.gather(context5, options);
+      var nodes = this.gather(context, options);
       if (options.performanceTimer) {
         performance_timer_default.mark(markMatchesStart);
       }
       nodes = nodes.filter(function(node) {
-        return _this7.matches(node.actualNode, node, context5);
+        return _this8.matches(node.actualNode, node, context);
       });
       if (options.performanceTimer) {
         performance_timer_default.mark(markMatchesEnd);
@@ -26402,10 +28121,10 @@ module.exports = {
       }
       return nodes;
     };
-    function findAfterChecks(rule3) {
-      return get_all_checks_default(rule3).map(function(c) {
-        var check4 = rule3._audit.checks[c.id || c];
-        return check4 && typeof check4.after === 'function' ? check4 : null;
+    function findAfterChecks(rule) {
+      return get_all_checks_default(rule).map(function(c) {
+        var check = rule._audit.checks[c.id || c];
+        return check && typeof check.after === 'function' ? check : null;
       }).filter(Boolean);
     }
     function findCheckResults(nodes, checkID) {
@@ -26422,8 +28141,8 @@ module.exports = {
       return checkResults;
     }
     function filterChecks(checks) {
-      return checks.filter(function(check4) {
-        return check4.filtered !== true;
+      return checks.filter(function(check) {
+        return check.filtered !== true;
       });
     }
     function sanitizeNodes(result) {
@@ -26449,12 +28168,22 @@ module.exports = {
       return nodes;
     }
     Rule.prototype.after = function after(result, options) {
+      var _this9 = this;
       var afterChecks = findAfterChecks(this);
       var ruleID = this.id;
-      afterChecks.forEach(function(check4) {
-        var beforeResults = findCheckResults(result.nodes, check4.id);
-        var option = get_check_option_default(check4, ruleID, options);
-        var afterResults = check4.after(beforeResults, option);
+      afterChecks.forEach(function(check) {
+        var beforeResults = findCheckResults(result.nodes, check.id);
+        var option = get_check_option_default(check, ruleID, options);
+        var afterResults = check.after(beforeResults, option);
+        if (_this9.reviewOnFail) {
+          afterResults.forEach(function(checkResult) {
+            var changeAnyAllResults = (_this9.any.includes(checkResult.id) || _this9.all.includes(checkResult.id)) && checkResult.result === false;
+            var changeNoneResult = _this9.none.includes(checkResult.id) && checkResult.result === true;
+            if (changeAnyAllResults || changeNoneResult) {
+              checkResult.result = void 0;
+            }
+          });
+        }
         beforeResults.forEach(function(item) {
           delete item.node;
           if (afterResults.indexOf(item) === -1) {
@@ -26465,7 +28194,7 @@ module.exports = {
       result.nodes = sanitizeNodes(result);
       return result;
     };
-    Rule.prototype.configure = function configure2(spec) {
+    Rule.prototype.configure = function configure3(spec) {
       if (spec.hasOwnProperty('selector')) {
         this.selector = spec.selector;
       }
@@ -26493,6 +28222,9 @@ module.exports = {
       if (spec.hasOwnProperty('tags')) {
         this.tags = spec.tags;
       }
+      if (spec.hasOwnProperty('actIds')) {
+        this.actIds = spec.actIds;
+      }
       if (spec.hasOwnProperty('matches')) {
         this.matches = createExecutionContext(spec.matches);
       }
@@ -26502,7 +28234,7 @@ module.exports = {
       }
     };
     var rule_default = Rule;
-    var dot = __toModule(require_doT());
+    var import_dot2 = __toModule(require_doT());
     var dotRegex = /\{\{.+?\}\}/g;
     function getDefaultOrigin() {
       if (window.origin) {
@@ -26512,11 +28244,11 @@ module.exports = {
         return window.location.origin;
       }
     }
-    function getDefaultConfiguration(audit3) {
+    function getDefaultConfiguration(audit) {
       var config;
-      if (audit3) {
-        config = clone_default(audit3);
-        config.commons = audit3.commons;
+      if (audit) {
+        config = clone_default(audit);
+        config.commons = audit.commons;
       } else {
         config = {};
       }
@@ -26534,19 +28266,19 @@ module.exports = {
       }, config.data);
       return config;
     }
-    function unpackToObject(collection, audit3, method) {
+    function unpackToObject(collection, audit, method) {
       var i, l;
       for (i = 0, l = collection.length; i < l; i++) {
-        audit3[method](collection[i]);
+        audit[method](collection[i]);
       }
     }
     var mergeCheckLocale = function mergeCheckLocale(a, b) {
       var pass = b.pass, fail = b.fail;
       if (typeof pass === 'string' && dotRegex.test(pass)) {
-        pass = dot['default'].compile(pass);
+        pass = import_dot2['default'].compile(pass);
       }
       if (typeof fail === 'string' && dotRegex.test(fail)) {
-        fail = dot['default'].compile(fail);
+        fail = import_dot2['default'].compile(fail);
       }
       return _extends({}, a, {
         messages: {
@@ -26559,10 +28291,10 @@ module.exports = {
     var mergeRuleLocale = function mergeRuleLocale(a, b) {
       var help = b.help, description = b.description;
       if (typeof help === 'string' && dotRegex.test(help)) {
-        help = dot['default'].compile(help);
+        help = import_dot2['default'].compile(help);
       }
       if (typeof description === 'string' && dotRegex.test(description)) {
-        description = dot['default'].compile(description);
+        description = import_dot2['default'].compile(description);
       }
       return _extends({}, a, {
         help: help || a.help,
@@ -26572,7 +28304,7 @@ module.exports = {
     var mergeFailureMessage = function mergeFailureMessage(a, b) {
       var failureMessage = b.failureMessage;
       if (typeof failureMessage === 'string' && dotRegex.test(failureMessage)) {
-        failureMessage = dot['default'].compile(failureMessage);
+        failureMessage = import_dot2['default'].compile(failureMessage);
       }
       return _extends({}, a, {
         failureMessage: failureMessage || a.failureMessage
@@ -26580,15 +28312,15 @@ module.exports = {
     };
     var mergeFallbackMessage = function mergeFallbackMessage(a, b) {
       if (typeof b === 'string' && dotRegex.test(b)) {
-        b = dot['default'].compile(b);
+        b = import_dot2['default'].compile(b);
       }
       return b || a;
     };
     var Audit = function() {
-      function Audit(audit3) {
+      function Audit(audit) {
         _classCallCheck(this, Audit);
         this.lang = 'en';
-        this.defaultConfig = audit3;
+        this.defaultConfig = audit;
         this.standards = standards_default;
         this._init();
         this._defaultLocale = null;
@@ -26607,10 +28339,10 @@ module.exports = {
             lang: this.lang
           };
           var checkIDs = Object.keys(this.data.checks);
-          for (var _i24 = 0; _i24 < checkIDs.length; _i24++) {
-            var id = checkIDs[_i24];
-            var check4 = this.data.checks[id];
-            var _check4$messages = check4.messages, pass = _check4$messages.pass, fail = _check4$messages.fail, incomplete = _check4$messages.incomplete;
+          for (var _i27 = 0; _i27 < checkIDs.length; _i27++) {
+            var id = checkIDs[_i27];
+            var check = this.data.checks[id];
+            var _check$messages = check.messages, pass = _check$messages.pass, fail = _check$messages.fail, incomplete = _check$messages.incomplete;
             locale.checks[id] = {
               pass: pass,
               fail: fail,
@@ -26618,18 +28350,18 @@ module.exports = {
             };
           }
           var ruleIDs = Object.keys(this.data.rules);
-          for (var _i25 = 0; _i25 < ruleIDs.length; _i25++) {
-            var _id = ruleIDs[_i25];
-            var rule3 = this.data.rules[_id];
-            var description = rule3.description, help = rule3.help;
+          for (var _i28 = 0; _i28 < ruleIDs.length; _i28++) {
+            var _id = ruleIDs[_i28];
+            var rule = this.data.rules[_id];
+            var description = rule.description, help = rule.help;
             locale.rules[_id] = {
               description: description,
               help: help
             };
           }
           var failureSummaries = Object.keys(this.data.failureSummaries);
-          for (var _i26 = 0; _i26 < failureSummaries.length; _i26++) {
-            var type = failureSummaries[_i26];
+          for (var _i29 = 0; _i29 < failureSummaries.length; _i29++) {
+            var type = failureSummaries[_i29];
             var failureSummary2 = this.data.failureSummaries[type];
             var failureMessage = failureSummary2.failureMessage;
             locale.failureSummaries[type] = {
@@ -26652,8 +28384,8 @@ module.exports = {
         key: '_applyCheckLocale',
         value: function _applyCheckLocale(checks) {
           var keys = Object.keys(checks);
-          for (var _i27 = 0; _i27 < keys.length; _i27++) {
-            var id = keys[_i27];
+          for (var _i30 = 0; _i30 < keys.length; _i30++) {
+            var id = keys[_i30];
             if (!this.data.checks[id]) {
               throw new Error('Locale provided for unknown check: "'.concat(id, '"'));
             }
@@ -26664,8 +28396,8 @@ module.exports = {
         key: '_applyRuleLocale',
         value: function _applyRuleLocale(rules) {
           var keys = Object.keys(rules);
-          for (var _i28 = 0; _i28 < keys.length; _i28++) {
-            var id = keys[_i28];
+          for (var _i31 = 0; _i31 < keys.length; _i31++) {
+            var id = keys[_i31];
             if (!this.data.rules[id]) {
               throw new Error('Locale provided for unknown rule: "'.concat(id, '"'));
             }
@@ -26676,8 +28408,8 @@ module.exports = {
         key: '_applyFailureSummaries',
         value: function _applyFailureSummaries(messages) {
           var keys = Object.keys(messages);
-          for (var _i29 = 0; _i29 < keys.length; _i29++) {
-            var key = keys[_i29];
+          for (var _i32 = 0; _i32 < keys.length; _i32++) {
+            var key = keys[_i32];
             if (!this.data.failureSummaries[key]) {
               throw new Error('Locale provided for unknown failureMessage: "'.concat(key, '"'));
             }
@@ -26709,10 +28441,10 @@ module.exports = {
         value: function setAllowedOrigins(allowedOrigins) {
           var defaultOrigin = getDefaultOrigin();
           this.allowedOrigins = [];
-          var _iterator3 = _createForOfIteratorHelper(allowedOrigins), _step3;
+          var _iterator11 = _createForOfIteratorHelper(allowedOrigins), _step11;
           try {
-            for (_iterator3.s(); !(_step3 = _iterator3.n()).done; ) {
-              var origin = _step3.value;
+            for (_iterator11.s(); !(_step11 = _iterator11.n()).done; ) {
+              var origin = _step11.value;
               if (origin === constants_default.allOrigins) {
                 this.allowedOrigins = [ '*' ];
                 return;
@@ -26723,32 +28455,32 @@ module.exports = {
               }
             }
           } catch (err) {
-            _iterator3.e(err);
+            _iterator11.e(err);
           } finally {
-            _iterator3.f();
+            _iterator11.f();
           }
         }
       }, {
         key: '_init',
         value: function _init() {
-          var audit3 = getDefaultConfiguration(this.defaultConfig);
-          this.lang = audit3.lang || 'en';
-          this.reporter = audit3.reporter;
+          var audit = getDefaultConfiguration(this.defaultConfig);
+          this.lang = audit.lang || 'en';
+          this.reporter = audit.reporter;
           this.commands = {};
           this.rules = [];
           this.checks = {};
           this.brand = 'axe';
           this.application = 'axeAPI';
           this.tagExclude = [ 'experimental' ];
-          this.noHtml = audit3.noHtml;
-          this.allowedOrigins = audit3.allowedOrigins;
-          unpackToObject(audit3.rules, this, 'addRule');
-          unpackToObject(audit3.checks, this, 'addCheck');
+          this.noHtml = audit.noHtml;
+          this.allowedOrigins = audit.allowedOrigins;
+          unpackToObject(audit.rules, this, 'addRule');
+          unpackToObject(audit.checks, this, 'addCheck');
           this.data = {};
-          this.data.checks = audit3.data && audit3.data.checks || {};
-          this.data.rules = audit3.data && audit3.data.rules || {};
-          this.data.failureSummaries = audit3.data && audit3.data.failureSummaries || {};
-          this.data.incompleteFallbackMessage = audit3.data && audit3.data.incompleteFallbackMessage || '';
+          this.data.checks = audit.data && audit.data.checks || {};
+          this.data.rules = audit.data && audit.data.rules || {};
+          this.data.failureSummaries = audit.data && audit.data.failureSummaries || {};
+          this.data.incompleteFallbackMessage = audit.data && audit.data.incompleteFallbackMessage || '';
           this._constructHelpUrls();
         }
       }, {
@@ -26762,9 +28494,9 @@ module.exports = {
           if (spec.metadata) {
             this.data.rules[spec.id] = spec.metadata;
           }
-          var rule3 = this.getRule(spec.id);
-          if (rule3) {
-            rule3.configure(spec);
+          var rule = this.getRule(spec.id);
+          if (rule) {
+            rule.configure(spec);
           } else {
             this.rules.push(new rule_default(spec, this));
           }
@@ -26793,15 +28525,15 @@ module.exports = {
         }
       }, {
         key: 'run',
-        value: function run(context5, options, resolve, reject) {
+        value: function run(context, options, resolve, reject) {
           this.normalizeOptions(options);
           axe._selectCache = [];
-          var allRulesToRun = getRulesToRun(this.rules, context5, options);
+          var allRulesToRun = getRulesToRun(this.rules, context, options);
           var runNowRules = allRulesToRun.now;
           var runLaterRules = allRulesToRun.later;
           var nowRulesQueue = queue_default();
-          runNowRules.forEach(function(rule3) {
-            nowRulesQueue.defer(getDefferedRule(rule3, context5, options));
+          runNowRules.forEach(function(rule) {
+            nowRulesQueue.defer(getDefferedRule(rule, context, options));
           });
           var preloaderQueue = queue_default();
           if (runLaterRules.length) {
@@ -26822,7 +28554,7 @@ module.exports = {
             if (assetsFromQueue && assetsFromQueue.length) {
               var assets = assetsFromQueue[0];
               if (assets) {
-                context5 = _extends({}, context5, assets);
+                context = _extends({}, context, assets);
               }
             }
             var nowRulesResults = nowRulesAndPreloaderResults[0];
@@ -26834,8 +28566,8 @@ module.exports = {
               return;
             }
             var laterRulesQueue = queue_default();
-            runLaterRules.forEach(function(rule3) {
-              var deferredRule = getDefferedRule(rule3, context5, options);
+            runLaterRules.forEach(function(rule) {
+              var deferredRule = getDefferedRule(rule, context, options);
               laterRulesQueue.defer(deferredRule);
             });
             laterRulesQueue.then(function(laterRuleResults) {
@@ -26851,29 +28583,29 @@ module.exports = {
         value: function after(results, options) {
           var rules = this.rules;
           return results.map(function(ruleResult) {
-            var rule3 = find_by_default(rules, 'id', ruleResult.id);
-            if (!rule3) {
+            var rule = find_by_default(rules, 'id', ruleResult.id);
+            if (!rule) {
               throw new Error('Result for unknown rule. You may be running mismatch axe-core versions');
             }
-            return rule3.after(ruleResult, options);
+            return rule.after(ruleResult, options);
           });
         }
       }, {
         key: 'getRule',
         value: function getRule(ruleId) {
-          return this.rules.find(function(rule3) {
-            return rule3.id === ruleId;
+          return this.rules.find(function(rule) {
+            return rule.id === ruleId;
           });
         }
       }, {
         key: 'normalizeOptions',
         value: function normalizeOptions(options) {
-          var audit3 = this;
+          var audit = this;
           var tags = [];
           var ruleIds = [];
-          audit3.rules.forEach(function(rule3) {
-            ruleIds.push(rule3.id);
-            rule3.tags.forEach(function(tag) {
+          audit.rules.forEach(function(rule) {
+            ruleIds.push(rule.id);
+            rule.tags.forEach(function(tag) {
               if (!tags.includes(tag)) {
                 tags.push(tag);
               }
@@ -26962,16 +28694,16 @@ module.exports = {
       }, {
         key: '_constructHelpUrls',
         value: function _constructHelpUrls() {
-          var _this8 = this;
+          var _this10 = this;
           var previous = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
           var version = (axe.version.match(/^[1-9][0-9]*\.[0-9]+/) || [ 'x.y' ])[0];
-          this.rules.forEach(function(rule3) {
-            if (!_this8.data.rules[rule3.id]) {
-              _this8.data.rules[rule3.id] = {};
+          this.rules.forEach(function(rule) {
+            if (!_this10.data.rules[rule.id]) {
+              _this10.data.rules[rule.id] = {};
             }
-            var metaData = _this8.data.rules[rule3.id];
-            if (typeof metaData.helpUrl !== 'string' || previous && metaData.helpUrl === getHelpUrl(previous, rule3.id, version)) {
-              metaData.helpUrl = getHelpUrl(_this8, rule3.id, version);
+            var metaData = _this10.data.rules[rule.id];
+            if (typeof metaData.helpUrl !== 'string' || previous && metaData.helpUrl === getHelpUrl(previous, rule.id, version)) {
+              metaData.helpUrl = getHelpUrl(_this10, rule.id, version);
             }
           });
         }
@@ -26984,34 +28716,34 @@ module.exports = {
       } ]);
       return Audit;
     }();
-    function getRulesToRun(rules, context5, options) {
+    function getRulesToRun(rules, context, options) {
       var base = {
         now: [],
         later: []
       };
-      var splitRules = rules.reduce(function(out, rule3) {
-        if (!rule_should_run_default(rule3, context5, options)) {
+      var splitRules = rules.reduce(function(out, rule) {
+        if (!rule_should_run_default(rule, context, options)) {
           return out;
         }
-        if (rule3.preload) {
-          out.later.push(rule3);
+        if (rule.preload) {
+          out.later.push(rule);
           return out;
         }
-        out.now.push(rule3);
+        out.now.push(rule);
         return out;
       }, base);
       return splitRules;
     }
-    function getDefferedRule(rule3, context5, options) {
+    function getDefferedRule(rule, context, options) {
       if (options.performanceTimer) {
-        performance_timer_default.mark('mark_rule_start_' + rule3.id);
+        performance_timer_default.mark('mark_rule_start_' + rule.id);
       }
       return function(resolve, reject) {
-        rule3.run(context5, options, function(ruleResult) {
+        rule.run(context, options, function(ruleResult) {
           resolve(ruleResult);
         }, function(err2) {
           if (!options.debug) {
-            var errResult = Object.assign(new rule_result_default(rule3), {
+            var errResult = Object.assign(new rule_result_default(rule), {
               result: constants_default.CANTTELL,
               description: 'An error occured while running this rule',
               message: err2.message,
@@ -27026,226 +28758,23 @@ module.exports = {
         });
       };
     }
-    function getHelpUrl(_ref86, ruleId, version) {
-      var brand = _ref86.brand, application = _ref86.application, lang = _ref86.lang;
+    function getHelpUrl(_ref110, ruleId, version) {
+      var brand = _ref110.brand, application = _ref110.application, lang = _ref110.lang;
       return constants_default.helpUrlBase + brand + '/' + (version || axe.version.substring(0, axe.version.lastIndexOf('.'))) + '/' + ruleId + '?application=' + encodeURIComponent(application) + (lang && lang !== 'en' ? '&lang=' + encodeURIComponent(lang) : '');
     }
     var audit_default = Audit;
-    var imports_exports = {};
-    __export(imports_exports, {
-      CssSelectorParser: function CssSelectorParser() {
-        return css_selector_parser2.CssSelectorParser;
-      },
-      doT: function doT() {
-        return dot2['default'];
-      },
-      emojiRegexText: function emojiRegexText() {
-        return emoji_regex3['default'];
-      },
-      memoize: function memoize() {
-        return memoizee2['default'];
-      }
-    });
-    var css_selector_parser2 = __toModule(require_lib());
-    var dot2 = __toModule(require_doT());
-    var emoji_regex3 = __toModule(require_emoji_regex());
-    var memoizee2 = __toModule(require_memoizee());
-    var es6_promise = __toModule(require_es6_promise());
-    var typedarray = __toModule(require_typedarray());
-    var weakmap_polyfill = __toModule(require_weakmap_polyfill());
-    dot2['default'].templateSettings.strip = false;
-    if (!('Promise' in window)) {
-      es6_promise['default'].polyfill();
-    }
-    if (!('Uint32Array' in window)) {
-      window.Uint32Array = typedarray.Uint32Array;
-    }
-    if (window.Uint32Array) {
-      if (!('some' in window.Uint32Array.prototype)) {
-        Object.defineProperty(window.Uint32Array.prototype, 'some', {
-          value: Array.prototype.some
-        });
-      }
-      if (!('reduce' in window.Uint32Array.prototype)) {
-        Object.defineProperty(window.Uint32Array.prototype, 'reduce', {
-          value: Array.prototype.reduce
-        });
-      }
-    }
-    function cleanup(resolve, reject) {
-      resolve = resolve || function res() {};
-      reject = reject || axe.log;
-      if (!axe._audit) {
-        throw new Error('No audit configured');
-      }
-      var q = axe.utils.queue();
-      var cleanupErrors = [];
-      Object.keys(axe.plugins).forEach(function(key) {
-        q.defer(function(res) {
-          var rej = function rej2(err2) {
-            cleanupErrors.push(err2);
-            res();
-          };
-          try {
-            axe.plugins[key].cleanup(res, rej);
-          } catch (err2) {
-            rej(err2);
-          }
-        });
-      });
-      var flattenedTree = axe.utils.getFlattenedTree(document.body);
-      axe.utils.querySelectorAll(flattenedTree, 'iframe, frame').forEach(function(node) {
-        q.defer(function(res, rej) {
-          return axe.utils.sendCommandToFrame(node.actualNode, {
-            command: 'cleanup-plugin'
-          }, res, rej);
-        });
-      });
-      q.then(function(results) {
-        if (cleanupErrors.length === 0) {
-          resolve(results);
-        } else {
-          reject(cleanupErrors);
-        }
-      })['catch'](reject);
-    }
-    var cleanup_default = cleanup;
-    var reporters = {};
-    var defaultReporter;
-    function hasReporter(reporterName) {
-      return reporters.hasOwnProperty(reporterName);
-    }
-    function getReporter(reporter5) {
-      if (typeof reporter5 === 'string' && reporters[reporter5]) {
-        return reporters[reporter5];
-      }
-      if (typeof reporter5 === 'function') {
-        return reporter5;
-      }
-      return defaultReporter;
-    }
-    function addReporter(name, cb, isDefault) {
-      reporters[name] = cb;
-      if (isDefault) {
-        defaultReporter = cb;
-      }
-    }
-    function configure3(spec) {
-      var audit3;
-      audit3 = axe._audit;
-      if (!audit3) {
-        throw new Error('No audit configured');
-      }
-      if (spec.axeVersion || spec.ver) {
-        var specVersion = spec.axeVersion || spec.ver;
-        if (!/^\d+\.\d+\.\d+(-canary)?/.test(specVersion)) {
-          throw new Error('Invalid configured version '.concat(specVersion));
-        }
-        var _specVersion$split = specVersion.split('-'), _specVersion$split2 = _slicedToArray(_specVersion$split, 2), version = _specVersion$split2[0], canary = _specVersion$split2[1];
-        var _version$split$map = version.split('.').map(Number), _version$split$map2 = _slicedToArray(_version$split$map, 3), major = _version$split$map2[0], minor = _version$split$map2[1], patch = _version$split$map2[2];
-        var _axe$version$split = axe.version.split('-'), _axe$version$split2 = _slicedToArray(_axe$version$split, 2), axeVersion = _axe$version$split2[0], axeCanary = _axe$version$split2[1];
-        var _axeVersion$split$map = axeVersion.split('.').map(Number), _axeVersion$split$map2 = _slicedToArray(_axeVersion$split$map, 3), axeMajor = _axeVersion$split$map2[0], axeMinor = _axeVersion$split$map2[1], axePatch = _axeVersion$split$map2[2];
-        if (major !== axeMajor || axeMinor < minor || axeMinor === minor && axePatch < patch || major === axeMajor && minor === axeMinor && patch === axePatch && canary && canary !== axeCanary) {
-          throw new Error('Configured version '.concat(specVersion, ' is not compatible with current axe version ').concat(axe.version));
-        }
-      }
-      if (spec.reporter && (typeof spec.reporter === 'function' || hasReporter(spec.reporter))) {
-        audit3.reporter = spec.reporter;
-      }
-      if (spec.checks) {
-        if (!Array.isArray(spec.checks)) {
-          throw new TypeError('Checks property must be an array');
-        }
-        spec.checks.forEach(function(check4) {
-          if (!check4.id) {
-            throw new TypeError('Configured check '.concat(JSON.stringify(check4), ' is invalid. Checks must be an object with at least an id property'));
-          }
-          audit3.addCheck(check4);
-        });
-      }
-      var modifiedRules = [];
-      if (spec.rules) {
-        if (!Array.isArray(spec.rules)) {
-          throw new TypeError('Rules property must be an array');
-        }
-        spec.rules.forEach(function(rule3) {
-          if (!rule3.id) {
-            throw new TypeError('Configured rule '.concat(JSON.stringify(rule3), ' is invalid. Rules must be an object with at least an id property'));
-          }
-          modifiedRules.push(rule3.id);
-          audit3.addRule(rule3);
-        });
-      }
-      if (spec.disableOtherRules) {
-        audit3.rules.forEach(function(rule3) {
-          if (modifiedRules.includes(rule3.id) === false) {
-            rule3.enabled = false;
-          }
-        });
-      }
-      if (typeof spec.branding !== 'undefined') {
-        audit3.setBranding(spec.branding);
-      } else {
-        audit3._constructHelpUrls();
-      }
-      if (spec.tagExclude) {
-        audit3.tagExclude = spec.tagExclude;
-      }
-      if (spec.locale) {
-        audit3.applyLocale(spec.locale);
-      }
-      if (spec.standards) {
-        configureStandards(spec.standards);
-      }
-      if (spec.noHtml) {
-        audit3.noHtml = true;
-      }
-      if (spec.allowedOrigins) {
-        if (!Array.isArray(spec.allowedOrigins)) {
-          throw new TypeError('Allowed origins property must be an array');
-        }
-        if (spec.allowedOrigins.includes('*')) {
-          throw new Error('"*" is not allowed. Use "'.concat(constants_default.allOrigins, '" instead'));
-        }
-        audit3.setAllowedOrigins(spec.allowedOrigins);
-      }
-    }
-    var configure_default = configure3;
-    function frameMessenger2(frameHandler) {
-      _respondable.updateMessenger(frameHandler);
-    }
-    function getRules(tags) {
-      tags = tags || [];
-      var matchingRules = !tags.length ? axe._audit.rules : axe._audit.rules.filter(function(item) {
-        return !!tags.filter(function(tag) {
-          return item.tags.indexOf(tag) !== -1;
-        }).length;
-      });
-      var ruleData = axe._audit.data.rules || {};
-      return matchingRules.map(function(matchingRule) {
-        var rd = ruleData[matchingRule.id] || {};
-        return {
-          ruleId: matchingRule.id,
-          description: rd.description,
-          help: rd.help,
-          helpUrl: rd.helpUrl,
-          tags: matchingRule.tags
-        };
-      });
-    }
-    var get_rules_default = getRules;
-    function setupGlobals(context5) {
+    function setupGlobals(context) {
       var hasWindow = window && 'Node' in window && 'NodeList' in window;
       var hasDoc = !!document;
       if (hasWindow && hasDoc) {
         return;
       }
-      if (!context5 || !context5.ownerDocument) {
+      if (!context || !context.ownerDocument) {
         throw new Error('Required "window" or "document" globals not defined and cannot be deduced from the context. Either set the globals before running or pass in a valid Element.');
       }
       if (!hasDoc) {
         cache_default.set('globalDocumentSet', true);
-        document = context5.ownerDocument;
+        document = context.ownerDocument;
       }
       if (!hasWindow) {
         cache_default.set('globalWindowSet', true);
@@ -27273,27 +28802,27 @@ module.exports = {
       axe._selectCache = void 0;
     }
     var teardown_default = teardown;
-    function runRules(context5, options, resolve, reject) {
+    function runRules(context, options, resolve, reject) {
       try {
-        context5 = new Context(context5);
-        axe._tree = context5.flatTree;
-        axe._selectorData = _getSelectorData(context5.flatTree);
+        context = new Context(context);
+        axe._tree = context.flatTree;
+        axe._selectorData = _getSelectorData(context.flatTree);
       } catch (e) {
         teardown_default();
         return reject(e);
       }
       var q = queue_default();
-      var audit3 = axe._audit;
+      var audit = axe._audit;
       if (options.performanceTimer) {
         performance_timer_default.auditStart();
       }
-      if (context5.frames.length && options.iframes !== false) {
+      if (context.frames.length && options.iframes !== false) {
         q.defer(function(res, rej) {
-          _collectResultsFromFrames(context5, options, 'rules', null, res, rej);
+          _collectResultsFromFrames(context, options, 'rules', null, res, rej);
         });
       }
       q.defer(function(res, rej) {
-        audit3.run(context5, options, res, rej);
+        audit.run(context, options, res, rej);
       });
       q.then(function(data2) {
         try {
@@ -27305,8 +28834,8 @@ module.exports = {
               results: results2
             };
           }));
-          if (context5.initiator) {
-            results = audit3.after(results, options);
+          if (context.initiator) {
+            results = audit.after(results, options);
             results.forEach(publish_metadata_default);
             results = results.map(finalize_result_default);
           }
@@ -27334,16 +28863,16 @@ module.exports = {
         }
         callback(err2);
       };
-      var context5 = data2 && data2.context || {};
-      if (context5.hasOwnProperty('include') && !context5.include.length) {
-        context5.include = [ document ];
+      var context = data2 && data2.context || {};
+      if (context.hasOwnProperty('include') && !context.include.length) {
+        context.include = [ document ];
       }
       var options = data2 && data2.options || {};
       switch (data2.command) {
        case 'rules':
-        return run_rules_default(context5, options, function(results, cleanup5) {
+        return run_rules_default(context, options, function(results, cleanup3) {
           resolve(results);
-          cleanup5();
+          cleanup3();
         }, reject);
 
        case 'cleanup-plugin':
@@ -27363,8 +28892,8 @@ module.exports = {
         });
       });
     }
-    function load(audit3) {
-      axe._audit = new audit_default(audit3);
+    function load(audit) {
+      axe._audit = new audit_default(audit);
     }
     var load_default = load;
     function Plugin(spec) {
@@ -27381,7 +28910,7 @@ module.exports = {
     Plugin.prototype.collect = function collect() {
       return this._collect.apply(this, arguments);
     };
-    Plugin.prototype.cleanup = function cleanup3(done) {
+    Plugin.prototype.cleanup = function cleanup2(done) {
       var q = axe.utils.queue();
       var that = this;
       Object.keys(this._registry).forEach(function(key) {
@@ -27399,11 +28928,11 @@ module.exports = {
     }
     var plugins_default = registerPlugin;
     function reset() {
-      var audit3 = axe._audit;
-      if (!audit3) {
+      var audit = axe._audit;
+      if (!audit) {
         throw new Error('No audit configured');
       }
-      audit3.resetRulesAndChecks();
+      audit.resetRulesAndChecks();
       resetStandards();
     }
     var reset_default = reset;
@@ -27414,20 +28943,26 @@ module.exports = {
       if (!(vNode instanceof abstract_virtual_node_default)) {
         vNode = new serial_virtual_node_default(vNode);
       }
-      var rule3 = get_rule_default(ruleId);
-      if (!rule3) {
+      var rule = get_rule_default(ruleId);
+      if (!rule) {
         throw new Error('unknown rule `' + ruleId + '`');
       }
-      rule3 = Object.create(rule3, {
+      rule = Object.create(rule, {
         excludeHidden: {
           value: false
         }
       });
-      var context5 = {
+      var context = {
         initiator: true,
-        include: [ vNode ]
+        include: [ vNode ],
+        exclude: [],
+        frames: [],
+        page: false,
+        focusable: true,
+        size: {},
+        flatTree: []
       };
-      var rawResults = rule3.runSync(context5, options);
+      var rawResults = rule.runSync(context, options);
       publish_metadata_default(rawResults);
       finalize_result_default(rawResults);
       var results = aggregate_result_default([ rawResults ]);
@@ -27440,18 +28975,17 @@ module.exports = {
         toolOptions: options
       });
     }
-    var run_virtual_rule_default = runVirtualRule;
-    function normalizeRunParams(_ref87) {
-      var _ref89, _options$reporter, _axe$_audit;
-      var _ref88 = _slicedToArray(_ref87, 3), context5 = _ref88[0], options = _ref88[1], callback = _ref88[2];
+    function normalizeRunParams(_ref111) {
+      var _ref113, _options$reporter, _axe$_audit;
+      var _ref112 = _slicedToArray(_ref111, 3), context = _ref112[0], options = _ref112[1], callback = _ref112[2];
       var typeErr = new TypeError('axe.run arguments are invalid');
-      if (!isContext(context5)) {
+      if (!isContextSpec(context)) {
         if (callback !== void 0) {
           throw typeErr;
         }
         callback = options;
-        options = context5;
-        context5 = document;
+        options = context;
+        context = document;
       }
       if (_typeof(options) !== 'object') {
         if (callback !== void 0) {
@@ -27464,32 +28998,12 @@ module.exports = {
         throw typeErr;
       }
       options = clone_default(options);
-      options.reporter = (_ref89 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit = axe._audit) === null || _axe$_audit === void 0 ? void 0 : _axe$_audit.reporter) !== null && _ref89 !== void 0 ? _ref89 : 'v1';
+      options.reporter = (_ref113 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit = axe._audit) === null || _axe$_audit === void 0 ? void 0 : _axe$_audit.reporter) !== null && _ref113 !== void 0 ? _ref113 : 'v1';
       return {
-        context: context5,
+        context: context,
         options: options,
         callback: callback
       };
-    }
-    function isContext(potential) {
-      switch (true) {
-       case typeof potential === 'string':
-       case Array.isArray(potential):
-       case window.Node && potential instanceof window.Node:
-       case window.NodeList && potential instanceof window.NodeList:
-        return true;
-
-       case _typeof(potential) !== 'object':
-        return false;
-
-       case potential.include !== void 0:
-       case potential.exclude !== void 0:
-       case typeof potential.length === 'number':
-        return true;
-
-       default:
-        return false;
-      }
     }
     var noop2 = function noop2() {};
     function run4() {
@@ -27497,7 +29011,7 @@ module.exports = {
         args[_key2] = arguments[_key2];
       }
       setupGlobals(args[0]);
-      var _normalizeRunParams = normalizeRunParams(args), context5 = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
+      var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
       var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
       try {
         assert_default(axe._audit, 'No audit configured');
@@ -27509,10 +29023,10 @@ module.exports = {
       if (options.performanceTimer) {
         axe.utils.performanceTimer.start();
       }
-      function handleRunRules(rawResults, cleanup5) {
+      function handleRunRules(rawResults, cleanup3) {
         var respond = function respond(results) {
           axe._running = false;
-          cleanup5();
+          cleanup3();
           try {
             callback(null, results);
           } catch (e) {
@@ -27527,7 +29041,7 @@ module.exports = {
           createReport(rawResults, options, respond);
         } catch (err2) {
           axe._running = false;
-          cleanup5();
+          cleanup3();
           callback(err2);
           reject(err2);
         }
@@ -27541,7 +29055,7 @@ module.exports = {
         callback(err2);
         reject(err2);
       }
-      axe._runRules(context5, options, handleRunRules, errorRunRules);
+      axe._runRules(context, options, handleRunRules, errorRunRules);
       return thenable;
     }
     function getPromiseHandlers(callback) {
@@ -27561,8 +29075,8 @@ module.exports = {
       };
     }
     function createReport(rawResults, options, respond) {
-      var reporter5 = getReporter(options.reporter);
-      var results = reporter5(rawResults, options, respond);
+      var reporter = getReporter(options.reporter);
+      var results = reporter(rawResults, options, respond);
       if (results !== void 0) {
         respond(results);
       }
@@ -27579,24 +29093,24 @@ module.exports = {
       for (var _len3 = arguments.length, args = new Array(_len3), _key3 = 0; _key3 < _len3; _key3++) {
         args[_key3] = arguments[_key3];
       }
-      var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context5 = _normalizeRunParams2.context;
+      var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context = _normalizeRunParams2.context;
       assert_default(axe._audit, 'Axe is not configured. Audit is missing.');
       assert_default(!axe._running, 'Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.');
-      var contextObj = new Context(context5, axe._tree);
+      var contextObj = new Context(context, axe._tree);
       axe._tree = contextObj.flatTree;
       axe._selectorData = _getSelectorData(contextObj.flatTree);
       axe._running = true;
       return new Promise(function(res, rej) {
         axe._audit.run(contextObj, options, res, rej);
       }).then(function(results) {
-        results = results.map(function(_ref90) {
-          var nodes = _ref90.nodes, result = _objectWithoutProperties(_ref90, _excluded8);
+        results = results.map(function(_ref114) {
+          var nodes = _ref114.nodes, result = _objectWithoutProperties(_ref114, _excluded8);
           return _extends({
             nodes: nodes.map(serializeNode)
           }, result);
         });
-        var frames = contextObj.frames.map(function(_ref91) {
-          var node = _ref91.node;
+        var frames = contextObj.frames.map(function(_ref115) {
+          var node = _ref115.node;
           return new dq_element_default(node, options).toJSON();
         });
         var environmentData;
@@ -27616,13 +29130,13 @@ module.exports = {
         return Promise.reject(err2);
       });
     }
-    function serializeNode(_ref92) {
-      var node = _ref92.node, nodeResult = _objectWithoutProperties(_ref92, _excluded9);
+    function serializeNode(_ref116) {
+      var node = _ref116.node, nodeResult = _objectWithoutProperties(_ref116, _excluded9);
       nodeResult.node = node.toJSON();
-      for (var _i30 = 0, _arr2 = [ 'any', 'all', 'none' ]; _i30 < _arr2.length; _i30++) {
-        var type = _arr2[_i30];
-        nodeResult[type] = nodeResult[type].map(function(_ref93) {
-          var relatedNodes = _ref93.relatedNodes, checkResult = _objectWithoutProperties(_ref93, _excluded10);
+      for (var _i33 = 0, _arr2 = [ 'any', 'all', 'none' ]; _i33 < _arr2.length; _i33++) {
+        var type = _arr2[_i33];
+        nodeResult[type] = nodeResult[type].map(function(_ref117) {
+          var relatedNodes = _ref117.relatedNodes, checkResult = _objectWithoutProperties(_ref117, _excluded10);
           return _extends({}, checkResult, {
             relatedNodes: relatedNodes.map(function(node2) {
               return node2.toJSON();
@@ -27633,14 +29147,14 @@ module.exports = {
       return nodeResult;
     }
     function finishRun(partialResults) {
-      var _ref95, _options$reporter2, _axe$_audit2;
+      var _ref119, _options$reporter2, _axe$_audit2;
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       options = clone_default(options);
-      var _ref94 = partialResults.find(function(r) {
+      var _ref118 = partialResults.find(function(r) {
         return r.environmentData;
-      }) || {}, environmentData = _ref94.environmentData;
+      }) || {}, environmentData = _ref118.environmentData;
       axe._audit.normalizeOptions(options);
-      options.reporter = (_ref95 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit2 = axe._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref95 !== void 0 ? _ref95 : 'v1';
+      options.reporter = (_ref119 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit2 = axe._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref119 !== void 0 ? _ref119 : 'v1';
       setFrameSpec(partialResults);
       var results = merge_results_default(partialResults);
       results = axe._audit.after(results, options);
@@ -27652,10 +29166,10 @@ module.exports = {
     }
     function setFrameSpec(partialResults) {
       var frameStack = [];
-      var _iterator4 = _createForOfIteratorHelper(partialResults), _step4;
+      var _iterator12 = _createForOfIteratorHelper(partialResults), _step12;
       try {
-        for (_iterator4.s(); !(_step4 = _iterator4.n()).done; ) {
-          var partialResult = _step4.value;
+        for (_iterator12.s(); !(_step12 = _iterator12.n()).done; ) {
+          var partialResult = _step12.value;
           var frameSpec = frameStack.shift();
           if (!partialResult) {
             continue;
@@ -27665,13 +29179,13 @@ module.exports = {
           frameStack.unshift.apply(frameStack, _toConsumableArray(frameSpecs));
         }
       } catch (err) {
-        _iterator4.e(err);
+        _iterator12.e(err);
       } finally {
-        _iterator4.f();
+        _iterator12.f();
       }
     }
-    function getMergedFrameSpecs(_ref96) {
-      var childFrameSpecs = _ref96.frames, parentFrameSpec = _ref96.frameSpec;
+    function getMergedFrameSpecs(_ref120) {
+      var childFrameSpecs = _ref120.frames, parentFrameSpec = _ref120.frameSpec;
       if (!parentFrameSpec) {
         return childFrameSpecs;
       }
@@ -27681,8 +29195,8 @@ module.exports = {
     }
     function createReport2(results, options) {
       return new Promise(function(resolve) {
-        var reporter5 = getReporter(options.reporter);
-        reporter5(results, options, resolve);
+        var reporter = getReporter(options.reporter);
+        reporter(results, options, resolve);
       });
     }
     function setup(node) {
@@ -27731,12 +29245,12 @@ module.exports = {
       var transformedResults = results.map(function(result) {
         var transformedResult = _extends({}, result);
         var types = [ 'passes', 'violations', 'incomplete', 'inapplicable' ];
-        for (var _i31 = 0, _types = types; _i31 < _types.length; _i31++) {
-          var type = _types[_i31];
+        for (var _i34 = 0, _types = types; _i34 < _types.length; _i34++) {
+          var type = _types[_i34];
           if (transformedResult[type] && Array.isArray(transformedResult[type])) {
-            transformedResult[type] = transformedResult[type].map(function(_ref97) {
+            transformedResult[type] = transformedResult[type].map(function(_ref121) {
               var _node;
-              var node = _ref97.node, typeResult = _objectWithoutProperties(_ref97, _excluded13);
+              var node = _ref121.node, typeResult = _objectWithoutProperties(_ref121, _excluded13);
               node = typeof ((_node = node) === null || _node === void 0 ? void 0 : _node.toJSON) === 'function' ? node.toJSON() : node;
               return _extends({
                 node: node
@@ -27755,10 +29269,10 @@ module.exports = {
         options = {};
       }
       var _options4 = options, environmentData = _options4.environmentData, toolOptions = _objectWithoutProperties(_options4, _excluded14);
-      raw_default(results, toolOptions, function(raw3) {
+      raw_default(results, toolOptions, function(raw) {
         var env = _getEnvironmentData(environmentData);
         callback({
-          raw: raw3,
+          raw: raw,
           env: env
         });
       });
@@ -27795,25 +29309,54 @@ module.exports = {
       }, out));
     };
     var v2_default = v2Reporter;
+    var _thisWillBeDeletedDoNotUse = {
+      base: {
+        Audit: audit_default,
+        CheckResult: check_result_default,
+        Check: check_default,
+        Context: Context,
+        RuleResult: rule_result_default,
+        Rule: rule_default,
+        metadataFunctionMap: metadata_function_map_default
+      },
+      public: {
+        reporters: reporters
+      },
+      helpers: {
+        failureSummary: failure_summary_default,
+        incompleteFallbackMessage: incompleteFallbackMessage,
+        processAggregate: process_aggregate_default
+      },
+      utils: {
+        setDefaultFrameMessenger: setDefaultFrameMessenger,
+        cacheNodeSelectors: cacheNodeSelectors,
+        getNodesMatchingExpression: getNodesMatchingExpression,
+        convertSelector: _convertSelector
+      },
+      commons: {
+        dom: {
+          nativelyHidden: nativelyHidden,
+          displayHidden: displayHidden,
+          visibilityHidden: visibilityHidden,
+          contentVisibiltyHidden: contentVisibiltyHidden,
+          ariaHidden: ariaHidden,
+          opacityHidden: opacityHidden,
+          scrollHidden: scrollHidden,
+          overflowHidden: overflowHidden,
+          clipHidden: clipHidden,
+          areaHidden: areaHidden,
+          detailsHidden: detailsHidden
+        }
+      }
+    };
+    var exposed_for_testing_default = _thisWillBeDeletedDoNotUse;
+    axe._thisWillBeDeletedDoNotUse = exposed_for_testing_default;
     axe.constants = constants_default;
     axe.log = log_default;
     axe.AbstractVirtualNode = abstract_virtual_node_default;
     axe.SerialVirtualNode = serial_virtual_node_default;
     axe.VirtualNode = virtual_node_default;
     axe._cache = cache_default;
-    axe._thisWillBeDeletedDoNotUse = axe._thisWillBeDeletedDoNotUse || {};
-    axe._thisWillBeDeletedDoNotUse.base = {
-      Audit: audit_default,
-      CheckResult: check_result_default,
-      Check: check_default,
-      Context: Context,
-      RuleResult: rule_result_default,
-      Rule: rule_default,
-      metadataFunctionMap: metadata_function_map_default
-    };
-    axe._thisWillBeDeletedDoNotUse['public'] = {
-      reporters: reporters
-    };
     axe.imports = imports_exports;
     axe.cleanup = cleanup_default;
     axe.configure = configure_default;
@@ -27827,7 +29370,7 @@ module.exports = {
     axe.addReporter = addReporter;
     axe.reset = reset_default;
     axe._runRules = run_rules_default;
-    axe.runVirtualRule = run_virtual_rule_default;
+    axe.runVirtualRule = runVirtualRule;
     axe.run = run4;
     axe.setup = setup_default;
     axe.teardown = teardown_default;
@@ -28001,7 +29544,7 @@ module.exports = {
         },
         'empty-table-header': {
           description: 'Ensures table headers have discernible text',
-          help: 'Table header text must not be empty'
+          help: 'Table header text should not be empty'
         },
         'focus-order-semantics': {
           description: 'Ensures elements in the focus order have a role appropriate for interactive content',
@@ -28021,7 +29564,7 @@ module.exports = {
         },
         'frame-title-unique': {
           description: 'Ensures <iframe> and <frame> elements contain a unique title attribute',
-          help: 'Frames should have a unique title attribute'
+          help: 'Frames must have a unique title attribute'
         },
         'frame-title': {
           description: 'Ensures <iframe> and <frame> elements have an accessible name',
@@ -28135,9 +29678,13 @@ module.exports = {
           description: 'Ensures <marquee> elements are not used',
           help: '<marquee> elements are deprecated and must not be used'
         },
+        'meta-refresh-no-exceptions': {
+          description: 'Ensures <meta http-equiv="refresh"> is not used for delayed refresh',
+          help: 'Delayed refresh must not be used'
+        },
         'meta-refresh': {
-          description: 'Ensures <meta http-equiv="refresh"> is not used',
-          help: 'Timed refresh must not exist'
+          description: 'Ensures <meta http-equiv="refresh"> is not used for delayed refresh',
+          help: 'Delayed refresh under 20 hours must not be used'
         },
         'meta-viewport-large': {
           description: 'Ensures <meta name="viewport"> can scale a significant amount',
@@ -28145,7 +29692,7 @@ module.exports = {
         },
         'meta-viewport': {
           description: 'Ensures <meta name="viewport"> does not disable text scaling and zooming',
-          help: 'Zooming and scaling should not be disabled'
+          help: 'Zooming and scaling must not be disabled'
         },
         'nested-interactive': {
           description: 'Ensures interactive controls are not nested as they are not always announced by screen readers or can cause focus problems for assistive technologies',
@@ -28168,8 +29715,8 @@ module.exports = {
           help: 'Page should contain a level-one heading'
         },
         'presentation-role-conflict': {
-          description: 'Flags elements whose role is none or presentation and which cause the role conflict resolution to trigger.',
-          help: 'Elements of role none or presentation should be flagged'
+          description: 'Elements marked as presentational should not have global ARIA or tabindex to ensure all screen readers ignore them',
+          help: 'Ensure elements marked as presentational are consistently ignored'
         },
         region: {
           description: 'Ensures all page content is contained by landmarks',
@@ -28214,6 +29761,10 @@ module.exports = {
         'table-fake-caption': {
           description: 'Ensure that tables with a caption use the <caption> element.',
           help: 'Data or header cells must not be used to give caption to a data table.'
+        },
+        'target-size': {
+          description: 'Ensure touch target have sufficient size and space',
+          help: 'All touch targets must be 24px large, or leave sufficient space'
         },
         'td-has-header': {
           description: 'Ensure that each non-empty data cell in a <table> larger than 3 by 3  has one or more table headers',
@@ -28270,6 +29821,13 @@ module.exports = {
               singular: 'ARIA role ${data.values} must be removed when the element is made visible, as it is not allowed for the element',
               plural: 'ARIA roles ${data.values} must be removed when the element is made visible, as they are not allowed for the element'
             }
+          }
+        },
+        'aria-busy': {
+          impact: 'serious',
+          messages: {
+            pass: 'Element has an aria-busy attribute',
+            fail: 'Element has no aria-busy="true" attribute'
           }
         },
         'aria-errormessage': {
@@ -28336,7 +29894,8 @@ module.exports = {
             pass: 'Required ARIA children are present',
             fail: {
               singular: 'Required ARIA child role not present: ${data.values}',
-              plural: 'Required ARIA children role not present: ${data.values}'
+              plural: 'Required ARIA children role not present: ${data.values}',
+              unallowed: 'Element has children which are not allowed (see related nodes)'
             },
             incomplete: {
               singular: 'Expecting ARIA child role to be added: ${data.values}',
@@ -28381,7 +29940,8 @@ module.exports = {
               noId: 'ARIA attribute element ID does not exist on the page: ${data.needsReview}',
               noIdShadow: 'ARIA attribute element ID does not exist on the page or is a descendant of a different shadow DOM tree: ${data.needsReview}',
               ariaCurrent: 'ARIA attribute value is invalid and will be treated as "aria-current=true": ${data.needsReview}',
-              idrefs: 'Unable to determine if ARIA attribute element ID exists on the page: ${data.needsReview}'
+              idrefs: 'Unable to determine if ARIA attribute element ID exists on the page: ${data.needsReview}',
+              empty: 'ARIA attribute value is ignored while empty: ${data.needsReview}'
             }
           }
         },
@@ -28455,7 +30015,7 @@ module.exports = {
           impact: 'critical',
           messages: {
             pass: 'ARIA role is supported',
-            fail: 'The role used is not widely supported in screen readers and assistive technologies: ${data.values}'
+            fail: 'The role used is not widely supported in screen readers and assistive technologies: ${data}'
           }
         },
         'valid-scrollable-semantics': {
@@ -28520,14 +30080,24 @@ module.exports = {
             }
           }
         },
+        'link-in-text-block-style': {
+          impact: 'serious',
+          messages: {
+            pass: 'Links can be distinguished from surrounding text by visual styling',
+            fail: 'The link has no styling (such as underline) to distinguish it from the surrounding text'
+          }
+        },
         'link-in-text-block': {
           impact: 'serious',
           messages: {
             pass: 'Links can be distinguished from surrounding text in some way other than by color',
-            fail: 'Links need to be distinguished from surrounding text in some way other than by color',
+            fail: {
+              fgContrast: 'The link has insufficient color contrast of ${data.contrastRatio}:1 with the surrounding text. (Minimum contrast is ${data.requiredContrastRatio}:1, link text: ${data.nodeColor}, surrounding text: ${data.parentColor})',
+              bgContrast: 'The link background has insufficient color contrast of ${data.contrastRatio} (Minimum contrast is ${data.requiredContrastRatio}:1, link background color: ${data.nodeBackgroundColor}, surrounding background color: ${data.parentBackgroundColor})'
+            },
             incomplete: {
-              default: 'Unable to determine contrast ratio',
-              bgContrast: 'Element\'s contrast ratio could not be determined. Check for a distinct hover/focus style',
+              default: 'Element\'s foreground contrast ratio could not be determined',
+              bgContrast: 'Element\'s background contrast ratio could not be determined',
               bgImage: 'Element\'s contrast ratio could not be determined due to a background image',
               bgGradient: 'Element\'s contrast ratio could not be determined due to a background gradient',
               imgNode: 'Element\'s contrast ratio could not be determined because element contains an image node',
@@ -28786,18 +30356,15 @@ module.exports = {
         'only-dlitems': {
           impact: 'serious',
           messages: {
-            pass: 'List element only has direct children that are allowed inside <dt> or <dd> elements',
-            fail: 'List element has direct children that are not allowed inside <dt> or <dd> elements'
+            pass: 'dl element only has direct children that are allowed inside; <dt>, <dd>, or <div> elements',
+            fail: 'dl element has direct children that are not allowed: ${data.values}'
           }
         },
         'only-listitems': {
           impact: 'serious',
           messages: {
             pass: 'List element only has direct children that are allowed inside <li> elements',
-            fail: {
-              default: 'List element has direct children that are not allowed inside <li> elements',
-              roleNotValid: 'List element has direct children with a role that is not allowed: ${data.roles}'
-            }
+            fail: 'List element has direct children that are not allowed: ${data.values}'
           }
         },
         'structured-dlitems': {
@@ -28852,6 +30419,36 @@ module.exports = {
             fail: '${data} on <meta> tag disables zooming on mobile devices'
           }
         },
+        'target-offset': {
+          impact: 'serious',
+          messages: {
+            pass: 'Target has sufficient offset from its closest neighbor (${data.closestOffset}px should be at least ${data.minOffset}px)',
+            fail: 'Target has insufficient offset from its closest neighbor (${data.closestOffset}px should be at least ${data.minOffset}px)',
+            incomplete: {
+              default: 'Element with negative tabindex has insufficient offset from its closest neighbor (${data.closestOffset}px should be at least ${data.minOffset}px). Is this a target?',
+              nonTabbableNeighbor: 'Target has insufficient offset from a neighbor with negative tabindex (${data.closestOffset}px should be at least ${data.minOffset}px). Is the neighbor a target?'
+            }
+          }
+        },
+        'target-size': {
+          impact: 'serious',
+          messages: {
+            pass: {
+              default: 'Control has sufficient size (${data.width}px by ${data.height}px, should be at least ${data.minSize}px by ${data.minSize}px)',
+              obscured: 'Control is ignored because it is fully obscured and thus not clickable'
+            },
+            fail: {
+              default: 'Target has insufficient size (${data.width}px by ${data.height}px, should be at least ${data.minSize}px by ${data.minSize}px)',
+              partiallyObscured: 'Target has insufficient size because it is partially obscured (smallest space is ${data.width}px by ${data.height}px, should be at least ${data.minSize}px by ${data.minSize}px)'
+            },
+            incomplete: {
+              default: 'Element with negative tabindex has insufficient size (${data.width}px by ${data.height}px, should be at least ${data.minSize}px by ${data.minSize}px). Is this a target?',
+              contentOverflow: 'Element size could not be accurately determined due to overflow content',
+              partiallyObscured: 'Element with negative tabindex has insufficient size because it is partially obscured (smallest space is ${data.width}px by ${data.height}px, should be at least ${data.minSize}px by ${data.minSize}px). Is this a target?',
+              partiallyObscuredNonTabbable: 'Target has insufficient size because it is partially obscured by a neighbor with negative tabindex (smallest space is ${data.width}px by ${data.height}px, should be at least ${data.minSize}px by ${data.minSize}px). Is the neighbor a target?'
+            }
+          }
+        },
         'header-present': {
           impact: 'serious',
           messages: {
@@ -28888,11 +30485,18 @@ module.exports = {
             fail: 'Page does not have a landmark region'
           }
         },
+        'meta-refresh-no-exceptions': {
+          impact: 'minor',
+          messages: {
+            pass: '<meta> tag does not immediately refresh the page',
+            fail: '<meta> tag forces timed refresh of page'
+          }
+        },
         'meta-refresh': {
           impact: 'critical',
           messages: {
             pass: '<meta> tag does not immediately refresh the page',
-            fail: '<meta> tag forces timed refresh of page'
+            fail: '<meta> tag forces timed refresh of page (less than 20 hours)'
           }
         },
         'p-as-heading': {
@@ -29008,6 +30612,27 @@ module.exports = {
             incomplete: 'Unable to determine if element has children'
           }
         },
+        'important-letter-spacing': {
+          impact: 'serious',
+          messages: {
+            pass: 'Letter-spacing in the style attribute is not set to !important, or meets the minimum',
+            fail: 'letter-spacing in the style attribute must not use !important, or be at ${data.minValue}em (current ${data.value}em)'
+          }
+        },
+        'important-line-height': {
+          impact: 'serious',
+          messages: {
+            pass: 'line-height in the style attribute is not set to !important, or meets the minimum',
+            fail: 'line-height in the style attribute must not use !important, or be at ${data.minValue}em (current ${data.value}em)'
+          }
+        },
+        'important-word-spacing': {
+          impact: 'serious',
+          messages: {
+            pass: 'word-spacing in the style attribute is not set to !important, or meets the minimum',
+            fail: 'word-spacing in the style attribute must not use !important, or be at ${data.minValue}em (current ${data.value}em)'
+          }
+        },
         'is-on-screen': {
           impact: 'serious',
           messages: {
@@ -29073,7 +30698,8 @@ module.exports = {
               default: 'Element\'s default semantics were not overridden with role="none" or role="presentation"',
               globalAria: 'Element\'s role is not presentational because it has a global ARIA attribute',
               focusable: 'Element\'s role is not presentational because it is focusable',
-              both: 'Element\'s role is not presentational because it has a global ARIA attribute and is focusable'
+              both: 'Element\'s role is not presentational because it has a global ARIA attribute and is focusable',
+              iframe: 'Using the "title" attribute on an ${data.nodeName} element with a presentational role behaves inconsistently between screen readers'
             }
           }
         },
@@ -29120,7 +30746,8 @@ module.exports = {
           impact: 'minor',
           messages: {
             pass: 'Content of summary attribute and <caption> are not duplicated',
-            fail: 'Content of summary attribute and <caption> element are identical'
+            fail: 'Content of summary attribute and <caption> element are identical',
+            incomplete: 'Unable to determine if <table> element has a caption'
           }
         },
         'scope-value': {
@@ -29206,7 +30833,7 @@ module.exports = {
       id: 'area-alt',
       selector: 'map area[href]',
       excludeHidden: false,
-      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag111', 'wcag244', 'wcag412', 'section508', 'section508.22.a', 'ACT' ],
+      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag244', 'wcag412', 'section508', 'section508.22.a', 'ACT' ],
       actIds: [ 'c487ae' ],
       all: [],
       any: [ {
@@ -29258,7 +30885,7 @@ module.exports = {
       id: 'aria-command-name',
       selector: '[role="link"], [role="button"], [role="menuitem"]',
       matches: 'no-naming-method-matches',
-      tags: [ 'cat.aria', 'wcag2a', 'wcag412' ],
+      tags: [ 'cat.aria', 'wcag2a', 'wcag412', 'ACT' ],
       actIds: [ '97a4e1' ],
       all: [],
       any: [ 'has-visible-text', 'aria-label', 'aria-labelledby', {
@@ -29295,7 +30922,7 @@ module.exports = {
       selector: '[aria-hidden="true"]',
       matches: 'aria-hidden-focus-matches',
       excludeHidden: false,
-      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412', 'wcag131' ],
+      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412' ],
       actIds: [ '6cfa84' ],
       all: [ 'focusable-modal-open', 'focusable-disabled', 'focusable-not-tabbable' ],
       any: [],
@@ -29344,6 +30971,7 @@ module.exports = {
       id: 'aria-required-attr',
       selector: '[role]',
       tags: [ 'cat.aria', 'wcag2a', 'wcag412' ],
+      actIds: [ '4e8ab6' ],
       all: [],
       any: [ 'aria-required-attr' ],
       none: []
@@ -29352,21 +30980,21 @@ module.exports = {
       selector: '[role]',
       matches: 'aria-required-children-matches',
       tags: [ 'cat.aria', 'wcag2a', 'wcag131' ],
-      actIds: [ 'ff89c9' ],
+      actIds: [ 'bc4a75', 'ff89c9' ],
       all: [],
       any: [ {
         options: {
-          reviewEmpty: [ 'doc-bibliography', 'doc-endnotes', 'grid', 'list', 'listbox', 'table', 'tablist', 'tree', 'treegrid', 'rowgroup' ]
+          reviewEmpty: [ 'doc-bibliography', 'doc-endnotes', 'grid', 'list', 'listbox', 'menu', 'menubar', 'table', 'tablist', 'tree', 'treegrid', 'rowgroup' ]
         },
         id: 'aria-required-children'
-      } ],
+      }, 'aria-busy' ],
       none: []
     }, {
       id: 'aria-required-parent',
       selector: '[role]',
       matches: 'aria-required-parent-matches',
       tags: [ 'cat.aria', 'wcag2a', 'wcag131' ],
-      actIds: [ 'bc4a75', 'ff89c9' ],
+      actIds: [ 'ff89c9' ],
       all: [],
       any: [ {
         options: {
@@ -29392,9 +31020,10 @@ module.exports = {
       selector: '[role]',
       matches: 'no-empty-role-matches',
       tags: [ 'cat.aria', 'wcag2a', 'wcag412' ],
+      actIds: [ '674b10' ],
       all: [],
       any: [],
-      none: [ 'fallbackrole', 'invalidrole', 'abstractrole', 'unsupportedrole', 'deprecatedrole' ]
+      none: [ 'invalidrole', 'abstractrole', 'unsupportedrole', 'deprecatedrole' ]
     }, {
       id: 'aria-text',
       selector: '[role=text]',
@@ -29407,6 +31036,7 @@ module.exports = {
       selector: '[role="checkbox"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="radio"], [role="switch"], [role="option"]',
       matches: 'no-naming-method-matches',
       tags: [ 'cat.aria', 'wcag2a', 'wcag412', 'ACT' ],
+      actIds: [ 'e086e5' ],
       all: [],
       any: [ 'has-visible-text', 'aria-label', 'aria-labelledby', {
         options: {
@@ -29445,7 +31075,7 @@ module.exports = {
       id: 'aria-valid-attr-value',
       matches: 'aria-has-attr-matches',
       tags: [ 'cat.aria', 'wcag2a', 'wcag412' ],
-      actIds: [ '5c01ea', 'c487ae' ],
+      actIds: [ '6a7281' ],
       all: [ {
         options: [],
         id: 'aria-valid-attr-value'
@@ -29456,6 +31086,7 @@ module.exports = {
       id: 'aria-valid-attr',
       matches: 'aria-has-attr-matches',
       tags: [ 'cat.aria', 'wcag2a', 'wcag412' ],
+      actIds: [ '5f99a7' ],
       all: [],
       any: [ {
         options: [],
@@ -29468,14 +31099,14 @@ module.exports = {
       enabled: false,
       excludeHidden: false,
       tags: [ 'cat.time-and-media', 'wcag2a', 'wcag121', 'section508', 'section508.22.a' ],
-      actIds: [ 'c3232f', 'e7aa44' ],
+      actIds: [ '2eb176', 'afb423' ],
       all: [],
       any: [],
       none: [ 'caption' ]
     }, {
       id: 'autocomplete-valid',
       matches: 'autocomplete-matches',
-      tags: [ 'cat.forms', 'wcag21aa', 'wcag135' ],
+      tags: [ 'cat.forms', 'wcag21aa', 'wcag135', 'ACT' ],
       actIds: [ '73f2c2' ],
       all: [ {
         options: {
@@ -29488,12 +31119,29 @@ module.exports = {
     }, {
       id: 'avoid-inline-spacing',
       selector: '[style]',
-      tags: [ 'cat.structure', 'wcag21aa', 'wcag1412' ],
+      matches: 'is-visible-on-screen-matches',
+      tags: [ 'cat.structure', 'wcag21aa', 'wcag1412', 'ACT' ],
+      actIds: [ '24afc2', '9e45ec', '78fd32' ],
       all: [ {
         options: {
-          cssProperties: [ 'line-height', 'letter-spacing', 'word-spacing' ]
+          cssProperty: 'letter-spacing',
+          minValue: .12
         },
-        id: 'avoid-inline-spacing'
+        id: 'important-letter-spacing'
+      }, {
+        options: {
+          cssProperty: 'word-spacing',
+          minValue: .16
+        },
+        id: 'important-word-spacing'
+      }, {
+        options: {
+          multiLineOnly: true,
+          cssProperty: 'line-height',
+          minValue: 1.5,
+          normalValue: 1
+        },
+        id: 'important-line-height'
       } ],
       any: [],
       none: []
@@ -29526,6 +31174,7 @@ module.exports = {
       matches: 'bypass-matches',
       reviewOnFail: true,
       tags: [ 'cat.keyboard', 'wcag2a', 'wcag241', 'section508', 'section508.22.o' ],
+      actIds: [ 'cf77f2', '047fe0', 'b40fd1', '3e12e1', 'ye5d6e' ],
       all: [],
       any: [ 'internal-link-present', {
         options: {
@@ -29544,7 +31193,8 @@ module.exports = {
       matches: 'color-contrast-matches',
       excludeHidden: false,
       enabled: false,
-      tags: [ 'cat.color', 'wcag2aaa', 'wcag146' ],
+      tags: [ 'cat.color', 'wcag2aaa', 'wcag146', 'ACT' ],
+      actIds: [ '09o5cg' ],
       all: [],
       any: [ {
         options: {
@@ -29556,14 +31206,17 @@ module.exports = {
           largeTextPt: 18,
           contrastRatio: {
             normal: {
-              expected: 7
+              expected: 7,
+              minThreshold: 4.5
             },
             large: {
-              expected: 4.5
+              expected: 4.5,
+              minThreshold: 3
             }
           },
           pseudoSizeThreshold: .25,
-          shadowOutlineEmMax: .1
+          shadowOutlineEmMax: .1,
+          textStrokeEmMin: .03
         },
         id: 'color-contrast-enhanced'
       } ],
@@ -29572,7 +31225,8 @@ module.exports = {
       id: 'color-contrast',
       matches: 'color-contrast-matches',
       excludeHidden: false,
-      tags: [ 'cat.color', 'wcag2aa', 'wcag143' ],
+      tags: [ 'cat.color', 'wcag2aa', 'wcag143', 'ACT' ],
+      actIds: [ 'afw4f7', '09o5cg' ],
       all: [],
       any: [ {
         options: {
@@ -29591,7 +31245,8 @@ module.exports = {
             }
           },
           pseudoSizeThreshold: .25,
-          shadowOutlineEmMax: .2
+          shadowOutlineEmMax: .2,
+          textStrokeEmMin: .03
         },
         id: 'color-contrast'
       } ],
@@ -29617,7 +31272,14 @@ module.exports = {
       tags: [ 'cat.structure', 'wcag2a', 'wcag131' ],
       all: [],
       any: [],
-      none: [ 'structured-dlitems', 'only-dlitems' ]
+      none: [ 'structured-dlitems', {
+        options: {
+          validRoles: [ 'definition', 'term', 'listitem' ],
+          validNodeNames: [ 'dt', 'dd' ],
+          divGroups: true
+        },
+        id: 'only-dlitems'
+      } ]
     }, {
       id: 'dlitem',
       selector: 'dd, dt',
@@ -29641,6 +31303,7 @@ module.exports = {
       matches: 'duplicate-id-active-matches',
       excludeHidden: false,
       tags: [ 'cat.parsing', 'wcag2a', 'wcag411' ],
+      actIds: [ '3ea0c8' ],
       all: [],
       any: [ 'duplicate-id-active' ],
       none: []
@@ -29660,6 +31323,7 @@ module.exports = {
       matches: 'duplicate-id-misc-matches',
       excludeHidden: false,
       tags: [ 'cat.parsing', 'wcag2a', 'wcag411' ],
+      actIds: [ '3ea0c8' ],
       all: [],
       any: [ 'duplicate-id' ],
       none: []
@@ -29668,6 +31332,7 @@ module.exports = {
       selector: 'h1, h2, h3, h4, h5, h6, [role="heading"]',
       matches: 'heading-matches',
       tags: [ 'cat.name-role-value', 'best-practice' ],
+      actIds: [ 'ffd0e9' ],
       impact: 'minor',
       all: [],
       any: [ 'has-visible-text', 'aria-label', 'aria-labelledby', {
@@ -29679,9 +31344,8 @@ module.exports = {
       none: []
     }, {
       id: 'empty-table-header',
-      selector: 'th, [role="rowheader"], [role="columnheader"]',
-      tags: [ 'wcag131', 'cat.aria' ],
-      reviewOnFail: true,
+      selector: 'th:not([role]), [role="rowheader"], [role="columnheader"]',
+      tags: [ 'cat.name-role-value', 'best-practice' ],
       all: [],
       any: [ 'has-visible-text' ],
       none: []
@@ -29714,6 +31378,7 @@ module.exports = {
       selector: 'html',
       matches: 'frame-focusable-content-matches',
       tags: [ 'cat.keyboard', 'wcag2a', 'wcag211' ],
+      actIds: [ 'akn7bn' ],
       all: [],
       any: [ 'frame-focusable-content' ],
       none: []
@@ -29733,14 +31398,18 @@ module.exports = {
       id: 'frame-title-unique',
       selector: 'frame[title], iframe[title]',
       matches: 'frame-title-has-text-matches',
-      tags: [ 'cat.text-alternatives', 'best-practice' ],
+      tags: [ 'cat.text-alternatives', 'wcag412', 'wcag2a' ],
+      actIds: [ '4b1c6c' ],
       all: [],
       any: [],
-      none: [ 'unique-frame-title' ]
+      none: [ 'unique-frame-title' ],
+      reviewOnFail: true
     }, {
       id: 'frame-title',
       selector: 'frame, iframe',
-      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag241', 'wcag412', 'section508', 'section508.22.i' ],
+      matches: 'no-negative-tabindex-matches',
+      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag412', 'section508', 'section508.22.i' ],
+      actIds: [ 'cae760' ],
       all: [],
       any: [ {
         options: {
@@ -29781,7 +31450,7 @@ module.exports = {
       none: []
     }, {
       id: 'html-lang-valid',
-      selector: 'html[lang], html[xml\\:lang]',
+      selector: 'html[lang]:not([lang=""]), html[xml\\:lang]:not([xml\\:lang=""])',
       tags: [ 'cat.language', 'wcag2a', 'wcag311', 'ACT' ],
       actIds: [ 'bf051a' ],
       all: [],
@@ -29805,9 +31474,10 @@ module.exports = {
       id: 'identical-links-same-purpose',
       selector: 'a[href], area[href], [role="link"]',
       excludeHidden: false,
+      enabled: false,
       matches: 'identical-links-same-purpose-matches',
       tags: [ 'cat.semantics', 'wcag2aaa', 'wcag249' ],
-      actIds: [ 'b20e66', 'fd3a94' ],
+      actIds: [ 'b20e66' ],
       all: [ 'identical-links-same-purpose' ],
       any: [],
       none: []
@@ -29841,7 +31511,8 @@ module.exports = {
       id: 'input-button-name',
       selector: 'input[type="button"], input[type="submit"], input[type="reset"]',
       matches: 'no-explicit-name-required-matches',
-      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412', 'section508', 'section508.22.a' ],
+      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412', 'section508', 'section508.22.a', 'ACT' ],
+      actIds: [ '97a4e1' ],
       all: [],
       any: [ 'non-empty-if-present', {
         options: {
@@ -29859,7 +31530,7 @@ module.exports = {
       id: 'input-image-alt',
       selector: 'input[type="image"]',
       matches: 'no-explicit-name-required-matches',
-      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag111', 'section508', 'section508.22.a', 'ACT' ],
+      tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag111', 'wcag412', 'section508', 'section508.22.a', 'ACT' ],
       actIds: [ '59796f' ],
       all: [],
       any: [ {
@@ -29883,7 +31554,7 @@ module.exports = {
       any: [ {
         options: {
           pixelThreshold: .1,
-          occuranceThreshold: 3
+          occurrenceThreshold: 3
         },
         id: 'label-content-name-mismatch'
       } ],
@@ -29900,8 +31571,8 @@ module.exports = {
       id: 'label',
       selector: 'input, textarea',
       matches: 'label-matches',
-      tags: [ 'cat.forms', 'wcag2a', 'wcag412', 'wcag131', 'section508', 'section508.22.n', 'ACT' ],
-      actIds: [ 'e086e5', '307n5z' ],
+      tags: [ 'cat.forms', 'wcag2a', 'wcag412', 'section508', 'section508.22.n', 'ACT' ],
+      actIds: [ 'e086e5' ],
       all: [],
       any: [ 'implicit-label', 'explicit-label', 'aria-label', 'aria-labelledby', {
         options: {
@@ -29989,7 +31660,8 @@ module.exports = {
       tags: [ 'cat.semantics', 'best-practice' ],
       all: [ {
         options: {
-          selector: 'main:not([role]), [role=\'main\']'
+          selector: 'main:not([role]), [role=\'main\']',
+          passForModal: true
         },
         id: 'page-has-main'
       } ],
@@ -30008,9 +31680,14 @@ module.exports = {
       selector: 'a[href], [role=link]',
       matches: 'link-in-text-block-matches',
       excludeHidden: false,
-      tags: [ 'cat.color', 'experimental', 'wcag2a', 'wcag141' ],
-      all: [ 'link-in-text-block' ],
-      any: [],
+      tags: [ 'cat.color', 'wcag2a', 'wcag141' ],
+      all: [],
+      any: [ {
+        options: {
+          requiredContrastRatio: 3
+        },
+        id: 'link-in-text-block'
+      }, 'link-in-text-block-style' ],
       none: []
     }, {
       id: 'link-name',
@@ -30032,7 +31709,13 @@ module.exports = {
       tags: [ 'cat.structure', 'wcag2a', 'wcag131' ],
       all: [],
       any: [],
-      none: [ 'only-listitems' ]
+      none: [ {
+        options: {
+          validRoles: [ 'listitem' ],
+          validNodeNames: [ 'li' ]
+        },
+        id: 'only-listitems'
+      } ]
     }, {
       id: 'listitem',
       selector: 'li',
@@ -30050,12 +31733,35 @@ module.exports = {
       any: [],
       none: [ 'is-on-screen' ]
     }, {
-      id: 'meta-refresh',
-      selector: 'meta[http-equiv="refresh"]',
+      id: 'meta-refresh-no-exceptions',
+      selector: 'meta[http-equiv="refresh"][content]',
       excludeHidden: false,
-      tags: [ 'cat.time-and-media', 'wcag2a', 'wcag221', 'wcag224', 'wcag325' ],
+      enabled: false,
+      tags: [ 'cat.time-and-media', 'wcag2aaa', 'wcag224', 'wcag325' ],
+      actIds: [ 'bisz58' ],
       all: [],
-      any: [ 'meta-refresh' ],
+      any: [ {
+        options: {
+          minDelay: 72e3,
+          maxDelay: false
+        },
+        id: 'meta-refresh-no-exceptions'
+      } ],
+      none: []
+    }, {
+      id: 'meta-refresh',
+      selector: 'meta[http-equiv="refresh"][content]',
+      excludeHidden: false,
+      tags: [ 'cat.time-and-media', 'wcag2a', 'wcag221' ],
+      actIds: [ 'bc659a', 'bisz58' ],
+      all: [],
+      any: [ {
+        options: {
+          minDelay: 0,
+          maxDelay: 72e3
+        },
+        id: 'meta-refresh'
+      } ],
       none: []
     }, {
       id: 'meta-viewport-large',
@@ -30077,7 +31783,7 @@ module.exports = {
       selector: 'meta[name="viewport"]',
       matches: 'is-initiator-matches',
       excludeHidden: false,
-      tags: [ 'cat.sensory-and-visual-cues', 'best-practice', 'ACT' ],
+      tags: [ 'cat.sensory-and-visual-cues', 'wcag2aa', 'wcag144', 'ACT' ],
       actIds: [ 'b4f0c3' ],
       all: [],
       any: [ {
@@ -30100,7 +31806,8 @@ module.exports = {
       excludeHidden: false,
       selector: 'audio[autoplay], video[autoplay]',
       matches: 'no-autoplay-audio-matches',
-      tags: [ 'cat.time-and-media', 'wcag2a', 'wcag142', 'experimental' ],
+      reviewOnFail: true,
+      tags: [ 'cat.time-and-media', 'wcag2a', 'wcag142', 'ACT' ],
       actIds: [ '80f0bf' ],
       preload: true,
       all: [ {
@@ -30113,8 +31820,8 @@ module.exports = {
       none: []
     }, {
       id: 'object-alt',
-      selector: 'object',
-      matches: 'no-explicit-name-required-matches',
+      selector: 'object[data]',
+      matches: 'object-is-loaded-matches',
       tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag111', 'section508', 'section508.22.a' ],
       actIds: [ '8fc3b6' ],
       all: [],
@@ -30157,7 +31864,8 @@ module.exports = {
       tags: [ 'cat.semantics', 'best-practice' ],
       all: [ {
         options: {
-          selector: 'h1:not([role], [aria-level]), :is(h1, h2, h3, h4, h5, h6):not([role])[aria-level=1], [role=heading][aria-level=1]'
+          selector: 'h1:not([role], [aria-level]), :is(h1, h2, h3, h4, h5, h6):not([role])[aria-level=1], [role=heading][aria-level=1]',
+          passForModal: true
         },
         id: 'page-has-heading-one'
       } ],
@@ -30165,9 +31873,10 @@ module.exports = {
       none: []
     }, {
       id: 'presentation-role-conflict',
+      selector: 'img[alt=\'\'], [role="none"], [role="presentation"]',
       matches: 'has-implicit-chromium-role-matches',
-      selector: '[role="none"], [role="presentation"]',
-      tags: [ 'cat.aria', 'best-practice' ],
+      tags: [ 'cat.aria', 'best-practice', 'ACT' ],
+      actIds: [ '46ca7f' ],
       all: [],
       any: [],
       none: [ 'is-element-focusable', 'has-global-aria-attribute' ]
@@ -30220,7 +31929,7 @@ module.exports = {
     }, {
       id: 'select-name',
       selector: 'select',
-      tags: [ 'cat.forms', 'wcag2a', 'wcag412', 'wcag131', 'section508', 'section508.22.n', 'ACT' ],
+      tags: [ 'cat.forms', 'wcag2a', 'wcag412', 'section508', 'section508.22.n', 'ACT' ],
       actIds: [ 'e086e5' ],
       all: [],
       any: [ 'implicit-label', 'explicit-label', 'aria-label', 'aria-labelledby', {
@@ -30282,6 +31991,25 @@ module.exports = {
       any: [],
       none: []
     }, {
+      id: 'target-size',
+      selector: '*',
+      enabled: false,
+      matches: 'widget-not-inline-matches',
+      tags: [ 'wcag22aa', 'wcag258', 'cat.sensory-and-visual-cues' ],
+      all: [],
+      any: [ {
+        options: {
+          minSize: 24
+        },
+        id: 'target-size'
+      }, {
+        options: {
+          minOffset: 24
+        },
+        id: 'target-offset'
+      } ],
+      none: []
+    }, {
       id: 'td-has-header',
       selector: 'table',
       matches: 'data-table-large-matches',
@@ -30292,6 +32020,7 @@ module.exports = {
     }, {
       id: 'td-headers-attr',
       selector: 'table',
+      matches: 'table-or-grid-role-matches',
       tags: [ 'cat.tables', 'wcag2a', 'wcag131', 'section508', 'section508.22.g' ],
       actIds: [ 'a25f45' ],
       all: [ 'td-headers-attr' ],
@@ -30308,9 +32037,9 @@ module.exports = {
       none: []
     }, {
       id: 'valid-lang',
-      selector: '[lang], [xml\\:lang]',
-      matches: 'not-html-matches',
-      tags: [ 'cat.language', 'wcag2aa', 'wcag312' ],
+      selector: '[lang]:not(html), [xml\\:lang]:not(html)',
+      tags: [ 'cat.language', 'wcag2aa', 'wcag312', 'ACT' ],
+      actIds: [ 'de46e4' ],
       all: [],
       any: [],
       none: [ {
@@ -30322,7 +32051,6 @@ module.exports = {
     }, {
       id: 'video-caption',
       selector: 'video',
-      excludeHidden: false,
       tags: [ 'cat.text-alternatives', 'wcag2a', 'wcag122', 'section508', 'section508.22.a' ],
       actIds: [ 'eac66b' ],
       all: [],
@@ -30346,6 +32074,9 @@ module.exports = {
         ignoredTags: []
       }
     }, {
+      id: 'aria-busy',
+      evaluate: 'aria-busy-evaluate'
+    }, {
       id: 'aria-errormessage',
       evaluate: 'aria-errormessage-evaluate'
     }, {
@@ -30367,7 +32098,7 @@ module.exports = {
       id: 'aria-required-children',
       evaluate: 'aria-required-children-evaluate',
       options: {
-        reviewEmpty: [ 'doc-bibliography', 'doc-endnotes', 'grid', 'list', 'listbox', 'table', 'tablist', 'tree', 'treegrid', 'rowgroup' ]
+        reviewEmpty: [ 'doc-bibliography', 'doc-endnotes', 'grid', 'list', 'listbox', 'menu', 'menubar', 'table', 'tablist', 'tree', 'treegrid', 'rowgroup' ]
       }
     }, {
       id: 'aria-required-parent',
@@ -30435,14 +32166,17 @@ module.exports = {
         largeTextPt: 18,
         contrastRatio: {
           normal: {
-            expected: 7
+            expected: 7,
+            minThreshold: 4.5
           },
           large: {
-            expected: 4.5
+            expected: 4.5,
+            minThreshold: 3
           }
         },
         pseudoSizeThreshold: .25,
-        shadowOutlineEmMax: .1
+        shadowOutlineEmMax: .1,
+        textStrokeEmMin: .03
       }
     }, {
       id: 'color-contrast',
@@ -30463,11 +32197,18 @@ module.exports = {
           }
         },
         pseudoSizeThreshold: .25,
-        shadowOutlineEmMax: .2
+        shadowOutlineEmMax: .2,
+        textStrokeEmMin: .03
       }
     }, {
+      id: 'link-in-text-block-style',
+      evaluate: 'link-in-text-block-style-evaluate'
+    }, {
       id: 'link-in-text-block',
-      evaluate: 'link-in-text-block-evaluate'
+      evaluate: 'link-in-text-block-evaluate',
+      options: {
+        requiredContrastRatio: 3
+      }
     }, {
       id: 'autocomplete-appropriate',
       evaluate: 'autocomplete-appropriate-evaluate',
@@ -30514,14 +32255,16 @@ module.exports = {
       evaluate: 'has-descendant-evaluate',
       after: 'has-descendant-after',
       options: {
-        selector: 'h1:not([role], [aria-level]), :is(h1, h2, h3, h4, h5, h6):not([role])[aria-level=1], [role=heading][aria-level=1]'
+        selector: 'h1:not([role], [aria-level]), :is(h1, h2, h3, h4, h5, h6):not([role])[aria-level=1], [role=heading][aria-level=1]',
+        passForModal: true
       }
     }, {
       id: 'page-has-main',
       evaluate: 'has-descendant-evaluate',
       after: 'has-descendant-after',
       options: {
-        selector: 'main:not([role]), [role=\'main\']'
+        selector: 'main:not([role]), [role=\'main\']',
+        passForModal: true
       }
     }, {
       id: 'page-no-duplicate-banner',
@@ -30576,7 +32319,7 @@ module.exports = {
       evaluate: 'label-content-name-mismatch-evaluate',
       options: {
         pixelThreshold: .1,
-        occuranceThreshold: 3
+        occurrenceThreshold: 3
       }
     }, {
       id: 'multiple-label',
@@ -30611,10 +32354,19 @@ module.exports = {
       evaluate: 'listitem-evaluate'
     }, {
       id: 'only-dlitems',
-      evaluate: 'only-dlitems-evaluate'
+      evaluate: 'invalid-children-evaluate',
+      options: {
+        validRoles: [ 'definition', 'term', 'listitem' ],
+        validNodeNames: [ 'dt', 'dd' ],
+        divGroups: true
+      }
     }, {
       id: 'only-listitems',
-      evaluate: 'only-listitems-evaluate'
+      evaluate: 'invalid-children-evaluate',
+      options: {
+        validRoles: [ 'listitem' ],
+        validNodeNames: [ 'li' ]
+      }
     }, {
       id: 'structured-dlitems',
       evaluate: 'structured-dlitems-evaluate'
@@ -30654,6 +32406,18 @@ module.exports = {
         scaleMinimum: 2
       }
     }, {
+      id: 'target-offset',
+      evaluate: 'target-offset-evaluate',
+      options: {
+        minOffset: 24
+      }
+    }, {
+      id: 'target-size',
+      evaluate: 'target-size-evaluate',
+      options: {
+        minSize: 24
+      }
+    }, {
       id: 'header-present',
       evaluate: 'has-descendant-evaluate',
       after: 'has-descendant-after',
@@ -30678,8 +32442,19 @@ module.exports = {
         selector: 'main, [role=main]'
       }
     }, {
+      id: 'meta-refresh-no-exceptions',
+      evaluate: 'meta-refresh-evaluate',
+      options: {
+        minDelay: 72e3,
+        maxDelay: false
+      }
+    }, {
       id: 'meta-refresh',
-      evaluate: 'meta-refresh-evaluate'
+      evaluate: 'meta-refresh-evaluate',
+      options: {
+        minDelay: 0,
+        maxDelay: 72e3
+      }
     }, {
       id: 'p-as-heading',
       evaluate: 'p-as-heading-evaluate',
@@ -30752,6 +32527,29 @@ module.exports = {
     }, {
       id: 'has-visible-text',
       evaluate: 'has-text-content-evaluate'
+    }, {
+      id: 'important-letter-spacing',
+      evaluate: 'inline-style-property-evaluate',
+      options: {
+        cssProperty: 'letter-spacing',
+        minValue: .12
+      }
+    }, {
+      id: 'important-line-height',
+      evaluate: 'inline-style-property-evaluate',
+      options: {
+        multiLineOnly: true,
+        cssProperty: 'line-height',
+        minValue: 1.5,
+        normalValue: 1
+      }
+    }, {
+      id: 'important-word-spacing',
+      evaluate: 'inline-style-property-evaluate',
+      options: {
+        cssProperty: 'word-spacing',
+        minValue: .16
+      }
     }, {
       id: 'is-on-screen',
       evaluate: 'is-on-screen-evaluate'
@@ -30846,17 +32644,14 @@ module.exports = {
 
 exports.__esModule = true;
 exports.computeAccessibleDescription = computeAccessibleDescription;
-
 var _accessibleNameAndDescription = require("./accessible-name-and-description");
-
 var _util = require("./util");
-
+function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
 function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
-
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { _defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
-
-function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-
+function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return _typeof(key) === "symbol" ? key : String(key); }
+function _toPrimitive(input, hint) { if (_typeof(input) !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (_typeof(res) !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
 /**
  * @param root
  * @param options
@@ -30868,17 +32663,17 @@ function computeAccessibleDescription(root) {
     return (0, _accessibleNameAndDescription.computeTextAlternative)(element, _objectSpread(_objectSpread({}, options), {}, {
       compute: "description"
     }));
-  }).join(" "); // TODO: Technically we need to make sure that node wasn't used for the accessible name
+  }).join(" ");
+
+  // TODO: Technically we need to make sure that node wasn't used for the accessible name
   //       This causes `description_1.0_combobox-focusable-manual` to fail
   //
   // https://www.w3.org/TR/html-aam-1.0/#accessible-name-and-description-computation
   // says for so many elements to use the `title` that we assume all elements are considered
-
   if (description === "") {
     var title = root.getAttribute("title");
     description = title === null ? "" : title;
   }
-
   return description;
 }
 
@@ -30887,15 +32682,10 @@ function computeAccessibleDescription(root) {
 
 exports.__esModule = true;
 exports.computeTextAlternative = computeTextAlternative;
-
 var _array = _interopRequireDefault(require("./polyfills/array.from"));
-
 var _SetLike = _interopRequireDefault(require("./polyfills/SetLike"));
-
 var _util = require("./util");
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
 /**
  * implements https://w3c.github.io/accname/
  */
@@ -30908,56 +32698,48 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 function asFlatString(s) {
   return s.trim().replace(/\s\s+/g, " ");
 }
+
 /**
  *
  * @param node -
  * @param options - These are not optional to prevent accidentally calling it without options in `computeAccessibleName`
  * @returns {boolean} -
  */
-
-
 function isHidden(node, getComputedStyleImplementation) {
   if (!(0, _util.isElement)(node)) {
     return false;
   }
-
   if (node.hasAttribute("hidden") || node.getAttribute("aria-hidden") === "true") {
     return true;
   }
-
   var style = getComputedStyleImplementation(node);
   return style.getPropertyValue("display") === "none" || style.getPropertyValue("visibility") === "hidden";
 }
+
 /**
  * @param {Node} node -
  * @returns {boolean} - As defined in step 2E of https://w3c.github.io/accname/#mapping_additional_nd_te
  */
-
-
 function isControl(node) {
   return (0, _util.hasAnyConcreteRoles)(node, ["button", "combobox", "listbox", "textbox"]) || hasAbstractRole(node, "range");
 }
-
 function hasAbstractRole(node, role) {
   if (!(0, _util.isElement)(node)) {
     return false;
   }
-
   switch (role) {
     case "range":
       return (0, _util.hasAnyConcreteRoles)(node, ["meter", "progressbar", "scrollbar", "slider", "spinbutton"]);
-
     default:
       throw new TypeError("No knowledge about abstract role '".concat(role, "'. This is likely a bug :("));
   }
 }
+
 /**
  * element.querySelectorAll but also considers owned tree
  * @param element
  * @param selectors
  */
-
-
 function querySelectorAllSubtree(element, selectors) {
   var elements = (0, _array.default)(element.querySelectorAll(selectors));
   (0, _util.queryIdRefs)(element, "aria-owns").forEach(function (root) {
@@ -30966,19 +32748,17 @@ function querySelectorAllSubtree(element, selectors) {
   });
   return elements;
 }
-
 function querySelectedOptions(listbox) {
   if ((0, _util.isHTMLSelectElement)(listbox)) {
     // IE11 polyfill
     return listbox.selectedOptions || querySelectorAllSubtree(listbox, "[selected]");
   }
-
   return querySelectorAllSubtree(listbox, '[aria-selected="true"]');
 }
-
 function isMarkedPresentational(node) {
   return (0, _util.hasAnyConcreteRoles)(node, ["none", "presentation"]);
 }
+
 /**
  * Elements specifically listed in html-aam
  *
@@ -30989,84 +32769,63 @@ function isMarkedPresentational(node) {
  *
  * - https://w3c.github.io/html-aam/#table-element
  */
-
-
 function isNativeHostLanguageTextAlternativeElement(node) {
   return (0, _util.isHTMLTableCaptionElement)(node);
 }
+
 /**
  * https://w3c.github.io/aria/#namefromcontent
  */
-
-
 function allowsNameFromContent(node) {
   return (0, _util.hasAnyConcreteRoles)(node, ["button", "cell", "checkbox", "columnheader", "gridcell", "heading", "label", "legend", "link", "menuitem", "menuitemcheckbox", "menuitemradio", "option", "radio", "row", "rowheader", "switch", "tab", "tooltip", "treeitem"]);
 }
+
 /**
  * TODO https://github.com/eps1lon/dom-accessibility-api/issues/100
  */
-
-
-function isDescendantOfNativeHostLanguageTextAlternativeElement( // eslint-disable-next-line @typescript-eslint/no-unused-vars -- not implemented yet
+function isDescendantOfNativeHostLanguageTextAlternativeElement(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- not implemented yet
 node) {
   return false;
 }
-/**
- * TODO https://github.com/eps1lon/dom-accessibility-api/issues/101
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- not implemented yet
-
-
-function computeTooltipAttributeValue(node) {
-  return null;
-}
-
 function getValueOfTextbox(element) {
   if ((0, _util.isHTMLInputElement)(element) || (0, _util.isHTMLTextAreaElement)(element)) {
     return element.value;
-  } // https://github.com/eps1lon/dom-accessibility-api/issues/4
-
-
+  }
+  // https://github.com/eps1lon/dom-accessibility-api/issues/4
   return element.textContent || "";
 }
-
 function getTextualContent(declaration) {
   var content = declaration.getPropertyValue("content");
-
   if (/^["'].*["']$/.test(content)) {
     return content.slice(1, -1);
   }
-
   return "";
 }
+
 /**
  * https://html.spec.whatwg.org/multipage/forms.html#category-label
  * TODO: form-associated custom elements
  * @param element
  */
-
-
 function isLabelableElement(element) {
   var localName = (0, _util.getLocalName)(element);
   return localName === "button" || localName === "input" && element.getAttribute("type") !== "hidden" || localName === "meter" || localName === "output" || localName === "progress" || localName === "select" || localName === "textarea";
 }
+
 /**
  * > [...], then the first such descendant in tree order is the label element's labeled control.
  * -- https://html.spec.whatwg.org/multipage/forms.html#labeled-control
  * @param element
  */
-
-
 function findLabelableElement(element) {
   if (isLabelableElement(element)) {
     return element;
   }
-
   var labelableElement = null;
   element.childNodes.forEach(function (childNode) {
     if (labelableElement === null && (0, _util.isElement)(childNode)) {
       var descendantLabelableElement = findLabelableElement(childNode);
-
       if (descendantLabelableElement !== null) {
         labelableElement = descendantLabelableElement;
       }
@@ -31074,160 +32833,146 @@ function findLabelableElement(element) {
   });
   return labelableElement;
 }
+
 /**
  * Polyfill of HTMLLabelElement.control
  * https://html.spec.whatwg.org/multipage/forms.html#labeled-control
  * @param label
  */
-
-
 function getControlOfLabel(label) {
   if (label.control !== undefined) {
     return label.control;
   }
-
   var htmlFor = label.getAttribute("for");
-
   if (htmlFor !== null) {
     return label.ownerDocument.getElementById(htmlFor);
   }
-
   return findLabelableElement(label);
 }
+
 /**
  * Polyfill of HTMLInputElement.labels
  * https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/labels
  * @param element
  */
-
-
 function getLabels(element) {
   var labelsProperty = element.labels;
-
   if (labelsProperty === null) {
     return labelsProperty;
   }
-
   if (labelsProperty !== undefined) {
     return (0, _array.default)(labelsProperty);
-  } // polyfill
+  }
 
-
+  // polyfill
   if (!isLabelableElement(element)) {
     return null;
   }
-
   var document = element.ownerDocument;
   return (0, _array.default)(document.querySelectorAll("label")).filter(function (label) {
     return getControlOfLabel(label) === element;
   });
 }
+
 /**
  * Gets the contents of a slot used for computing the accname
  * @param slot
  */
-
-
 function getSlotContents(slot) {
   // Computing the accessible name for elements containing slots is not
   // currently defined in the spec. This implementation reflects the
   // behavior of NVDA 2020.2/Firefox 81 and iOS VoiceOver/Safari 13.6.
   var assignedNodes = slot.assignedNodes();
-
   if (assignedNodes.length === 0) {
     // if no nodes are assigned to the slot, it displays the default content
     return (0, _array.default)(slot.childNodes);
   }
-
   return assignedNodes;
 }
+
 /**
  * implements https://w3c.github.io/accname/#mapping_additional_nd_te
  * @param root
  * @param options
  * @returns
  */
-
-
 function computeTextAlternative(root) {
   var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
   var consultedNodes = new _SetLike.default();
   var window = (0, _util.safeWindow)(root);
   var _options$compute = options.compute,
-      compute = _options$compute === void 0 ? "name" : _options$compute,
-      _options$computedStyl = options.computedStyleSupportsPseudoElements,
-      computedStyleSupportsPseudoElements = _options$computedStyl === void 0 ? options.getComputedStyle !== undefined : _options$computedStyl,
-      _options$getComputedS = options.getComputedStyle,
-      getComputedStyle = _options$getComputedS === void 0 ? window.getComputedStyle.bind(window) : _options$getComputedS,
-      _options$hidden = options.hidden,
-      hidden = _options$hidden === void 0 ? false : _options$hidden; // 2F.i
+    compute = _options$compute === void 0 ? "name" : _options$compute,
+    _options$computedStyl = options.computedStyleSupportsPseudoElements,
+    computedStyleSupportsPseudoElements = _options$computedStyl === void 0 ? options.getComputedStyle !== undefined : _options$computedStyl,
+    _options$getComputedS = options.getComputedStyle,
+    getComputedStyle = _options$getComputedS === void 0 ? window.getComputedStyle.bind(window) : _options$getComputedS,
+    _options$hidden = options.hidden,
+    hidden = _options$hidden === void 0 ? false : _options$hidden;
 
+  // 2F.i
   function computeMiscTextAlternative(node, context) {
     var accumulatedText = "";
-
     if ((0, _util.isElement)(node) && computedStyleSupportsPseudoElements) {
       var pseudoBefore = getComputedStyle(node, "::before");
       var beforeContent = getTextualContent(pseudoBefore);
       accumulatedText = "".concat(beforeContent, " ").concat(accumulatedText);
-    } // FIXME: Including aria-owns is not defined in the spec
+    }
+
+    // FIXME: Including aria-owns is not defined in the spec
     // But it is required in the web-platform-test
-
-
     var childNodes = (0, _util.isHTMLSlotElement)(node) ? getSlotContents(node) : (0, _array.default)(node.childNodes).concat((0, _util.queryIdRefs)(node, "aria-owns"));
     childNodes.forEach(function (child) {
       var result = computeTextAlternative(child, {
         isEmbeddedInLabel: context.isEmbeddedInLabel,
         isReferenced: false,
         recursion: true
-      }); // TODO: Unclear why display affects delimiter
+      });
+      // TODO: Unclear why display affects delimiter
       // see https://github.com/w3c/accname/issues/3
-
       var display = (0, _util.isElement)(child) ? getComputedStyle(child).getPropertyValue("display") : "inline";
-      var separator = display !== "inline" ? " " : ""; // trailing separator for wpt tests
-
+      var separator = display !== "inline" ? " " : "";
+      // trailing separator for wpt tests
       accumulatedText += "".concat(separator).concat(result).concat(separator);
     });
-
     if ((0, _util.isElement)(node) && computedStyleSupportsPseudoElements) {
       var pseudoAfter = getComputedStyle(node, "::after");
       var afterContent = getTextualContent(pseudoAfter);
       accumulatedText = "".concat(accumulatedText, " ").concat(afterContent);
     }
-
     return accumulatedText.trim();
   }
 
+  /**
+   *
+   * @param element
+   * @param attributeName
+   * @returns A string non-empty string or `null`
+   */
+  function useAttribute(element, attributeName) {
+    var attribute = element.getAttributeNode(attributeName);
+    if (attribute !== null && !consultedNodes.has(attribute) && attribute.value.trim() !== "") {
+      consultedNodes.add(attribute);
+      return attribute.value;
+    }
+    return null;
+  }
+  function computeTooltipAttributeValue(node) {
+    if (!(0, _util.isElement)(node)) {
+      return null;
+    }
+    return useAttribute(node, "title");
+  }
   function computeElementTextAlternative(node) {
     if (!(0, _util.isElement)(node)) {
       return null;
     }
-    /**
-     *
-     * @param element
-     * @param attributeName
-     * @returns A string non-empty string or `null`
-     */
 
-
-    function useAttribute(element, attributeName) {
-      var attribute = element.getAttributeNode(attributeName);
-
-      if (attribute !== null && !consultedNodes.has(attribute) && attribute.value.trim() !== "") {
-        consultedNodes.add(attribute);
-        return attribute.value;
-      }
-
-      return null;
-    } // https://w3c.github.io/html-aam/#fieldset-and-legend-elements
-
-
+    // https://w3c.github.io/html-aam/#fieldset-and-legend-elements
     if ((0, _util.isHTMLFieldSetElement)(node)) {
       consultedNodes.add(node);
       var children = (0, _array.default)(node.childNodes);
-
       for (var i = 0; i < children.length; i += 1) {
         var child = children[i];
-
         if ((0, _util.isHTMLLegendElement)(child)) {
           return computeTextAlternative(child, {
             isEmbeddedInLabel: false,
@@ -31239,12 +32984,9 @@ function computeTextAlternative(root) {
     } else if ((0, _util.isHTMLTableElement)(node)) {
       // https://w3c.github.io/html-aam/#table-element
       consultedNodes.add(node);
-
       var _children = (0, _array.default)(node.childNodes);
-
       for (var _i = 0; _i < _children.length; _i += 1) {
         var _child = _children[_i];
-
         if ((0, _util.isHTMLTableCaptionElement)(_child)) {
           return computeTextAlternative(_child, {
             isEmbeddedInLabel: false,
@@ -31256,55 +32998,44 @@ function computeTextAlternative(root) {
     } else if ((0, _util.isSVGSVGElement)(node)) {
       // https://www.w3.org/TR/svg-aam-1.0/
       consultedNodes.add(node);
-
       var _children2 = (0, _array.default)(node.childNodes);
-
       for (var _i2 = 0; _i2 < _children2.length; _i2 += 1) {
         var _child2 = _children2[_i2];
-
         if ((0, _util.isSVGTitleElement)(_child2)) {
           return _child2.textContent;
         }
       }
-
       return null;
     } else if ((0, _util.getLocalName)(node) === "img" || (0, _util.getLocalName)(node) === "area") {
       // https://w3c.github.io/html-aam/#area-element
       // https://w3c.github.io/html-aam/#img-element
       var nameFromAlt = useAttribute(node, "alt");
-
       if (nameFromAlt !== null) {
         return nameFromAlt;
       }
     } else if ((0, _util.isHTMLOptGroupElement)(node)) {
       var nameFromLabel = useAttribute(node, "label");
-
       if (nameFromLabel !== null) {
         return nameFromLabel;
       }
     }
-
     if ((0, _util.isHTMLInputElement)(node) && (node.type === "button" || node.type === "submit" || node.type === "reset")) {
       // https://w3c.github.io/html-aam/#input-type-text-input-type-password-input-type-search-input-type-tel-input-type-email-input-type-url-and-textarea-element-accessible-description-computation
       var nameFromValue = useAttribute(node, "value");
-
       if (nameFromValue !== null) {
         return nameFromValue;
-      } // TODO: l10n
+      }
 
-
+      // TODO: l10n
       if (node.type === "submit") {
         return "Submit";
-      } // TODO: l10n
-
-
+      }
+      // TODO: l10n
       if (node.type === "reset") {
         return "Reset";
       }
     }
-
     var labels = getLabels(node);
-
     if (labels !== null && labels.length !== 0) {
       consultedNodes.add(node);
       return (0, _array.default)(labels).map(function (element) {
@@ -31316,59 +33047,49 @@ function computeTextAlternative(root) {
       }).filter(function (label) {
         return label.length > 0;
       }).join(" ");
-    } // https://w3c.github.io/html-aam/#input-type-image-accessible-name-computation
+    }
+
+    // https://w3c.github.io/html-aam/#input-type-image-accessible-name-computation
     // TODO: wpt test consider label elements but html-aam does not mention them
     // We follow existing implementations over spec
-
-
     if ((0, _util.isHTMLInputElement)(node) && node.type === "image") {
       var _nameFromAlt = useAttribute(node, "alt");
-
       if (_nameFromAlt !== null) {
         return _nameFromAlt;
       }
-
       var nameFromTitle = useAttribute(node, "title");
-
       if (nameFromTitle !== null) {
         return nameFromTitle;
-      } // TODO: l10n
+      }
 
-
+      // TODO: l10n
       return "Submit Query";
     }
-
     if ((0, _util.hasAnyConcreteRoles)(node, ["button"])) {
       // https://www.w3.org/TR/html-aam-1.0/#button-element
       var nameFromSubTree = computeMiscTextAlternative(node, {
         isEmbeddedInLabel: false,
         isReferenced: false
       });
-
       if (nameFromSubTree !== "") {
         return nameFromSubTree;
       }
-
-      return useAttribute(node, "title");
     }
-
-    return useAttribute(node, "title");
+    return null;
   }
-
   function computeTextAlternative(current, context) {
     if (consultedNodes.has(current)) {
       return "";
-    } // 2A
+    }
 
-
+    // 2A
     if (!hidden && isHidden(current, getComputedStyle) && !context.isReferenced) {
       consultedNodes.add(current);
       return "";
-    } // 2B
+    }
 
-
+    // 2B
     var labelElements = (0, _util.queryIdRefs)(current, "aria-labelledby");
-
     if (compute === "name" && !context.isReferenced && labelElements.length > 0) {
       return labelElements.map(function (element) {
         return computeTextAlternative(element, {
@@ -31380,50 +33101,45 @@ function computeTextAlternative(root) {
           recursion: false
         });
       }).join(" ");
-    } // 2C
+    }
+
+    // 2C
     // Changed from the spec in anticipation of https://github.com/w3c/accname/issues/64
     // spec says we should only consider skipping if we have a non-empty label
-
-
     var skipToStep2E = context.recursion && isControl(current) && compute === "name";
-
     if (!skipToStep2E) {
       var ariaLabel = ((0, _util.isElement)(current) && current.getAttribute("aria-label") || "").trim();
-
       if (ariaLabel !== "" && compute === "name") {
         consultedNodes.add(current);
         return ariaLabel;
-      } // 2D
+      }
 
-
+      // 2D
       if (!isMarkedPresentational(current)) {
         var elementTextAlternative = computeElementTextAlternative(current);
-
         if (elementTextAlternative !== null) {
           consultedNodes.add(current);
           return elementTextAlternative;
         }
       }
-    } // special casing, cheating to make tests pass
+    }
+
+    // special casing, cheating to make tests pass
     // https://github.com/w3c/accname/issues/67
-
-
     if ((0, _util.hasAnyConcreteRoles)(current, ["menu"])) {
       consultedNodes.add(current);
       return "";
-    } // 2E
+    }
 
-
+    // 2E
     if (skipToStep2E || context.isEmbeddedInLabel || context.isReferenced) {
       if ((0, _util.hasAnyConcreteRoles)(current, ["combobox", "listbox"])) {
         consultedNodes.add(current);
         var selectedOptions = querySelectedOptions(current);
-
         if (selectedOptions.length === 0) {
           // defined per test `name_heading_combobox`
           return (0, _util.isHTMLInputElement)(current) ? current.value : "";
         }
-
         return (0, _array.default)(selectedOptions).map(function (selectedOption) {
           return computeTextAlternative(selectedOption, {
             isEmbeddedInLabel: context.isEmbeddedInLabel,
@@ -31432,44 +33148,40 @@ function computeTextAlternative(root) {
           });
         }).join(" ");
       }
-
       if (hasAbstractRole(current, "range")) {
         consultedNodes.add(current);
-
         if (current.hasAttribute("aria-valuetext")) {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- safe due to hasAttribute guard
           return current.getAttribute("aria-valuetext");
         }
-
         if (current.hasAttribute("aria-valuenow")) {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- safe due to hasAttribute guard
           return current.getAttribute("aria-valuenow");
-        } // Otherwise, use the value as specified by a host language attribute.
-
-
+        }
+        // Otherwise, use the value as specified by a host language attribute.
         return current.getAttribute("value") || "";
       }
-
       if ((0, _util.hasAnyConcreteRoles)(current, ["textbox"])) {
         consultedNodes.add(current);
         return getValueOfTextbox(current);
       }
-    } // 2F: https://w3c.github.io/accname/#step2F
+    }
 
-
+    // 2F: https://w3c.github.io/accname/#step2F
     if (allowsNameFromContent(current) || (0, _util.isElement)(current) && context.isReferenced || isNativeHostLanguageTextAlternativeElement(current) || isDescendantOfNativeHostLanguageTextAlternativeElement(current)) {
-      consultedNodes.add(current);
-      return computeMiscTextAlternative(current, {
+      var accumulatedText2F = computeMiscTextAlternative(current, {
         isEmbeddedInLabel: context.isEmbeddedInLabel,
         isReferenced: false
       });
+      if (accumulatedText2F !== "") {
+        consultedNodes.add(current);
+        return accumulatedText2F;
+      }
     }
-
     if (current.nodeType === current.TEXT_NODE) {
       consultedNodes.add(current);
       return current.textContent || "";
     }
-
     if (context.recursion) {
       consultedNodes.add(current);
       return computeMiscTextAlternative(current, {
@@ -31477,19 +33189,16 @@ function computeTextAlternative(root) {
         isReferenced: false
       });
     }
-
     var tooltipAttributeValue = computeTooltipAttributeValue(current);
-
     if (tooltipAttributeValue !== null) {
       consultedNodes.add(current);
       return tooltipAttributeValue;
-    } // TODO should this be reachable?
+    }
 
-
+    // TODO should this be reachable?
     consultedNodes.add(current);
     return "";
   }
-
   return asFlatString(computeTextAlternative(root, {
     isEmbeddedInLabel: false,
     // by spec computeAccessibleDescription starts with the referenced elements as roots
@@ -31503,32 +33212,26 @@ function computeTextAlternative(root) {
 
 exports.__esModule = true;
 exports.computeAccessibleName = computeAccessibleName;
-
 var _accessibleNameAndDescription = require("./accessible-name-and-description");
-
 var _util = require("./util");
-
 /**
  * https://w3c.github.io/aria/#namefromprohibited
  */
 function prohibitsNaming(node) {
   return (0, _util.hasAnyConcreteRoles)(node, ["caption", "code", "deletion", "emphasis", "generic", "insertion", "paragraph", "presentation", "strong", "subscript", "superscript"]);
 }
+
 /**
  * implements https://w3c.github.io/accname/#mapping_additional_nd_name
  * @param root
  * @param options
  * @returns
  */
-
-
 function computeAccessibleName(root) {
   var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-
   if (prohibitsNaming(root)) {
     return "";
   }
-
   return (0, _accessibleNameAndDescription.computeTextAlternative)(root, options);
 }
 
@@ -31538,7 +33241,6 @@ function computeAccessibleName(root) {
 exports.__esModule = true;
 exports.default = getRole;
 exports.getLocalName = getLocalName;
-
 // https://w3c.github.io/html-aria/#document-conformance-requirements-for-use-of-aria-attributes-in-html
 
 /**
@@ -31547,13 +33249,12 @@ exports.getLocalName = getLocalName;
  */
 function getLocalName(element) {
   var _element$localName;
-
   return (// eslint-disable-next-line no-restricted-properties -- actual guard for environments without localName
-    (_element$localName = element.localName) !== null && _element$localName !== void 0 ? _element$localName : // eslint-disable-next-line no-restricted-properties -- required for the fallback
+    (_element$localName = element.localName) !== null && _element$localName !== void 0 ? _element$localName :
+    // eslint-disable-next-line no-restricted-properties -- required for the fallback
     element.tagName.toLowerCase()
   );
 }
-
 var localNameToRoleMappings = {
   article: "article",
   aside: "complementary",
@@ -31616,52 +33317,47 @@ var prohibitedAttributes = {
   subscript: new Set(["aria-label", "aria-labelledby"]),
   superscript: new Set(["aria-label", "aria-labelledby"])
 };
+
 /**
  *
  * @param element
  * @param role The role used for this element. This is specified to control whether you want to use the implicit or explicit role.
  */
-
 function hasGlobalAriaAttributes(element, role) {
   // https://rawgit.com/w3c/aria/stable/#global_states
   // commented attributes are deprecated
-  return ["aria-atomic", "aria-busy", "aria-controls", "aria-current", "aria-describedby", "aria-details", // "disabled",
-  "aria-dropeffect", // "errormessage",
-  "aria-flowto", "aria-grabbed", // "haspopup",
-  "aria-hidden", // "invalid",
+  return ["aria-atomic", "aria-busy", "aria-controls", "aria-current", "aria-describedby", "aria-details",
+  // "disabled",
+  "aria-dropeffect",
+  // "errormessage",
+  "aria-flowto", "aria-grabbed",
+  // "haspopup",
+  "aria-hidden",
+  // "invalid",
   "aria-keyshortcuts", "aria-label", "aria-labelledby", "aria-live", "aria-owns", "aria-relevant", "aria-roledescription"].some(function (attributeName) {
     var _prohibitedAttributes;
-
     return element.hasAttribute(attributeName) && !((_prohibitedAttributes = prohibitedAttributes[role]) !== null && _prohibitedAttributes !== void 0 && _prohibitedAttributes.has(attributeName));
   });
 }
-
 function ignorePresentationalRole(element, implicitRole) {
   // https://rawgit.com/w3c/aria/stable/#conflict_resolution_presentation_none
   return hasGlobalAriaAttributes(element, implicitRole);
 }
-
 function getRole(element) {
   var explicitRole = getExplicitRole(element);
-
   if (explicitRole === null || explicitRole === "presentation") {
     var implicitRole = getImplicitRole(element);
-
     if (explicitRole !== "presentation" || ignorePresentationalRole(element, implicitRole || "")) {
       return implicitRole;
     }
   }
-
   return explicitRole;
 }
-
 function getImplicitRole(element) {
   var mappedByTag = localNameToRoleMappings[getLocalName(element)];
-
   if (mappedByTag !== undefined) {
     return mappedByTag;
   }
-
   switch (getLocalName(element)) {
     case "a":
     case "area":
@@ -31669,35 +33365,27 @@ function getImplicitRole(element) {
       if (element.hasAttribute("href")) {
         return "link";
       }
-
       break;
-
     case "img":
       if (element.getAttribute("alt") === "" && !ignorePresentationalRole(element, "img")) {
         return "presentation";
       }
-
       return "img";
-
     case "input":
       {
         var _ref = element,
-            type = _ref.type;
-
+          type = _ref.type;
         switch (type) {
           case "button":
           case "image":
           case "reset":
           case "submit":
             return "button";
-
           case "checkbox":
           case "radio":
             return type;
-
           case "range":
             return "slider";
-
           case "email":
           case "tel":
           case "text":
@@ -31705,47 +33393,36 @@ function getImplicitRole(element) {
             if (element.hasAttribute("list")) {
               return "combobox";
             }
-
             return "textbox";
-
           case "search":
             if (element.hasAttribute("list")) {
               return "combobox";
             }
-
             return "searchbox";
-
           case "number":
             return "spinbutton";
-
           default:
             return null;
         }
       }
-
     case "select":
       if (element.hasAttribute("multiple") || element.size > 1) {
         return "listbox";
       }
-
       return "combobox";
   }
-
   return null;
 }
-
 function getExplicitRole(element) {
   var role = element.getAttribute("role");
-
   if (role !== null) {
-    var explicitRole = role.trim().split(" ")[0]; // String.prototype.split(sep, limit) will always return an array with at least one member
+    var explicitRole = role.trim().split(" ")[0];
+    // String.prototype.split(sep, limit) will always return an array with at least one member
     // as long as limit is either undefined or > 0
-
     if (explicitRole.length > 0) {
       return explicitRole;
     }
   }
-
   return null;
 }
 
@@ -31759,28 +33436,19 @@ var _exportNames = {
   getRole: true
 };
 exports.getRole = exports.computeAccessibleName = exports.computeAccessibleDescription = void 0;
-
 var _accessibleDescription = require("./accessible-description");
-
 exports.computeAccessibleDescription = _accessibleDescription.computeAccessibleDescription;
-
 var _accessibleName = require("./accessible-name");
-
 exports.computeAccessibleName = _accessibleName.computeAccessibleName;
-
 var _getRole = _interopRequireDefault(require("./getRole"));
-
 exports.getRole = _getRole.default;
-
 var _isInaccessible = require("./is-inaccessible");
-
 Object.keys(_isInaccessible).forEach(function (key) {
   if (key === "default" || key === "__esModule") return;
   if (Object.prototype.hasOwnProperty.call(_exportNames, key)) return;
   if (key in exports && exports[key] === _isInaccessible[key]) return;
   exports[key] = _isInaccessible[key];
 });
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 },{"./accessible-description":16,"./accessible-name":18,"./getRole":19,"./is-inaccessible":21}],21:[function(require,module,exports){
@@ -31789,7 +33457,6 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 exports.__esModule = true;
 exports.isInaccessible = isInaccessible;
 exports.isSubtreeInaccessible = isSubtreeInaccessible;
-
 /**
  * Partial implementation https://www.w3.org/TR/wai-aria-1.2/#tree_exclusion
  * which should only be used for elements with a non-presentational role i.e.
@@ -31804,37 +33471,29 @@ exports.isSubtreeInaccessible = isSubtreeInaccessible;
  */
 function isInaccessible(element) {
   var _element$ownerDocumen;
-
   var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
   var _options$getComputedS = options.getComputedStyle,
-      getComputedStyle = _options$getComputedS === void 0 ? (_element$ownerDocumen = element.ownerDocument.defaultView) === null || _element$ownerDocumen === void 0 ? void 0 : _element$ownerDocumen.getComputedStyle : _options$getComputedS,
-      _options$isSubtreeIna = options.isSubtreeInaccessible,
-      isSubtreeInaccessibleImpl = _options$isSubtreeIna === void 0 ? isSubtreeInaccessible : _options$isSubtreeIna;
-
+    getComputedStyle = _options$getComputedS === void 0 ? (_element$ownerDocumen = element.ownerDocument.defaultView) === null || _element$ownerDocumen === void 0 ? void 0 : _element$ownerDocumen.getComputedStyle : _options$getComputedS,
+    _options$isSubtreeIna = options.isSubtreeInaccessible,
+    isSubtreeInaccessibleImpl = _options$isSubtreeIna === void 0 ? isSubtreeInaccessible : _options$isSubtreeIna;
   if (typeof getComputedStyle !== "function") {
     throw new TypeError("Owner document of the element needs to have an associated window.");
-  } // since visibility is inherited we can exit early
-
-
+  }
+  // since visibility is inherited we can exit early
   if (getComputedStyle(element).visibility === "hidden") {
     return true;
   }
-
   var currentElement = element;
-
   while (currentElement) {
     if (isSubtreeInaccessibleImpl(currentElement, {
       getComputedStyle: getComputedStyle
     })) {
       return true;
     }
-
     currentElement = currentElement.parentElement;
   }
-
   return false;
 }
-
 /**
  *
  * @param element
@@ -31843,27 +33502,21 @@ function isInaccessible(element) {
  */
 function isSubtreeInaccessible(element) {
   var _element$ownerDocumen2;
-
   var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
   var _options$getComputedS2 = options.getComputedStyle,
-      getComputedStyle = _options$getComputedS2 === void 0 ? (_element$ownerDocumen2 = element.ownerDocument.defaultView) === null || _element$ownerDocumen2 === void 0 ? void 0 : _element$ownerDocumen2.getComputedStyle : _options$getComputedS2;
-
+    getComputedStyle = _options$getComputedS2 === void 0 ? (_element$ownerDocumen2 = element.ownerDocument.defaultView) === null || _element$ownerDocumen2 === void 0 ? void 0 : _element$ownerDocumen2.getComputedStyle : _options$getComputedS2;
   if (typeof getComputedStyle !== "function") {
     throw new TypeError("Owner document of the element needs to have an associated window.");
   }
-
   if (element.hidden === true) {
     return true;
   }
-
   if (element.getAttribute("aria-hidden") === "true") {
     return true;
   }
-
   if (getComputedStyle(element).display === "none") {
     return true;
   }
-
   return false;
 }
 
@@ -31872,34 +33525,27 @@ function isSubtreeInaccessible(element) {
 
 exports.__esModule = true;
 exports.default = void 0;
-
+function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
-
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor); } }
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); Object.defineProperty(Constructor, "prototype", { writable: false }); return Constructor; }
-
-function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-
+function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return _typeof(key) === "symbol" ? key : String(key); }
+function _toPrimitive(input, hint) { if (_typeof(input) !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (_typeof(res) !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
 // for environments without Set we fallback to arrays with unique members
 var SetLike = /*#__PURE__*/function () {
   function SetLike() {
     var items = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
-
     _classCallCheck(this, SetLike);
-
     _defineProperty(this, "items", void 0);
-
     this.items = items;
   }
-
   _createClass(SetLike, [{
     key: "add",
     value: function add(value) {
       if (this.has(value) === false) {
         this.items.push(value);
       }
-
       return this;
     }
   }, {
@@ -31920,7 +33566,6 @@ var SetLike = /*#__PURE__*/function () {
     key: "forEach",
     value: function forEach(callbackfn) {
       var _this = this;
-
       this.items.forEach(function (item) {
         callbackfn(item, item, _this);
       });
@@ -31936,12 +33581,9 @@ var SetLike = /*#__PURE__*/function () {
       return this.items.length;
     }
   }]);
-
   return SetLike;
 }();
-
 var _default = typeof Set === "undefined" ? Set : SetLike;
-
 exports.default = _default;
 
 },{}],23:[function(require,module,exports){
@@ -31949,33 +33591,25 @@ exports.default = _default;
 
 exports.__esModule = true;
 exports.default = arrayFrom;
-
 /**
  * @source {https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from#Polyfill}
  * but without thisArg (too hard to type, no need to `this`)
  */
 var toStr = Object.prototype.toString;
-
 function isCallable(fn) {
   return typeof fn === "function" || toStr.call(fn) === "[object Function]";
 }
-
 function toInteger(value) {
   var number = Number(value);
-
   if (isNaN(number)) {
     return 0;
   }
-
   if (number === 0 || !isFinite(number)) {
     return number;
   }
-
   return (number > 0 ? 1 : -1) * Math.floor(Math.abs(number));
 }
-
 var maxSafeInteger = Math.pow(2, 53) - 1;
-
 function toLength(value) {
   var len = toInteger(value);
   return Math.min(Math.max(len, 0), maxSafeInteger);
@@ -31984,7 +33618,6 @@ function toLength(value) {
  * Creates an array from an iterable object.
  * @param iterable An iterable object to convert to an array.
  */
-
 
 /**
  * Creates an array from an iterable object.
@@ -31995,15 +33628,18 @@ function toLength(value) {
 function arrayFrom(arrayLike, mapFn) {
   // 1. Let C be the this value.
   // edit(@eps1lon): we're not calling it as Array.from
-  var C = Array; // 2. Let items be ToObject(arrayLike).
+  var C = Array;
 
-  var items = Object(arrayLike); // 3. ReturnIfAbrupt(items).
+  // 2. Let items be ToObject(arrayLike).
+  var items = Object(arrayLike);
 
+  // 3. ReturnIfAbrupt(items).
   if (arrayLike == null) {
     throw new TypeError("Array.from requires an array-like object - not null or undefined");
-  } // 4. If mapfn is undefined, then let mapping be false.
-  // const mapFn = arguments.length > 1 ? arguments[1] : void undefined;
+  }
 
+  // 4. If mapfn is undefined, then let mapping be false.
+  // const mapFn = arguments.length > 1 ? arguments[1] : void undefined;
 
   if (typeof mapFn !== "undefined") {
     // 5. else
@@ -32011,36 +33647,34 @@ function arrayFrom(arrayLike, mapFn) {
     if (!isCallable(mapFn)) {
       throw new TypeError("Array.from: when provided, the second argument must be a function");
     }
-  } // 10. Let lenValue be Get(items, "length").
+  }
+
+  // 10. Let lenValue be Get(items, "length").
   // 11. Let len be ToLength(lenValue).
+  var len = toLength(items.length);
 
-
-  var len = toLength(items.length); // 13. If IsConstructor(C) is true, then
+  // 13. If IsConstructor(C) is true, then
   // 13. a. Let A be the result of calling the [[Construct]] internal method
   // of C with an argument list containing the single item len.
   // 14. a. Else, Let A be ArrayCreate(len).
+  var A = isCallable(C) ? Object(new C(len)) : new Array(len);
 
-  var A = isCallable(C) ? Object(new C(len)) : new Array(len); // 16. Let k be 0.
-
-  var k = 0; // 17. Repeat, while k < len… (also steps a - h)
-
+  // 16. Let k be 0.
+  var k = 0;
+  // 17. Repeat, while k < len… (also steps a - h)
   var kValue;
-
   while (k < len) {
     kValue = items[k];
-
     if (mapFn) {
       A[k] = mapFn(kValue, k);
     } else {
       A[k] = kValue;
     }
-
     k += 1;
-  } // 18. Let putStatus be Put(A, "length", len, true).
-
-
-  A.length = len; // 20. Return A.
-
+  }
+  // 18. Let putStatus be Put(A, "length", len, true).
+  A.length = len;
+  // 20. Return A.
   return A;
 }
 
@@ -32048,7 +33682,6 @@ function arrayFrom(arrayLike, mapFn) {
 "use strict";
 
 function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
-
 exports.__esModule = true;
 exports.hasAnyConcreteRoles = hasAnyConcreteRoles;
 exports.isElement = isElement;
@@ -32066,107 +33699,86 @@ exports.isSVGSVGElement = isSVGSVGElement;
 exports.isSVGTitleElement = isSVGTitleElement;
 exports.queryIdRefs = queryIdRefs;
 exports.safeWindow = safeWindow;
-
 var _getRole = _interopRequireWildcard(require("./getRole"));
-
 exports.getLocalName = _getRole.getLocalName;
-
 function _getRequireWildcardCache(nodeInterop) { if (typeof WeakMap !== "function") return null; var cacheBabelInterop = new WeakMap(); var cacheNodeInterop = new WeakMap(); return (_getRequireWildcardCache = function _getRequireWildcardCache(nodeInterop) { return nodeInterop ? cacheNodeInterop : cacheBabelInterop; })(nodeInterop); }
-
 function _interopRequireWildcard(obj, nodeInterop) { if (!nodeInterop && obj && obj.__esModule) { return obj; } if (obj === null || _typeof(obj) !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(nodeInterop); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (key !== "default" && Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
-
 function isElement(node) {
   return node !== null && node.nodeType === node.ELEMENT_NODE;
 }
-
 function isHTMLTableCaptionElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "caption";
 }
-
 function isHTMLInputElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "input";
 }
-
 function isHTMLOptGroupElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "optgroup";
 }
-
 function isHTMLSelectElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "select";
 }
-
 function isHTMLTableElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "table";
 }
-
 function isHTMLTextAreaElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "textarea";
 }
-
 function safeWindow(node) {
   var _ref = node.ownerDocument === null ? node : node.ownerDocument,
-      defaultView = _ref.defaultView;
-
+    defaultView = _ref.defaultView;
   if (defaultView === null) {
     throw new TypeError("no window available");
   }
-
   return defaultView;
 }
-
 function isHTMLFieldSetElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "fieldset";
 }
-
 function isHTMLLegendElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "legend";
 }
-
 function isHTMLSlotElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "slot";
 }
-
 function isSVGElement(node) {
   return isElement(node) && node.ownerSVGElement !== undefined;
 }
-
 function isSVGSVGElement(node) {
   return isElement(node) && (0, _getRole.getLocalName)(node) === "svg";
 }
-
 function isSVGTitleElement(node) {
   return isSVGElement(node) && (0, _getRole.getLocalName)(node) === "title";
 }
+
 /**
  *
  * @param {Node} node -
  * @param {string} attributeName -
  * @returns {Element[]} -
  */
-
-
 function queryIdRefs(node, attributeName) {
   if (isElement(node) && node.hasAttribute(attributeName)) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- safe due to hasAttribute check
-    var ids = node.getAttribute(attributeName).split(" "); // Browsers that don't support shadow DOM won't have getRootNode
+    var ids = node.getAttribute(attributeName).split(" ");
 
+    // Browsers that don't support shadow DOM won't have getRootNode
     var root = node.getRootNode ? node.getRootNode() : node.ownerDocument;
     return ids.map(function (id) {
       return root.getElementById(id);
     }).filter(function (element) {
       return element !== null;
-    } // TODO: why does this not narrow?
+    }
+    // TODO: why does this not narrow?
     );
   }
 
   return [];
 }
-
 function hasAnyConcreteRoles(node, roles) {
   if (isElement(node)) {
     return roles.indexOf((0, _getRole.default)(node)) !== -1;
   }
-
   return false;
 }
 
@@ -33909,7 +35521,7 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = [{
-	name: 'aria-api (0.4.3)',
+	name: 'aria-api (0.4.6)',
 	url: 'https://github.com/xi/aria-api',
 	fn: function(el) {
 		return {
@@ -33923,7 +35535,7 @@ var implementations = [{
 	url: 'https://github.com/accdc/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {
-	name: 'dom-accessibility-api (0.5.14)',
+	name: 'dom-accessibility-api (0.5.15)',
 	url: 'https://github.com/eps1lon/dom-accessibility-api/',
 	fn: function(el) {
 		return {
@@ -33933,7 +35545,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'axe (4.4.3)',
+	name: 'axe (4.6.2)',
 	url: 'https://github.com/dequelabs/axe-core',
 	fn: function(el) {
 		axe._tree = axe.utils.getFlattenedTree(document.body);
