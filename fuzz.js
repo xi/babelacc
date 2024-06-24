@@ -289,13 +289,13 @@ module.exports = {
 };
 
 },{"./lib/atree.js":5,"./lib/name-inst.js":8,"./lib/query.js":9}],5:[function(require,module,exports){
-var attrs = require('./attrs');
+const attrs = require('./attrs');
 
-var _getOwner = function(node, owners) {
+const _getOwner = function(node, owners) {
 	if (node.nodeType === node.ELEMENT_NODE && node.id) {
-		var selector = '[aria-owns~="' + CSS.escape(node.id) + '"]';
+		const selector = '[aria-owns~="' + CSS.escape(node.id) + '"]';
 		if (owners) {
-			for (var owner of owners) {
+			for (const owner of owners) {
 				if (owner.matches(selector)) {
 					return owner;
 				}
@@ -306,12 +306,12 @@ var _getOwner = function(node, owners) {
 	}
 };
 
-var _getParentNode = function(node, owners) {
+const _getParentNode = function(node, owners) {
 	return _getOwner(node, owners) || node.parentNode;
 };
 
-var detectLoop = function(node, owners) {
-	var seen = [node];
+const detectLoop = function(node, owners) {
+	const seen = [node];
 	while ((node = _getParentNode(node, owners))) {
 		if (seen.includes(node)) {
 			return true;
@@ -320,35 +320,35 @@ var detectLoop = function(node, owners) {
 	}
 };
 
-var getOwner = function(node, owners) {
-	var owner = _getOwner(node, owners);
+const getOwner = function(node, owners) {
+	const owner = _getOwner(node, owners);
 	if (owner && !detectLoop(node, owners)) {
 		return owner;
 	}
 };
 
-var getParentNode = function(node, owners) {
+const getParentNode = function(node, owners) {
 	return getOwner(node, owners) || node.parentNode;
 };
 
-var isHidden = function(node) {
+const isHidden = function(node) {
 	return node.nodeType === node.ELEMENT_NODE && attrs.getAttribute(node, 'hidden');
 };
 
-var getChildNodes = function(node, owners) {
-	var childNodes = [];
+const getChildNodes = function(node, owners) {
+	const childNodes = [];
 
-	for (var i = 0; i < node.childNodes.length; i++) {
-		var child = node.childNodes[i];
+	for (let i = 0; i < node.childNodes.length; i++) {
+		const child = node.childNodes[i];
 		if (!getOwner(child, owners) && !isHidden(child)) {
 			childNodes.push(child);
 		}
 	}
 
 	if (node.nodeType === node.ELEMENT_NODE) {
-		var owns = attrs.getAttribute(node, 'owns') || [];
-		for (var i = 0; i < owns.length; i++) {
-			var child = document.getElementById(owns[i]);
+		const owns = attrs.getAttribute(node, 'owns') || [];
+		for (let i = 0; i < owns.length; i++) {
+			const child = document.getElementById(owns[i]);
 			// double check with getOwner for consistency
 			if (child && getOwner(child, owners) === node && !isHidden(child)) {
 				childNodes.push(child);
@@ -359,18 +359,18 @@ var getChildNodes = function(node, owners) {
 	return childNodes;
 };
 
-var walk = function(root, fn) {
-	var owners = document.querySelectorAll('[aria-owns]');
-	var queue = [root];
+const walk = function(root, fn) {
+	const owners = document.querySelectorAll('[aria-owns]');
+	let queue = [root];
 	while (queue.length) {
-		var item = queue.shift();
+		const item = queue.shift();
 		fn(item);
 		queue = getChildNodes(item, owners).concat(queue);
 	}
 };
 
-var searchUp = function(node, test) {
-	var candidate = getParentNode(node);
+const searchUp = function(node, test) {
+	const candidate = getParentNode(node);
 	if (candidate) {
 		if (test(candidate)) {
 			return candidate;
@@ -388,44 +388,59 @@ module.exports = {
 };
 
 },{"./attrs":6}],6:[function(require,module,exports){
-var constants = require('./constants.js');
+const constants = require('./constants.js');
+
+var unique = function(arr) {
+	return arr.filter((a, i) => arr.indexOf(a) === i);
+};
+
+var flatten = function(arr) {
+	return [].concat.apply([], arr);
+};
+
+var normalizeRoles = function(roles, includeAbstract) {
+	return unique(roles
+		.map(r => constants.aliases[r] || r)
+		.filter(r => constants.roles[r])
+		.filter(r => includeAbstract || !constants.roles[r].abstract)
+	);
+};
 
 // candidates can be passed for performance optimization
-var getRole = function(el, candidates) {
-	if (el.hasAttribute('role')) {
-		var roles = el.getAttribute('role').toLowerCase().split(/\s+/);
-		if (roles.length > 1 && candidates) {
-			return [roles, candidates];
-		}
-		for (var role of roles) {
+const getRole = function(el, candidates) {
+	// TODO: filter out any invalid roles (e.g. name or context required)
+	const roles = normalizeRoles(
+		(el.getAttribute('role') || '').toLowerCase().split(/\s+/)
+	);
+
+	if (roles.length > 1 && candidates) {
+		return [roles, candidates];
+	} else if (roles.length) {
+		for (const role of roles) {
 			if (!candidates || candidates.includes(role)) {
 				return role;
 			}
 		}
 	} else {
-		var roles = candidates ? candidates : Object.keys(constants.roles);
-		for (var role of roles) {
-			var r = constants.roles[role];
-			if (r) {
-				var selector = (r.selectors || []).join(',');
-				if (selector && el.matches(selector)) {
-					return role;
-				}
+		for (const role of (candidates || Object.keys(constants.roles))) {
+			const r = constants.roles[role];
+			if (!r.abstract && r.selectors && el.matches(r.selectors.join(','))) {
+				return role;
 			}
 		}
 	}
 };
 
-var hasRole = function(el, roles) {
-	var candidates = [].concat.apply([], roles.map(role => {
-		return (constants.roles[role] || {}).subRoles || [role];
-	}));
-	return !!getRole(el, candidates);
+const hasRole = function(el, roles) {
+	const subRoles = normalizeRoles(roles, true).map(role => {
+		return constants.roles[role].subRoles || [role];
+	});
+	return !!getRole(el, unique(flatten(subRoles)));
 };
 
-var getAttribute = function(el, key) {
+const getAttribute = function(el, key) {
 	if (constants.attributeStrongMapping.hasOwnProperty(key)) {
-		var value = el[constants.attributeStrongMapping[key]];
+		const value = el[constants.attributeStrongMapping[key]];
 		if (value) {
 			return value;
 		}
@@ -442,14 +457,14 @@ var getAttribute = function(el, key) {
 		if (el.matches('details:not([open]) > :not(summary)')) {
 			return true;
 		}
-		var style = window.getComputedStyle(el);
-		if (style.display === 'none' || style.visibility === 'hidden') {
+		const style = window.getComputedStyle(el);
+		if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
 			return true;
 		}
 	}
 
-	var type = constants.attributes[key];
-	var raw = el.getAttribute('aria-' + key);
+	const type = constants.attributes[key];
+	const raw = el.getAttribute('aria-' + key);
 
 	if (raw) {
 		if (type === 'bool') {
@@ -478,7 +493,7 @@ var getAttribute = function(el, key) {
 	// list -> aria-controls
 
 	if (key === 'level') {
-		for (var i = 1; i <= 6; i++) {
+		for (let i = 1; i <= 6; i++) {
 			if (el.tagName.toLowerCase() === 'h' + i) {
 				return i;
 			}
@@ -488,8 +503,8 @@ var getAttribute = function(el, key) {
 	}
 
 	if (key in constants.attrsWithDefaults) {
-		var role = getRole(el);
-		var defaults = (constants.roles[role] || {}).defaults;
+		const role = getRole(el);
+		const defaults = constants.roles[role].defaults;
 		if (defaults && defaults.hasOwnProperty(key)) {
 			return defaults[key];
 		}
@@ -512,14 +527,18 @@ exports.attributes = {
 	'activedescendant': 'id',
 	'atomic': 'bool',
 	'autocomplete': 'token',
+	'braillelabel': 'string',
+	'brailleroledescription': 'string',
 	'busy': 'bool',
 	'checked': 'tristate',
 	'colcount': 'int',
 	'colindex': 'int',
+	'colindextext': 'string',
 	'colspan': 'int',
 	'controls': 'id-list',
 	'current': 'token',
 	'describedby': 'id-list',
+	'description': 'string',
 	'details': 'id',
 	'disabled': 'bool',
 	'dropeffect': 'token-list',
@@ -549,6 +568,7 @@ exports.attributes = {
 	'roledescription': 'string',
 	'rowcount': 'int',
 	'rowindex': 'int',
+	'rowindextext': 'string',
 	'rowspan': 'int',
 	'selected': 'bool-undefined',
 	'setsize': 'int',
@@ -576,7 +596,20 @@ exports.attributeWeakMapping = {
 };
 
 // https://www.w3.org/TR/html/dom.html#sectioning-content-2
-var scoped = ['article *', 'aside *', 'nav *', 'section *'].join(',');
+const scoped = ['article *', 'aside *', 'nav *', 'section *'].join(',');
+
+const svgSelectors = function(selector) {
+	return [
+		// `${selector}:has(> title:not(:empty))`,
+		// `${selector}:has(> desc:not(:empty))`,
+		`${selector}[aria-label]`,
+		`${selector}[aria-roledescription]`,
+		`${selector}[aria-labelledby]`,
+		`${selector}[aria-describedby]`,
+		`${selector}[tabindex]`,
+		`${selector}[role]`,
+	];
+};
 
 // https://www.w3.org/TR/html-aam-1.0/#html-element-role-mappings
 // https://www.w3.org/TR/wai-aria/roles
@@ -588,8 +621,11 @@ exports.roles = {
 			'atomic': true,
 		},
 	},
+	alertdialog: {},
+	application: {},
 	article: {
 		selectors: ['article'],
+		childRoles: ['comment'],
 	},
 	banner: {
 		selectors: [`header:not(main *, ${scoped})`],
@@ -612,7 +648,7 @@ exports.roles = {
 		selectors: ['caption', 'figcaption'],
 	},
 	cell: {
-		selectors: ['td', 'th:not([scope])'],
+		selectors: ['td', 'td ~ th:not([scope])'],
 		childRoles: ['columnheader', 'gridcell', 'rowheader'],
 		nameFromContents: true,
 	},
@@ -649,7 +685,11 @@ exports.roles = {
 		},
 	},
 	command: {
+		abstract: true,
 		childRoles: ['button', 'link', 'menuitem'],
+	},
+	comment: {
+		nameFromContents: true,
 	},
 	complementary: {
 		selectors: [
@@ -660,6 +700,7 @@ exports.roles = {
 		],
 	},
 	composite: {
+		abstract: true,
 		childRoles: ['grid', 'select', 'spinbutton', 'tablist'],
 	},
 	contentinfo: {
@@ -675,24 +716,59 @@ exports.roles = {
 		selectors: ['dialog'],
 		childRoles: ['alertdialog'],
 	},
+	'doc-abstract': {},
+	'doc-acknowledgments': {},
+	'doc-afterword': {},
+	'doc-appendix': {},
 	'doc-backlink': {
 		nameFromContents: true,
 	},
+	'doc-biblioentry': {},
+	'doc-bibliography': {},
 	'doc-biblioref': {
 		nameFromContents: true,
 	},
+	'doc-chapter': {},
+	'doc-colophon': {},
+	'doc-conclusion': {},
+	'doc-cover': {},
+	'doc-credit': {},
+	'doc-credits': {},
+	'doc-dedication': {},
+	'doc-endnote': {},
+	'doc-endnotes': {},
+	'doc-epilogue': {},
+	'doc-epigraph': {},
+	'doc-errata': {},
+	'doc-example': {},
+	'doc-footnote': {},
+	'doc-foreword': {},
+	'doc-glossary': {},
 	'doc-glossref': {
 		nameFromContents: true,
 	},
+	'doc-index': {},
+	'doc-introduction': {},
 	'doc-noteref': {
 		nameFromContents: true,
 	},
+	'doc-notice': {},
 	'doc-pagebreak': {
 		nameFromContents: true,
 	},
+	'doc-pagefooter': {},
+	'doc-pageheader': {},
+	'doc-pagelist': {},
+	'doc-part': {},
+	'doc-preface': {},
+	'doc-prologue': {},
+	'doc-pullquote': {},
+	'doc-qna': {},
 	'doc-subtitle': {
 		nameFromContents: true,
 	},
+	'doc-tip': {},
+	'doc-toc': {},
 	document: {
 		selectors: ['html'],
 		childRoles: ['article', 'graphics-document'],
@@ -700,6 +776,7 @@ exports.roles = {
 	emphasis: {
 		selectors: ['em'],
 	},
+	feed: {},
 	figure: {
 		selectors: ['figure'],
 		childRoles: ['doc-example'],
@@ -708,10 +785,48 @@ exports.roles = {
 		selectors: ['form[aria-label]', 'form[aria-labelledby]', 'form[title]'],
 	},
 	generic: {
-		// too many selectors to list
+		selectors: [
+			'a:not([*|href])',
+			'area:not([*|href])',
+			`aside:not(${scoped}):not([aria-label]):not([aria-labelledby]):not([title])`,
+			'b',
+			'bdi',
+			'bdo',
+			'body',
+			'data',
+			'div',
+			// footer scoped
+			// header scoped
+			'i',
+			'li:not(ul > li):not(ol > li)',
+			'pre',
+			'q',
+			'samp',
+			'section:not([aria-label]):not([aria-labelledby]):not([title])',
+			'small',
+			'span',
+			'u',
+		],
 	},
 	'graphics-document': {
 		selectors: ['svg'],
+	},
+	'graphics-object': {
+		selectors: [
+			...svgSelectors('symbol'),
+			...svgSelectors('use'),
+		],
+	},
+	'graphics-symbol': {
+		selectors: [
+			...svgSelectors('circle'),
+			...svgSelectors('ellipse'),
+			...svgSelectors('line'),
+			...svgSelectors('path'),
+			...svgSelectors('polygon'),
+			...svgSelectors('polyline'),
+			...svgSelectors('rect'),
+		],
 	},
 	grid: {
 		childRoles: ['treegrid'],
@@ -727,7 +842,11 @@ exports.roles = {
 			'fieldset',
 			'hgroup',
 			'optgroup',
+			...svgSelectors('foreignObject'),
+			...svgSelectors('g'),
 			'text',
+			...svgSelectors('textPath'),
+			...svgSelectors('tspan'),
 		],
 		childRoles: ['row', 'select', 'toolbar', 'graphics-object'],
 	},
@@ -738,11 +857,17 @@ exports.roles = {
 			'level': 2,
 		},
 	},
-	img: {
-		selectors: ['img:not([alt=""])', 'graphics-symbol'],
+	image: {
+		selectors: [
+			'img:not([alt=""])',
+			'graphics-symbol',
+			...svgSelectors('image'),
+			...svgSelectors('mesh'),
+		],
 		childRoles: ['doc-cover'],
 	},
 	input: {
+		abstract: true,
 		childRoles: [
 			'checkbox',
 			'combobox',
@@ -757,6 +882,7 @@ exports.roles = {
 		selectors: ['ins'],
 	},
 	landmark: {
+		abstract: true,
 		childRoles: [
 			'banner',
 			'complementary',
@@ -785,13 +911,13 @@ exports.roles = {
 		],
 	},
 	link: {
-		selectors: ['a[href]', 'area[href]'],
+		selectors: ['a[*|href]', 'area[href]'],
 		childRoles: ['doc-backlink', 'doc-biblioref', 'doc-glossref', 'doc-noteref'],
 		nameFromContents: true,
 	},
 	list: {
 		selectors: ['dl', 'ol', 'ul', 'menu'],
-		childRoles: ['directory', 'feed'],
+		childRoles: ['feed'],
 	},
 	listbox: {
 		selectors: [
@@ -804,7 +930,7 @@ exports.roles = {
 		},
 	},
 	listitem: {
-		selectors: ['li'],
+		selectors: ['ol > li', 'ul > li'],
 		childRoles: ['doc-biblioentry', 'doc-endnote', 'treeitem'],
 	},
 	log: {
@@ -815,6 +941,10 @@ exports.roles = {
 	main: {
 		selectors: ['main'],
 	},
+	mark: {
+		selectors: ['mark'],
+	},
+	marquee: {},
 	math: {
 		selectors: ['math'],
 	},
@@ -837,11 +967,10 @@ exports.roles = {
 		},
 	},
 	menuitem: {
-		childRoles: ['menuitemcheckbox'],
+		childRoles: ['menuitemcheckbox', 'menuitemradio'],
 		nameFromContents: true,
 	},
 	menuitemcheckbox: {
-		childRoles: ['menuitemradio'],
 		nameFromContents: true,
 		defaults: {
 			'checked': 'false',
@@ -857,6 +986,9 @@ exports.roles = {
 		selectors: ['nav'],
 		childRoles: ['doc-index', 'doc-pagelist', 'doc-toc'],
 	},
+	none: {
+		selectors: ['img[alt=""]'],
+	},
 	note: {
 		childRoles: ['doc-notice', 'doc-tip'],
 	},
@@ -870,9 +1002,6 @@ exports.roles = {
 	},
 	paragraph: {
 		selectors: ['p'],
-	},
-	presentation: {
-		selectors: ['img[alt=""]'],
 	},
 	progressbar: {
 		selectors: ['progress'],
@@ -889,13 +1018,16 @@ exports.roles = {
 			'checked': 'false',
 		},
 	},
+	radiogroup: {},
 	range: {
+		abstract: true,
 		childRoles: ['meter', 'progressbar', 'scrollbar', 'slider', 'spinbutton'],
 	},
 	region: {
 		selectors: ['section[aria-label]', 'section[aria-labelledby]', 'section[title]'],
 	},
 	roletype: {
+		abstract: true,
 		childRoles: ['structure', 'widget', 'window'],
 	},
 	row: {
@@ -906,7 +1038,7 @@ exports.roles = {
 		selectors: ['tbody', 'thead', 'tfoot'],
 	},
 	rowheader: {
-		selectors: ['th[scope="row"]'],
+		selectors: ['th[scope="row"]', 'th:not([scope]):not(td ~ th)'],
 		nameFromContents: true,
 	},
 	scrollbar: {
@@ -923,6 +1055,7 @@ exports.roles = {
 		selectors: ['input[type="search"]:not([list])'],
 	},
 	section: {
+		abstract: true,
 		childRoles: [
 			'alert',
 			'blockquote',
@@ -944,12 +1077,13 @@ exports.roles = {
 			'emphasis',
 			'figure',
 			'group',
-			'img',
+			'image',
 			'insertion',
 			'landmark',
 			'list',
 			'listitem',
 			'log',
+			'mark',
 			'marquee',
 			'math',
 			'note',
@@ -957,6 +1091,7 @@ exports.roles = {
 			'status',
 			'strong',
 			'subscript',
+			'suggestion',
 			'superscript',
 			'table',
 			'tabpanel',
@@ -966,6 +1101,7 @@ exports.roles = {
 		],
 	},
 	sectionhead: {
+		abstract: true,
 		childRoles: [
 			'columnheader',
 			'doc-subtitle',
@@ -976,6 +1112,7 @@ exports.roles = {
 		nameFromContents: true,
 	},
 	select: {
+		abstract: true,
 		childRoles: ['listbox', 'menu', 'radiogroup', 'tree'],
 	},
 	separator: {
@@ -1016,12 +1153,12 @@ exports.roles = {
 		selectors: ['strong'],
 	},
 	structure: {
+		abstract: true,
 		childRoles: [
 			'application',
 			'document',
 			'none',
 			'generic',
-			'presentation',
 			'range',
 			'rowgroup',
 			'section',
@@ -1029,6 +1166,7 @@ exports.roles = {
 			'separator',
 		],
 	},
+	suggestion: {},
 	subscript: {
 		selectors: ['sub'],
 	},
@@ -1056,6 +1194,7 @@ exports.roles = {
 			'orientation': 'horizontal',
 		},
 	},
+	tabpanel: {},
 	term: {
 		selectors: ['dfn', 'dt'],
 	},
@@ -1092,10 +1231,12 @@ exports.roles = {
 			'orientation': 'vertical',
 		},
 	},
+	treegrid: {},
 	treeitem: {
 		nameFromContents: true,
 	},
 	widget: {
+		abstract: true,
 		childRoles: [
 			'command',
 			'composite',
@@ -1109,15 +1250,16 @@ exports.roles = {
 		],
 	},
 	window: {
+		abstract: true,
 		childRoles: ['dialog'],
 	},
 };
 
-var getSubRoles = function(role) {
-	var children = (exports.roles[role] || {}).childRoles || [];
-	var descendents = children.map(getSubRoles);
+const getSubRoles = function(role) {
+	const children = (exports.roles[role]).childRoles || [];
+	const descendents = children.map(getSubRoles);
 
-	var result = [role];
+	const result = [role];
 
 	descendents.forEach(list => {
 		list.forEach(r => {
@@ -1132,18 +1274,20 @@ var getSubRoles = function(role) {
 
 exports.attrsWithDefaults = [];
 
-for (var role in exports.roles) {
+for (const role in exports.roles) {
 	exports.roles[role].subRoles = getSubRoles(role);
-	for (var key in exports.roles[role].defaults) {
+	for (const key in exports.roles[role].defaults) {
 		if (!exports.attrsWithDefaults.includes(key)) {
 			exports.attrsWithDefaults.push(key);
 		}
 	}
 }
-exports.roles['none'] = exports.roles['none'] || {};
-exports.roles['none'].subRoles = ['none', 'presentation'];
-exports.roles['presentation'] = exports.roles['presentation'] || {};
-exports.roles['presentation'].subRoles = ['presentation', 'none'];
+
+exports.aliases = {
+	'presentation': 'none',
+	'directory': 'list',
+	'img': 'image',
+};
 
 exports.nameFromDescendant = {
 	'figure': 'figcaption',
@@ -1158,55 +1302,53 @@ exports.nameDefaults = {
 };
 
 },{}],8:[function(require,module,exports){
-function cov_22i8nvh4cs(){var path="node_modules/aria-api/lib/name.js";var hash="1de31b7612077d6ae16bb7d65d41c072c50d8c25";var global=new Function("return this")();var gcv="__coverage__";var coverageData={path:"/home/tobias/code/a11y/babelacc/node_modules/aria-api/lib/name.js",statementMap:{"0":{start:{line:1,column:16},end:{line:1,column:41}},"1":{start:{line:2,column:12},end:{line:2,column:33}},"2":{start:{line:3,column:12},end:{line:3,column:33}},"3":{start:{line:5,column:23},end:{line:21,column:1}},"4":{start:{line:6,column:14},end:{line:6,column:53}},"5":{start:{line:7,column:11},end:{line:7,column:45}},"6":{start:{line:8,column:14},end:{line:8,column:54}},"7":{start:{line:9,column:1},end:{line:11,column:2}},"8":{start:{line:10,column:2},end:{line:10,column:12}},"9":{start:{line:12,column:1},end:{line:20,column:2}},"10":{start:{line:13,column:2},end:{line:13,column:12}},"11":{start:{line:15,column:2},end:{line:19,column:3}},"12":{start:{line:16,column:3},end:{line:16,column:27}},"13":{start:{line:18,column:3},end:{line:18,column:39}},"14":{start:{line:23,column:17},end:{line:45,column:1}},"15":{start:{line:24,column:16},end:{line:24,column:41}},"16":{start:{line:26,column:11},end:{line:26,column:13}},"17":{start:{line:27,column:1},end:{line:42,column:2}},"18":{start:{line:27,column:14},end:{line:27,column:15}},"19":{start:{line:28,column:13},end:{line:28,column:24}},"20":{start:{line:29,column:2},end:{line:41,column:3}},"21":{start:{line:30,column:3},end:{line:30,column:27}},"22":{start:{line:31,column:9},end:{line:41,column:3}},"23":{start:{line:32,column:3},end:{line:40,column:4}},"24":{start:{line:33,column:4},end:{line:33,column:16}},"25":{start:{line:34,column:10},end:{line:40,column:4}},"26":{start:{line:37,column:4},end:{line:37,column:40}},"27":{start:{line:39,column:4},end:{line:39,column:52}},"28":{start:{line:44,column:1},end:{line:44,column:12}},"29":{start:{line:47,column:27},end:{line:50,column:1}},"30":{start:{line:48,column:12},end:{line:48,column:29}},"31":{start:{line:49,column:1},end:{line:49,column:55}},"32":{start:{line:52,column:30},end:{line:55,column:1}},"33":{start:{line:53,column:13},end:{line:53,column:46}},"34":{start:{line:54,column:1},end:{line:54,column:82}},"35":{start:{line:57,column:14},end:{line:171,column:1}},"36":{start:{line:58,column:11},end:{line:58,column:13}},"37":{start:{line:60,column:1},end:{line:60,column:25}},"38":{start:{line:61,column:1},end:{line:67,column:2}},"39":{start:{line:62,column:2},end:{line:64,column:3}},"40":{start:{line:63,column:3},end:{line:63,column:13}},"41":{start:{line:66,column:2},end:{line:66,column:19}},"42":{start:{line:73,column:1},end:{line:80,column:2}},"43":{start:{line:74,column:12},end:{line:74,column:59}},"44":{start:{line:75,column:16},end:{line:78,column:4}},"45":{start:{line:76,column:15},end:{line:76,column:42}},"46":{start:{line:77,column:3},end:{line:77,column:59}},"47":{start:{line:79,column:2},end:{line:79,column:26}},"48":{start:{line:83,column:1},end:{line:86,column:2}},"49":{start:{line:85,column:2},end:{line:85,column:38}},"50":{start:{line:89,column:1},end:{line:94,column:2}},"51":{start:{line:90,column:16},end:{line:92,column:4}},"52":{start:{line:91,column:3},end:{line:91,column:40}},"53":{start:{line:93,column:2},end:{line:93,column:26}},"54":{start:{line:95,column:1},end:{line:97,column:2}},"55":{start:{line:96,column:2},end:{line:96,column:29}},"56":{start:{line:98,column:1},end:{line:100,column:2}},"57":{start:{line:99,column:2},end:{line:99,column:21}},"58":{start:{line:101,column:1},end:{line:103,column:2}},"59":{start:{line:102,column:2},end:{line:102,column:17}},"60":{start:{line:104,column:1},end:{line:113,column:2}},"61":{start:{line:105,column:2},end:{line:112,column:3}},"62":{start:{line:106,column:3},end:{line:111,column:4}},"63":{start:{line:107,column:21},end:{line:107,column:77}},"64":{start:{line:108,column:4},end:{line:110,column:5}},"65":{start:{line:109,column:5},end:{line:109,column:46}},"66":{start:{line:114,column:1},end:{line:119,column:2}},"67":{start:{line:115,column:17},end:{line:115,column:42}},"68":{start:{line:116,column:2},end:{line:118,column:3}},"69":{start:{line:117,column:3},end:{line:117,column:30}},"70":{start:{line:122,column:1},end:{line:137,column:2}},"71":{start:{line:123,column:2},end:{line:136,column:3}},"72":{start:{line:124,column:3},end:{line:135,column:4}},"73":{start:{line:125,column:4},end:{line:125,column:37}},"74":{start:{line:126,column:10},end:{line:135,column:4}},"75":{start:{line:127,column:19},end:{line:127,column:92}},"76":{start:{line:128,column:4},end:{line:132,column:5}},"77":{start:{line:129,column:5},end:{line:129,column:49}},"78":{start:{line:131,column:5},end:{line:131,column:26}},"79":{start:{line:133,column:10},end:{line:135,column:4}},"80":{start:{line:134,column:4},end:{line:134,column:103}},"81":{start:{line:141,column:1},end:{line:143,column:2}},"82":{start:{line:142,column:2},end:{line:142,column:32}},"83":{start:{line:145,column:1},end:{line:151,column:2}},"84":{start:{line:146,column:2},end:{line:150,column:3}},"85":{start:{line:147,column:3},end:{line:149,column:4}},"86":{start:{line:148,column:4},end:{line:148,column:43}},"87":{start:{line:158,column:1},end:{line:160,column:2}},"88":{start:{line:159,column:2},end:{line:159,column:23}},"89":{start:{line:164,column:1},end:{line:166,column:2}},"90":{start:{line:165,column:2},end:{line:165,column:12}},"91":{start:{line:168,column:14},end:{line:168,column:45}},"92":{start:{line:169,column:13},end:{line:169,column:43}},"93":{start:{line:170,column:1},end:{line:170,column:29}},"94":{start:{line:173,column:21},end:{line:175,column:1}},"95":{start:{line:174,column:1},end:{line:174,column:48}},"96":{start:{line:177,column:21},end:{line:205,column:1}},"97":{start:{line:178,column:11},end:{line:178,column:13}},"98":{start:{line:180,column:1},end:{line:196,column:2}},"99":{start:{line:181,column:12},end:{line:181,column:60}},"100":{start:{line:182,column:16},end:{line:185,column:4}},"101":{start:{line:183,column:15},end:{line:183,column:42}},"102":{start:{line:184,column:3},end:{line:184,column:44}},"103":{start:{line:186,column:2},end:{line:186,column:26}},"104":{start:{line:187,column:8},end:{line:196,column:2}},"105":{start:{line:188,column:2},end:{line:188,column:44}},"106":{start:{line:189,column:8},end:{line:196,column:2}},"107":{start:{line:190,column:16},end:{line:190,column:40}},"108":{start:{line:191,column:2},end:{line:193,column:3}},"109":{start:{line:192,column:3},end:{line:192,column:29}},"110":{start:{line:194,column:8},end:{line:196,column:2}},"111":{start:{line:195,column:2},end:{line:195,column:17}},"112":{start:{line:198,column:1},end:{line:198,column:47}},"113":{start:{line:200,column:1},end:{line:202,column:2}},"114":{start:{line:201,column:2},end:{line:201,column:11}},"115":{start:{line:204,column:1},end:{line:204,column:12}},"116":{start:{line:207,column:0},end:{line:210,column:2}}},fnMap:{"0":{name:"(anonymous_0)",decl:{start:{line:5,column:23},end:{line:5,column:24}},loc:{start:{line:5,column:48},end:{line:21,column:1}},line:5},"1":{name:"(anonymous_1)",decl:{start:{line:23,column:17},end:{line:23,column:18}},loc:{start:{line:23,column:41},end:{line:45,column:1}},line:23},"2":{name:"(anonymous_2)",decl:{start:{line:47,column:27},end:{line:47,column:28}},loc:{start:{line:47,column:40},end:{line:50,column:1}},line:47},"3":{name:"(anonymous_3)",decl:{start:{line:52,column:30},end:{line:52,column:31}},loc:{start:{line:52,column:43},end:{line:55,column:1}},line:52},"4":{name:"(anonymous_4)",decl:{start:{line:57,column:14},end:{line:57,column:15}},loc:{start:{line:57,column:64},end:{line:171,column:1}},line:57},"5":{name:"(anonymous_5)",decl:{start:{line:75,column:24},end:{line:75,column:25}},loc:{start:{line:75,column:30},end:{line:78,column:3}},line:75},"6":{name:"(anonymous_6)",decl:{start:{line:90,column:52},end:{line:90,column:53}},loc:{start:{line:90,column:61},end:{line:92,column:3}},line:90},"7":{name:"(anonymous_7)",decl:{start:{line:173,column:21},end:{line:173,column:22}},loc:{start:{line:173,column:34},end:{line:175,column:1}},line:173},"8":{name:"(anonymous_8)",decl:{start:{line:177,column:21},end:{line:177,column:22}},loc:{start:{line:177,column:34},end:{line:205,column:1}},line:177},"9":{name:"(anonymous_9)",decl:{start:{line:182,column:24},end:{line:182,column:25}},loc:{start:{line:182,column:30},end:{line:185,column:3}},line:182}},branchMap:{"0":{loc:{start:{line:9,column:1},end:{line:11,column:2}},type:"if",locations:[{start:{line:9,column:1},end:{line:11,column:2}},{start:{line:9,column:1},end:{line:11,column:2}}],line:9},"1":{loc:{start:{line:12,column:1},end:{line:20,column:2}},type:"if",locations:[{start:{line:12,column:1},end:{line:20,column:2}},{start:{line:12,column:1},end:{line:20,column:2}}],line:12},"2":{loc:{start:{line:15,column:2},end:{line:19,column:3}},type:"if",locations:[{start:{line:15,column:2},end:{line:19,column:3}},{start:{line:15,column:2},end:{line:19,column:3}}],line:15},"3":{loc:{start:{line:29,column:2},end:{line:41,column:3}},type:"if",locations:[{start:{line:29,column:2},end:{line:41,column:3}},{start:{line:29,column:2},end:{line:41,column:3}}],line:29},"4":{loc:{start:{line:31,column:9},end:{line:41,column:3}},type:"if",locations:[{start:{line:31,column:9},end:{line:41,column:3}},{start:{line:31,column:9},end:{line:41,column:3}}],line:31},"5":{loc:{start:{line:32,column:3},end:{line:40,column:4}},type:"if",locations:[{start:{line:32,column:3},end:{line:40,column:4}},{start:{line:32,column:3},end:{line:40,column:4}}],line:32},"6":{loc:{start:{line:34,column:10},end:{line:40,column:4}},type:"if",locations:[{start:{line:34,column:10},end:{line:40,column:4}},{start:{line:34,column:10},end:{line:40,column:4}}],line:34},"7":{loc:{start:{line:34,column:14},end:{line:36,column:41}},type:"binary-expr",locations:[{start:{line:34,column:14},end:{line:34,column:77}},{start:{line:35,column:5},end:{line:35,column:43}},{start:{line:36,column:5},end:{line:36,column:41}}],line:34},"8":{loc:{start:{line:49,column:9},end:{line:49,column:36}},type:"binary-expr",locations:[{start:{line:49,column:9},end:{line:49,column:30}},{start:{line:49,column:34},end:{line:49,column:36}}],line:49},"9":{loc:{start:{line:54,column:8},end:{line:54,column:81}},type:"binary-expr",locations:[{start:{line:54,column:8},end:{line:54,column:13}},{start:{line:54,column:18},end:{line:54,column:28}},{start:{line:54,column:32},end:{line:54,column:80}}],line:54},"10":{loc:{start:{line:60,column:11},end:{line:60,column:24}},type:"binary-expr",locations:[{start:{line:60,column:11},end:{line:60,column:18}},{start:{line:60,column:22},end:{line:60,column:24}}],line:60},"11":{loc:{start:{line:61,column:1},end:{line:67,column:2}},type:"if",locations:[{start:{line:61,column:1},end:{line:67,column:2}},{start:{line:61,column:1},end:{line:67,column:2}}],line:61},"12":{loc:{start:{line:62,column:2},end:{line:64,column:3}},type:"if",locations:[{start:{line:62,column:2},end:{line:64,column:3}},{start:{line:62,column:2},end:{line:64,column:3}}],line:62},"13":{loc:{start:{line:73,column:1},end:{line:80,column:2}},type:"if",locations:[{start:{line:73,column:1},end:{line:80,column:2}},{start:{line:73,column:1},end:{line:80,column:2}}],line:73},"14":{loc:{start:{line:73,column:5},end:{line:73,column:50}},type:"binary-expr",locations:[{start:{line:73,column:5},end:{line:73,column:15}},{start:{line:73,column:19},end:{line:73,column:50}}],line:73},"15":{loc:{start:{line:77,column:10},end:{line:77,column:58}},type:"cond-expr",locations:[{start:{line:77,column:18},end:{line:77,column:53}},{start:{line:77,column:56},end:{line:77,column:58}}],line:77},"16":{loc:{start:{line:83,column:1},end:{line:86,column:2}},type:"if",locations:[{start:{line:83,column:1},end:{line:86,column:2}},{start:{line:83,column:1},end:{line:86,column:2}}],line:83},"17":{loc:{start:{line:83,column:5},end:{line:83,column:46}},type:"binary-expr",locations:[{start:{line:83,column:5},end:{line:83,column:16}},{start:{line:83,column:20},end:{line:83,column:46}}],line:83},"18":{loc:{start:{line:89,column:1},end:{line:94,column:2}},type:"if",locations:[{start:{line:89,column:1},end:{line:94,column:2}},{start:{line:89,column:1},end:{line:94,column:2}}],line:89},"19":{loc:{start:{line:89,column:5},end:{line:89,column:43}},type:"binary-expr",locations:[{start:{line:89,column:5},end:{line:89,column:16}},{start:{line:89,column:20},end:{line:89,column:30}},{start:{line:89,column:34},end:{line:89,column:43}}],line:89},"20":{loc:{start:{line:95,column:1},end:{line:97,column:2}},type:"if",locations:[{start:{line:95,column:1},end:{line:97,column:2}},{start:{line:95,column:1},end:{line:97,column:2}}],line:95},"21":{loc:{start:{line:96,column:8},end:{line:96,column:28}},type:"binary-expr",locations:[{start:{line:96,column:8},end:{line:96,column:22}},{start:{line:96,column:26},end:{line:96,column:28}}],line:96},"22":{loc:{start:{line:98,column:1},end:{line:100,column:2}},type:"if",locations:[{start:{line:98,column:1},end:{line:100,column:2}},{start:{line:98,column:1},end:{line:100,column:2}}],line:98},"23":{loc:{start:{line:99,column:8},end:{line:99,column:20}},type:"binary-expr",locations:[{start:{line:99,column:8},end:{line:99,column:14}},{start:{line:99,column:18},end:{line:99,column:20}}],line:99},"24":{loc:{start:{line:101,column:1},end:{line:103,column:2}},type:"if",locations:[{start:{line:101,column:1},end:{line:103,column:2}},{start:{line:101,column:1},end:{line:103,column:2}}],line:101},"25":{loc:{start:{line:101,column:5},end:{line:101,column:58}},type:"binary-expr",locations:[{start:{line:101,column:5},end:{line:101,column:16}},{start:{line:101,column:20},end:{line:101,column:46}},{start:{line:101,column:50},end:{line:101,column:58}}],line:101},"26":{loc:{start:{line:104,column:1},end:{line:113,column:2}},type:"if",locations:[{start:{line:104,column:1},end:{line:113,column:2}},{start:{line:104,column:1},end:{line:113,column:2}}],line:104},"27":{loc:{start:{line:106,column:3},end:{line:111,column:4}},type:"if",locations:[{start:{line:106,column:3},end:{line:111,column:4}},{start:{line:106,column:3},end:{line:111,column:4}}],line:106},"28":{loc:{start:{line:108,column:4},end:{line:110,column:5}},type:"if",locations:[{start:{line:108,column:4},end:{line:110,column:5}},{start:{line:108,column:4},end:{line:110,column:5}}],line:108},"29":{loc:{start:{line:114,column:1},end:{line:119,column:2}},type:"if",locations:[{start:{line:114,column:1},end:{line:119,column:2}},{start:{line:114,column:1},end:{line:119,column:2}}],line:114},"30":{loc:{start:{line:114,column:5},end:{line:114,column:39}},type:"binary-expr",locations:[{start:{line:114,column:5},end:{line:114,column:16}},{start:{line:114,column:20},end:{line:114,column:39}}],line:114},"31":{loc:{start:{line:116,column:2},end:{line:118,column:3}},type:"if",locations:[{start:{line:116,column:2},end:{line:118,column:3}},{start:{line:116,column:2},end:{line:118,column:3}}],line:116},"32":{loc:{start:{line:116,column:6},end:{line:116,column:47}},type:"binary-expr",locations:[{start:{line:116,column:6},end:{line:116,column:14}},{start:{line:116,column:18},end:{line:116,column:47}}],line:116},"33":{loc:{start:{line:122,column:1},end:{line:137,column:2}},type:"if",locations:[{start:{line:122,column:1},end:{line:137,column:2}},{start:{line:122,column:1},end:{line:137,column:2}}],line:122},"34":{loc:{start:{line:122,column:5},end:{line:122,column:93}},type:"binary-expr",locations:[{start:{line:122,column:5},end:{line:122,column:16}},{start:{line:122,column:21},end:{line:122,column:30}},{start:{line:122,column:34},end:{line:122,column:61}},{start:{line:122,column:65},end:{line:122,column:92}}],line:122},"35":{loc:{start:{line:123,column:2},end:{line:136,column:3}},type:"if",locations:[{start:{line:123,column:2},end:{line:136,column:3}},{start:{line:123,column:2},end:{line:136,column:3}}],line:123},"36":{loc:{start:{line:124,column:3},end:{line:135,column:4}},type:"if",locations:[{start:{line:124,column:3},end:{line:135,column:4}},{start:{line:124,column:3},end:{line:135,column:4}}],line:124},"37":{loc:{start:{line:125,column:10},end:{line:125,column:36}},type:"binary-expr",locations:[{start:{line:125,column:10},end:{line:125,column:18}},{start:{line:125,column:22},end:{line:125,column:36}}],line:125},"38":{loc:{start:{line:126,column:10},end:{line:135,column:4}},type:"if",locations:[{start:{line:126,column:10},end:{line:135,column:4}},{start:{line:126,column:10},end:{line:135,column:4}}],line:126},"39":{loc:{start:{line:127,column:19},end:{line:127,column:92}},type:"binary-expr",locations:[{start:{line:127,column:19},end:{line:127,column:55}},{start:{line:127,column:59},end:{line:127,column:92}}],line:127},"40":{loc:{start:{line:128,column:4},end:{line:132,column:5}},type:"if",locations:[{start:{line:128,column:4},end:{line:132,column:5}},{start:{line:128,column:4},end:{line:132,column:5}}],line:128},"41":{loc:{start:{line:131,column:11},end:{line:131,column:25}},type:"binary-expr",locations:[{start:{line:131,column:11},end:{line:131,column:19}},{start:{line:131,column:23},end:{line:131,column:25}}],line:131},"42":{loc:{start:{line:133,column:10},end:{line:135,column:4}},type:"if",locations:[{start:{line:133,column:10},end:{line:135,column:4}},{start:{line:133,column:10},end:{line:135,column:4}}],line:133},"43":{loc:{start:{line:134,column:16},end:{line:134,column:101}},type:"binary-expr",locations:[{start:{line:134,column:16},end:{line:134,column:51}},{start:{line:134,column:55},end:{line:134,column:89}},{start:{line:134,column:93},end:{line:134,column:101}}],line:134},"44":{loc:{start:{line:141,column:1},end:{line:143,column:2}},type:"if",locations:[{start:{line:141,column:1},end:{line:143,column:2}},{start:{line:141,column:1},end:{line:143,column:2}}],line:141},"45":{loc:{start:{line:141,column:5},end:{line:141,column:112}},type:"binary-expr",locations:[{start:{line:141,column:5},end:{line:141,column:16}},{start:{line:141,column:21},end:{line:141,column:30}},{start:{line:141,column:34},end:{line:141,column:58}},{start:{line:141,column:62},end:{line:141,column:81}},{start:{line:141,column:86},end:{line:141,column:112}}],line:141},"46":{loc:{start:{line:145,column:1},end:{line:151,column:2}},type:"if",locations:[{start:{line:145,column:1},end:{line:151,column:2}},{start:{line:145,column:1},end:{line:151,column:2}}],line:145},"47":{loc:{start:{line:147,column:3},end:{line:149,column:4}},type:"if",locations:[{start:{line:147,column:3},end:{line:149,column:4}},{start:{line:147,column:3},end:{line:149,column:4}}],line:147},"48":{loc:{start:{line:158,column:1},end:{line:160,column:2}},type:"if",locations:[{start:{line:158,column:1},end:{line:160,column:2}},{start:{line:158,column:1},end:{line:160,column:2}}],line:158},"49":{loc:{start:{line:158,column:5},end:{line:158,column:75}},type:"binary-expr",locations:[{start:{line:158,column:5},end:{line:158,column:16}},{start:{line:158,column:21},end:{line:158,column:36}},{start:{line:158,column:40},end:{line:158,column:74}}],line:158},"50":{loc:{start:{line:159,column:8},end:{line:159,column:22}},type:"binary-expr",locations:[{start:{line:159,column:8},end:{line:159,column:16}},{start:{line:159,column:20},end:{line:159,column:22}}],line:159},"51":{loc:{start:{line:164,column:1},end:{line:166,column:2}},type:"if",locations:[{start:{line:164,column:1},end:{line:166,column:2}},{start:{line:164,column:1},end:{line:166,column:2}}],line:164},"52":{loc:{start:{line:180,column:1},end:{line:196,column:2}},type:"if",locations:[{start:{line:180,column:1},end:{line:196,column:2}},{start:{line:180,column:1},end:{line:196,column:2}}],line:180},"53":{loc:{start:{line:184,column:10},end:{line:184,column:43}},type:"cond-expr",locations:[{start:{line:184,column:18},end:{line:184,column:38}},{start:{line:184,column:41},end:{line:184,column:43}}],line:184},"54":{loc:{start:{line:187,column:8},end:{line:196,column:2}},type:"if",locations:[{start:{line:187,column:8},end:{line:196,column:2}},{start:{line:187,column:8},end:{line:196,column:2}}],line:187},"55":{loc:{start:{line:189,column:8},end:{line:196,column:2}},type:"if",locations:[{start:{line:189,column:8},end:{line:196,column:2}},{start:{line:189,column:8},end:{line:196,column:2}}],line:189},"56":{loc:{start:{line:191,column:2},end:{line:193,column:3}},type:"if",locations:[{start:{line:191,column:2},end:{line:193,column:3}},{start:{line:191,column:2},end:{line:193,column:3}}],line:191},"57":{loc:{start:{line:191,column:6},end:{line:191,column:45}},type:"binary-expr",locations:[{start:{line:191,column:6},end:{line:191,column:13}},{start:{line:191,column:17},end:{line:191,column:45}}],line:191},"58":{loc:{start:{line:194,column:8},end:{line:196,column:2}},type:"if",locations:[{start:{line:194,column:8},end:{line:196,column:2}},{start:{line:194,column:8},end:{line:196,column:2}}],line:194},"59":{loc:{start:{line:198,column:8},end:{line:198,column:17}},type:"binary-expr",locations:[{start:{line:198,column:8},end:{line:198,column:11}},{start:{line:198,column:15},end:{line:198,column:17}}],line:198},"60":{loc:{start:{line:200,column:1},end:{line:202,column:2}},type:"if",locations:[{start:{line:200,column:1},end:{line:202,column:2}},{start:{line:200,column:1},end:{line:202,column:2}}],line:200}},s:{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,"75":0,"76":0,"77":0,"78":0,"79":0,"80":0,"81":0,"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0},f:{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0},b:{"0":[0,0],"1":[0,0],"2":[0,0],"3":[0,0],"4":[0,0],"5":[0,0],"6":[0,0],"7":[0,0,0],"8":[0,0],"9":[0,0,0],"10":[0,0],"11":[0,0],"12":[0,0],"13":[0,0],"14":[0,0],"15":[0,0],"16":[0,0],"17":[0,0],"18":[0,0],"19":[0,0,0],"20":[0,0],"21":[0,0],"22":[0,0],"23":[0,0],"24":[0,0],"25":[0,0,0],"26":[0,0],"27":[0,0],"28":[0,0],"29":[0,0],"30":[0,0],"31":[0,0],"32":[0,0],"33":[0,0],"34":[0,0,0,0],"35":[0,0],"36":[0,0],"37":[0,0],"38":[0,0],"39":[0,0],"40":[0,0],"41":[0,0],"42":[0,0],"43":[0,0,0],"44":[0,0],"45":[0,0,0,0,0],"46":[0,0],"47":[0,0],"48":[0,0],"49":[0,0,0],"50":[0,0],"51":[0,0],"52":[0,0],"53":[0,0],"54":[0,0],"55":[0,0],"56":[0,0],"57":[0,0],"58":[0,0],"59":[0,0],"60":[0,0]},_coverageSchema:"1a1c01bbd47fc00a2c39e90264f33305004495a9",hash:"1de31b7612077d6ae16bb7d65d41c072c50d8c25"};var coverage=global[gcv]||(global[gcv]={});if(!coverage[path]||coverage[path].hash!==hash){coverage[path]=coverageData;}var actualCoverage=coverage[path];{// @ts-ignore
-cov_22i8nvh4cs=function(){return actualCoverage;};}return actualCoverage;}cov_22i8nvh4cs();var constants=(cov_22i8nvh4cs().s[0]++,require('./constants.js'));var atree=(cov_22i8nvh4cs().s[1]++,require('./atree.js'));var query=(cov_22i8nvh4cs().s[2]++,require('./query.js'));cov_22i8nvh4cs().s[3]++;var getPseudoContent=function(node,selector){cov_22i8nvh4cs().f[0]++;var styles=(cov_22i8nvh4cs().s[4]++,window.getComputedStyle(node,selector));var ret=(cov_22i8nvh4cs().s[5]++,styles.getPropertyValue('content'));var inline=(cov_22i8nvh4cs().s[6]++,styles.display.substr(0,6)==='inline');cov_22i8nvh4cs().s[7]++;if(!ret){cov_22i8nvh4cs().b[0][0]++;cov_22i8nvh4cs().s[8]++;return'';}else{cov_22i8nvh4cs().b[0][1]++;}cov_22i8nvh4cs().s[9]++;if(ret.substr(0,1)!=='"'){cov_22i8nvh4cs().b[1][0]++;cov_22i8nvh4cs().s[10]++;return'';}else{cov_22i8nvh4cs().b[1][1]++;cov_22i8nvh4cs().s[11]++;if(inline){cov_22i8nvh4cs().b[2][0]++;cov_22i8nvh4cs().s[12]++;return ret.slice(1,-1);}else{cov_22i8nvh4cs().b[2][1]++;cov_22i8nvh4cs().s[13]++;return' '+ret.slice(1,-1)+' ';}}};cov_22i8nvh4cs().s[14]++;var getContent=function(root,visited){cov_22i8nvh4cs().f[1]++;var children=(cov_22i8nvh4cs().s[15]++,atree.getChildNodes(root));var ret=(cov_22i8nvh4cs().s[16]++,'');cov_22i8nvh4cs().s[17]++;for(var i=(cov_22i8nvh4cs().s[18]++,0);i<children.length;i++){var node=(cov_22i8nvh4cs().s[19]++,children[i]);cov_22i8nvh4cs().s[20]++;if(node.nodeType===node.TEXT_NODE){cov_22i8nvh4cs().b[3][0]++;cov_22i8nvh4cs().s[21]++;ret+=node.textContent;}else{cov_22i8nvh4cs().b[3][1]++;cov_22i8nvh4cs().s[22]++;if(node.nodeType===node.ELEMENT_NODE){cov_22i8nvh4cs().b[4][0]++;cov_22i8nvh4cs().s[23]++;if(node.tagName.toLowerCase()==='br'){cov_22i8nvh4cs().b[5][0]++;cov_22i8nvh4cs().s[24]++;ret+='\n';}else{cov_22i8nvh4cs().b[5][1]++;cov_22i8nvh4cs().s[25]++;if((cov_22i8nvh4cs().b[7][0]++,window.getComputedStyle(node).display.substr(0,6)==='inline')&&(cov_22i8nvh4cs().b[7][1]++,node.tagName.toLowerCase()!=='input')&&(cov_22i8nvh4cs().b[7][2]++,node.tagName.toLowerCase()!=='img')){cov_22i8nvh4cs().b[6][0]++;cov_22i8nvh4cs().s[26]++;// https://github.com/w3c/accname/issues/3
-ret+=getName(node,true,visited);}else{cov_22i8nvh4cs().b[6][1]++;cov_22i8nvh4cs().s[27]++;ret+=' '+getName(node,true,visited)+' ';}}}else{cov_22i8nvh4cs().b[4][1]++;}}}cov_22i8nvh4cs().s[28]++;return ret;};cov_22i8nvh4cs().s[29]++;var allowNameFromContent=function(el){cov_22i8nvh4cs().f[2]++;var role=(cov_22i8nvh4cs().s[30]++,query.getRole(el));cov_22i8nvh4cs().s[31]++;return((cov_22i8nvh4cs().b[8][0]++,constants.roles[role])||(cov_22i8nvh4cs().b[8][1]++,{})).nameFromContents;};cov_22i8nvh4cs().s[32]++;var isInLabelForOtherWidget=function(el){cov_22i8nvh4cs().f[3]++;var label=(cov_22i8nvh4cs().s[33]++,el.parentElement.closest('label'));cov_22i8nvh4cs().s[34]++;return(cov_22i8nvh4cs().b[9][0]++,label)&&((cov_22i8nvh4cs().b[9][1]++,!el.labels)||(cov_22i8nvh4cs().b[9][2]++,!Array.prototype.includes.call(el.labels,label)));};cov_22i8nvh4cs().s[35]++;var getName=function(el,recursive,visited,directReference){cov_22i8nvh4cs().f[4]++;var ret=(cov_22i8nvh4cs().s[36]++,'');cov_22i8nvh4cs().s[37]++;visited=(cov_22i8nvh4cs().b[10][0]++,visited)||(cov_22i8nvh4cs().b[10][1]++,[]);cov_22i8nvh4cs().s[38]++;if(visited.includes(el)){cov_22i8nvh4cs().b[11][0]++;cov_22i8nvh4cs().s[39]++;if(!directReference){cov_22i8nvh4cs().b[12][0]++;cov_22i8nvh4cs().s[40]++;return'';}else{cov_22i8nvh4cs().b[12][1]++;}}else{cov_22i8nvh4cs().b[11][1]++;cov_22i8nvh4cs().s[41]++;visited.push(el);}// A
+function cov_22i8nvh4cs(){var path="node_modules/aria-api/lib/name.js";var hash="33fb1e8c5c5d4b85b7cbe0185f2673ac454be0c8";var global=new Function("return this")();var gcv="__coverage__";var coverageData={path:"/home/tobias/code/a11y/babelacc/node_modules/aria-api/lib/name.js",statementMap:{"0":{start:{line:1,column:18},end:{line:1,column:43}},"1":{start:{line:2,column:14},end:{line:2,column:35}},"2":{start:{line:3,column:14},end:{line:3,column:35}},"3":{start:{line:5,column:18},end:{line:10,column:1}},"4":{start:{line:7,column:16},end:{line:7,column:59}},"5":{start:{line:8,column:16},end:{line:8,column:43}},"6":{start:{line:9,column:1},end:{line:9,column:36}},"7":{start:{line:12,column:25},end:{line:39,column:1}},"8":{start:{line:13,column:16},end:{line:13,column:59}},"9":{start:{line:14,column:12},end:{line:14,column:53}},"10":{start:{line:15,column:11},end:{line:15,column:13}},"11":{start:{line:18,column:1},end:{line:36,column:2}},"12":{start:{line:19,column:2},end:{line:34,column:3}},"13":{start:{line:20,column:3},end:{line:20,column:22}},"14":{start:{line:21,column:9},end:{line:34,column:3}},"15":{start:{line:22,column:3},end:{line:24,column:4}},"16":{start:{line:23,column:4},end:{line:23,column:46}},"17":{start:{line:25,column:9},end:{line:34,column:3}},"18":{start:{line:26,column:3},end:{line:28,column:4}},"19":{start:{line:27,column:4},end:{line:27,column:18}},"20":{start:{line:29,column:9},end:{line:34,column:3}},"21":{start:{line:30,column:3},end:{line:30,column:12}},"22":{start:{line:33,column:3},end:{line:33,column:13}},"23":{start:{line:35,column:2},end:{line:35,column:44}},"24":{start:{line:38,column:1},end:{line:38,column:52}},"25":{start:{line:41,column:19},end:{line:59,column:1}},"26":{start:{line:42,column:18},end:{line:42,column:43}},"27":{start:{line:44,column:11},end:{line:44,column:13}},"28":{start:{line:45,column:1},end:{line:56,column:2}},"29":{start:{line:45,column:14},end:{line:45,column:15}},"30":{start:{line:46,column:15},end:{line:46,column:26}},"31":{start:{line:47,column:2},end:{line:55,column:3}},"32":{start:{line:48,column:3},end:{line:48,column:27}},"33":{start:{line:49,column:9},end:{line:55,column:3}},"34":{start:{line:50,column:3},end:{line:54,column:4}},"35":{start:{line:51,column:4},end:{line:51,column:16}},"36":{start:{line:53,column:4},end:{line:53,column:59}},"37":{start:{line:58,column:1},end:{line:58,column:12}},"38":{start:{line:61,column:29},end:{line:66,column:1}},"39":{start:{line:62,column:14},end:{line:62,column:31}},"40":{start:{line:63,column:1},end:{line:65,column:2}},"41":{start:{line:64,column:2},end:{line:64,column:48}},"42":{start:{line:68,column:16},end:{line:183,column:1}},"43":{start:{line:69,column:11},end:{line:69,column:13}},"44":{start:{line:71,column:1},end:{line:71,column:25}},"45":{start:{line:72,column:1},end:{line:78,column:2}},"46":{start:{line:73,column:2},end:{line:75,column:3}},"47":{start:{line:74,column:3},end:{line:74,column:13}},"48":{start:{line:77,column:2},end:{line:77,column:19}},"49":{start:{line:84,column:1},end:{line:91,column:2}},"50":{start:{line:85,column:14},end:{line:85,column:61}},"51":{start:{line:86,column:18},end:{line:89,column:4}},"52":{start:{line:87,column:17},end:{line:87,column:44}},"53":{start:{line:88,column:3},end:{line:88,column:65}},"54":{start:{line:90,column:2},end:{line:90,column:26}},"55":{start:{line:94,column:1},end:{line:107,column:2}},"56":{start:{line:95,column:2},end:{line:106,column:3}},"57":{start:{line:96,column:3},end:{line:96,column:36}},"58":{start:{line:97,column:9},end:{line:106,column:3}},"59":{start:{line:98,column:20},end:{line:98,column:93}},"60":{start:{line:99,column:3},end:{line:103,column:4}},"61":{start:{line:100,column:4},end:{line:100,column:67}},"62":{start:{line:102,column:4},end:{line:102,column:25}},"63":{start:{line:104,column:9},end:{line:106,column:3}},"64":{start:{line:105,column:3},end:{line:105,column:102}},"65":{start:{line:110,column:1},end:{line:113,column:2}},"66":{start:{line:112,column:2},end:{line:112,column:38}},"67":{start:{line:116,column:1},end:{line:121,column:2}},"68":{start:{line:117,column:18},end:{line:119,column:4}},"69":{start:{line:118,column:3},end:{line:118,column:59}},"70":{start:{line:120,column:2},end:{line:120,column:26}},"71":{start:{line:122,column:1},end:{line:124,column:2}},"72":{start:{line:123,column:2},end:{line:123,column:21}},"73":{start:{line:125,column:1},end:{line:127,column:2}},"74":{start:{line:126,column:2},end:{line:126,column:17}},"75":{start:{line:128,column:1},end:{line:137,column:2}},"76":{start:{line:129,column:2},end:{line:136,column:3}},"77":{start:{line:130,column:3},end:{line:135,column:4}},"78":{start:{line:131,column:23},end:{line:131,column:79}},"79":{start:{line:132,column:4},end:{line:134,column:5}},"80":{start:{line:133,column:5},end:{line:133,column:65}},"81":{start:{line:138,column:1},end:{line:143,column:2}},"82":{start:{line:139,column:19},end:{line:139,column:44}},"83":{start:{line:140,column:2},end:{line:142,column:3}},"84":{start:{line:141,column:3},end:{line:141,column:30}},"85":{start:{line:144,column:1},end:{line:146,column:2}},"86":{start:{line:145,column:2},end:{line:145,column:45}},"87":{start:{line:150,column:1},end:{line:152,column:2}},"88":{start:{line:151,column:2},end:{line:151,column:51}},"89":{start:{line:154,column:1},end:{line:156,column:2}},"90":{start:{line:155,column:2},end:{line:155,column:23}},"91":{start:{line:158,column:1},end:{line:164,column:2}},"92":{start:{line:159,column:2},end:{line:163,column:3}},"93":{start:{line:160,column:3},end:{line:162,column:4}},"94":{start:{line:161,column:4},end:{line:161,column:43}},"95":{start:{line:170,column:1},end:{line:172,column:2}},"96":{start:{line:171,column:2},end:{line:171,column:41}},"97":{start:{line:176,column:1},end:{line:178,column:2}},"98":{start:{line:177,column:2},end:{line:177,column:12}},"99":{start:{line:180,column:16},end:{line:180,column:47}},"100":{start:{line:181,column:15},end:{line:181,column:45}},"101":{start:{line:182,column:1},end:{line:182,column:44}},"102":{start:{line:185,column:23},end:{line:190,column:1}},"103":{start:{line:186,column:1},end:{line:189,column:21}},"104":{start:{line:192,column:23},end:{line:223,column:1}},"105":{start:{line:193,column:11},end:{line:193,column:13}},"106":{start:{line:195,column:1},end:{line:211,column:2}},"107":{start:{line:196,column:14},end:{line:196,column:62}},"108":{start:{line:197,column:18},end:{line:200,column:4}},"109":{start:{line:198,column:17},end:{line:198,column:44}},"110":{start:{line:199,column:3},end:{line:199,column:50}},"111":{start:{line:201,column:2},end:{line:201,column:26}},"112":{start:{line:202,column:8},end:{line:211,column:2}},"113":{start:{line:203,column:2},end:{line:203,column:44}},"114":{start:{line:204,column:8},end:{line:211,column:2}},"115":{start:{line:205,column:18},end:{line:205,column:42}},"116":{start:{line:206,column:2},end:{line:208,column:3}},"117":{start:{line:207,column:3},end:{line:207,column:29}},"118":{start:{line:209,column:8},end:{line:211,column:2}},"119":{start:{line:210,column:2},end:{line:210,column:17}},"120":{start:{line:212,column:1},end:{line:214,column:2}},"121":{start:{line:213,column:2},end:{line:213,column:45}},"122":{start:{line:216,column:1},end:{line:216,column:47}},"123":{start:{line:218,column:1},end:{line:220,column:2}},"124":{start:{line:219,column:2},end:{line:219,column:11}},"125":{start:{line:222,column:1},end:{line:222,column:12}},"126":{start:{line:225,column:0},end:{line:228,column:2}}},fnMap:{"0":{name:"(anonymous_0)",decl:{start:{line:5,column:18},end:{line:5,column:19}},loc:{start:{line:5,column:53},end:{line:10,column:1}},line:5},"1":{name:"(anonymous_1)",decl:{start:{line:12,column:25},end:{line:12,column:26}},loc:{start:{line:12,column:54},end:{line:39,column:1}},line:12},"2":{name:"(anonymous_2)",decl:{start:{line:41,column:19},end:{line:41,column:20}},loc:{start:{line:41,column:62},end:{line:59,column:1}},line:41},"3":{name:"(anonymous_3)",decl:{start:{line:61,column:29},end:{line:61,column:30}},loc:{start:{line:61,column:42},end:{line:66,column:1}},line:61},"4":{name:"(anonymous_4)",decl:{start:{line:68,column:16},end:{line:68,column:17}},loc:{start:{line:68,column:85},end:{line:183,column:1}},line:68},"5":{name:"(anonymous_5)",decl:{start:{line:86,column:26},end:{line:86,column:27}},loc:{start:{line:86,column:32},end:{line:89,column:3}},line:86},"6":{name:"(anonymous_6)",decl:{start:{line:117,column:54},end:{line:117,column:55}},loc:{start:{line:117,column:63},end:{line:119,column:3}},line:117},"7":{name:"(anonymous_7)",decl:{start:{line:185,column:23},end:{line:185,column:24}},loc:{start:{line:185,column:36},end:{line:190,column:1}},line:185},"8":{name:"(anonymous_8)",decl:{start:{line:192,column:23},end:{line:192,column:24}},loc:{start:{line:192,column:36},end:{line:223,column:1}},line:192},"9":{name:"(anonymous_9)",decl:{start:{line:197,column:26},end:{line:197,column:27}},loc:{start:{line:197,column:32},end:{line:200,column:3}},line:197}},branchMap:{"0":{loc:{start:{line:9,column:8},end:{line:9,column:35}},type:"cond-expr",locations:[{start:{line:9,column:17},end:{line:9,column:21}},{start:{line:9,column:24},end:{line:9,column:35}}],line:9},"1":{loc:{start:{line:19,column:2},end:{line:34,column:3}},type:"if",locations:[{start:{line:19,column:2},end:{line:34,column:3}},{start:{line:19,column:2},end:{line:34,column:3}}],line:19},"2":{loc:{start:{line:21,column:9},end:{line:34,column:3}},type:"if",locations:[{start:{line:21,column:9},end:{line:34,column:3}},{start:{line:21,column:9},end:{line:34,column:3}}],line:21},"3":{loc:{start:{line:22,column:3},end:{line:24,column:4}},type:"if",locations:[{start:{line:22,column:3},end:{line:24,column:4}},{start:{line:22,column:3},end:{line:24,column:4}}],line:22},"4":{loc:{start:{line:23,column:13},end:{line:23,column:44}},type:"binary-expr",locations:[{start:{line:23,column:13},end:{line:23,column:38}},{start:{line:23,column:42},end:{line:23,column:44}}],line:23},"5":{loc:{start:{line:25,column:9},end:{line:34,column:3}},type:"if",locations:[{start:{line:25,column:9},end:{line:34,column:3}},{start:{line:25,column:9},end:{line:34,column:3}}],line:25},"6":{loc:{start:{line:26,column:3},end:{line:28,column:4}},type:"if",locations:[{start:{line:26,column:3},end:{line:28,column:4}},{start:{line:26,column:3},end:{line:28,column:4}}],line:26},"7":{loc:{start:{line:26,column:7},end:{line:26,column:62}},type:"binary-expr",locations:[{start:{line:26,column:7},end:{line:26,column:32}},{start:{line:26,column:36},end:{line:26,column:62}}],line:26},"8":{loc:{start:{line:29,column:9},end:{line:34,column:3}},type:"if",locations:[{start:{line:29,column:9},end:{line:34,column:3}},{start:{line:29,column:9},end:{line:34,column:3}}],line:29},"9":{loc:{start:{line:47,column:2},end:{line:55,column:3}},type:"if",locations:[{start:{line:47,column:2},end:{line:55,column:3}},{start:{line:47,column:2},end:{line:55,column:3}}],line:47},"10":{loc:{start:{line:49,column:9},end:{line:55,column:3}},type:"if",locations:[{start:{line:49,column:9},end:{line:55,column:3}},{start:{line:49,column:9},end:{line:55,column:3}}],line:49},"11":{loc:{start:{line:50,column:3},end:{line:54,column:4}},type:"if",locations:[{start:{line:50,column:3},end:{line:54,column:4}},{start:{line:50,column:3},end:{line:54,column:4}}],line:50},"12":{loc:{start:{line:63,column:1},end:{line:65,column:2}},type:"if",locations:[{start:{line:63,column:1},end:{line:65,column:2}},{start:{line:63,column:1},end:{line:65,column:2}}],line:63},"13":{loc:{start:{line:71,column:11},end:{line:71,column:24}},type:"binary-expr",locations:[{start:{line:71,column:11},end:{line:71,column:18}},{start:{line:71,column:22},end:{line:71,column:24}}],line:71},"14":{loc:{start:{line:72,column:1},end:{line:78,column:2}},type:"if",locations:[{start:{line:72,column:1},end:{line:78,column:2}},{start:{line:72,column:1},end:{line:78,column:2}}],line:72},"15":{loc:{start:{line:73,column:2},end:{line:75,column:3}},type:"if",locations:[{start:{line:73,column:2},end:{line:75,column:3}},{start:{line:73,column:2},end:{line:75,column:3}}],line:73},"16":{loc:{start:{line:84,column:1},end:{line:91,column:2}},type:"if",locations:[{start:{line:84,column:1},end:{line:91,column:2}},{start:{line:84,column:1},end:{line:91,column:2}}],line:84},"17":{loc:{start:{line:84,column:5},end:{line:84,column:58}},type:"binary-expr",locations:[{start:{line:84,column:5},end:{line:84,column:23}},{start:{line:84,column:27},end:{line:84,column:58}}],line:84},"18":{loc:{start:{line:88,column:10},end:{line:88,column:64}},type:"cond-expr",locations:[{start:{line:88,column:18},end:{line:88,column:59}},{start:{line:88,column:62},end:{line:88,column:64}}],line:88},"19":{loc:{start:{line:94,column:1},end:{line:107,column:2}},type:"if",locations:[{start:{line:94,column:1},end:{line:107,column:2}},{start:{line:94,column:1},end:{line:107,column:2}}],line:94},"20":{loc:{start:{line:94,column:5},end:{line:94,column:29}},type:"binary-expr",locations:[{start:{line:94,column:5},end:{line:94,column:16}},{start:{line:94,column:20},end:{line:94,column:29}}],line:94},"21":{loc:{start:{line:95,column:2},end:{line:106,column:3}},type:"if",locations:[{start:{line:95,column:2},end:{line:106,column:3}},{start:{line:95,column:2},end:{line:106,column:3}}],line:95},"22":{loc:{start:{line:96,column:9},end:{line:96,column:35}},type:"binary-expr",locations:[{start:{line:96,column:9},end:{line:96,column:17}},{start:{line:96,column:21},end:{line:96,column:35}}],line:96},"23":{loc:{start:{line:97,column:9},end:{line:106,column:3}},type:"if",locations:[{start:{line:97,column:9},end:{line:106,column:3}},{start:{line:97,column:9},end:{line:106,column:3}}],line:97},"24":{loc:{start:{line:98,column:20},end:{line:98,column:93}},type:"binary-expr",locations:[{start:{line:98,column:20},end:{line:98,column:56}},{start:{line:98,column:60},end:{line:98,column:93}}],line:98},"25":{loc:{start:{line:99,column:3},end:{line:103,column:4}},type:"if",locations:[{start:{line:99,column:3},end:{line:103,column:4}},{start:{line:99,column:3},end:{line:103,column:4}}],line:99},"26":{loc:{start:{line:102,column:10},end:{line:102,column:24}},type:"binary-expr",locations:[{start:{line:102,column:10},end:{line:102,column:18}},{start:{line:102,column:22},end:{line:102,column:24}}],line:102},"27":{loc:{start:{line:104,column:9},end:{line:106,column:3}},type:"if",locations:[{start:{line:104,column:9},end:{line:106,column:3}},{start:{line:104,column:9},end:{line:106,column:3}}],line:104},"28":{loc:{start:{line:105,column:15},end:{line:105,column:100}},type:"binary-expr",locations:[{start:{line:105,column:15},end:{line:105,column:50}},{start:{line:105,column:54},end:{line:105,column:88}},{start:{line:105,column:92},end:{line:105,column:100}}],line:105},"29":{loc:{start:{line:110,column:1},end:{line:113,column:2}},type:"if",locations:[{start:{line:110,column:1},end:{line:113,column:2}},{start:{line:110,column:1},end:{line:113,column:2}}],line:110},"30":{loc:{start:{line:110,column:5},end:{line:110,column:46}},type:"binary-expr",locations:[{start:{line:110,column:5},end:{line:110,column:16}},{start:{line:110,column:20},end:{line:110,column:46}}],line:110},"31":{loc:{start:{line:116,column:1},end:{line:121,column:2}},type:"if",locations:[{start:{line:116,column:1},end:{line:121,column:2}},{start:{line:116,column:1},end:{line:121,column:2}}],line:116},"32":{loc:{start:{line:116,column:5},end:{line:116,column:43}},type:"binary-expr",locations:[{start:{line:116,column:5},end:{line:116,column:16}},{start:{line:116,column:20},end:{line:116,column:30}},{start:{line:116,column:34},end:{line:116,column:43}}],line:116},"33":{loc:{start:{line:122,column:1},end:{line:124,column:2}},type:"if",locations:[{start:{line:122,column:1},end:{line:124,column:2}},{start:{line:122,column:1},end:{line:124,column:2}}],line:122},"34":{loc:{start:{line:123,column:8},end:{line:123,column:20}},type:"binary-expr",locations:[{start:{line:123,column:8},end:{line:123,column:14}},{start:{line:123,column:18},end:{line:123,column:20}}],line:123},"35":{loc:{start:{line:125,column:1},end:{line:127,column:2}},type:"if",locations:[{start:{line:125,column:1},end:{line:127,column:2}},{start:{line:125,column:1},end:{line:127,column:2}}],line:125},"36":{loc:{start:{line:125,column:5},end:{line:125,column:58}},type:"binary-expr",locations:[{start:{line:125,column:5},end:{line:125,column:16}},{start:{line:125,column:20},end:{line:125,column:46}},{start:{line:125,column:50},end:{line:125,column:58}}],line:125},"37":{loc:{start:{line:128,column:1},end:{line:137,column:2}},type:"if",locations:[{start:{line:128,column:1},end:{line:137,column:2}},{start:{line:128,column:1},end:{line:137,column:2}}],line:128},"38":{loc:{start:{line:130,column:3},end:{line:135,column:4}},type:"if",locations:[{start:{line:130,column:3},end:{line:135,column:4}},{start:{line:130,column:3},end:{line:135,column:4}}],line:130},"39":{loc:{start:{line:132,column:4},end:{line:134,column:5}},type:"if",locations:[{start:{line:132,column:4},end:{line:134,column:5}},{start:{line:132,column:4},end:{line:134,column:5}}],line:132},"40":{loc:{start:{line:138,column:1},end:{line:143,column:2}},type:"if",locations:[{start:{line:138,column:1},end:{line:143,column:2}},{start:{line:138,column:1},end:{line:143,column:2}}],line:138},"41":{loc:{start:{line:138,column:5},end:{line:138,column:39}},type:"binary-expr",locations:[{start:{line:138,column:5},end:{line:138,column:16}},{start:{line:138,column:20},end:{line:138,column:39}}],line:138},"42":{loc:{start:{line:140,column:2},end:{line:142,column:3}},type:"if",locations:[{start:{line:140,column:2},end:{line:142,column:3}},{start:{line:140,column:2},end:{line:142,column:3}}],line:140},"43":{loc:{start:{line:140,column:6},end:{line:140,column:47}},type:"binary-expr",locations:[{start:{line:140,column:6},end:{line:140,column:14}},{start:{line:140,column:18},end:{line:140,column:47}}],line:140},"44":{loc:{start:{line:144,column:1},end:{line:146,column:2}},type:"if",locations:[{start:{line:144,column:1},end:{line:146,column:2}},{start:{line:144,column:1},end:{line:146,column:2}}],line:144},"45":{loc:{start:{line:144,column:5},end:{line:144,column:35}},type:"binary-expr",locations:[{start:{line:144,column:5},end:{line:144,column:16}},{start:{line:144,column:20},end:{line:144,column:35}}],line:144},"46":{loc:{start:{line:145,column:8},end:{line:145,column:44}},type:"binary-expr",locations:[{start:{line:145,column:8},end:{line:145,column:38}},{start:{line:145,column:42},end:{line:145,column:44}}],line:145},"47":{loc:{start:{line:150,column:1},end:{line:152,column:2}},type:"if",locations:[{start:{line:150,column:1},end:{line:152,column:2}},{start:{line:150,column:1},end:{line:152,column:2}}],line:150},"48":{loc:{start:{line:150,column:5},end:{line:150,column:112}},type:"binary-expr",locations:[{start:{line:150,column:5},end:{line:150,column:16}},{start:{line:150,column:21},end:{line:150,column:30}},{start:{line:150,column:34},end:{line:150,column:58}},{start:{line:150,column:62},end:{line:150,column:81}},{start:{line:150,column:86},end:{line:150,column:112}}],line:150},"49":{loc:{start:{line:154,column:1},end:{line:156,column:2}},type:"if",locations:[{start:{line:154,column:1},end:{line:156,column:2}},{start:{line:154,column:1},end:{line:156,column:2}}],line:154},"50":{loc:{start:{line:154,column:5},end:{line:154,column:47}},type:"binary-expr",locations:[{start:{line:154,column:5},end:{line:154,column:16}},{start:{line:154,column:20},end:{line:154,column:47}}],line:154},"51":{loc:{start:{line:155,column:8},end:{line:155,column:22}},type:"binary-expr",locations:[{start:{line:155,column:8},end:{line:155,column:16}},{start:{line:155,column:20},end:{line:155,column:22}}],line:155},"52":{loc:{start:{line:158,column:1},end:{line:164,column:2}},type:"if",locations:[{start:{line:158,column:1},end:{line:164,column:2}},{start:{line:158,column:1},end:{line:164,column:2}}],line:158},"53":{loc:{start:{line:160,column:3},end:{line:162,column:4}},type:"if",locations:[{start:{line:160,column:3},end:{line:162,column:4}},{start:{line:160,column:3},end:{line:162,column:4}}],line:160},"54":{loc:{start:{line:170,column:1},end:{line:172,column:2}},type:"if",locations:[{start:{line:170,column:1},end:{line:172,column:2}},{start:{line:170,column:1},end:{line:172,column:2}}],line:170},"55":{loc:{start:{line:171,column:8},end:{line:171,column:40}},type:"binary-expr",locations:[{start:{line:171,column:8},end:{line:171,column:16}},{start:{line:171,column:20},end:{line:171,column:34}},{start:{line:171,column:38},end:{line:171,column:40}}],line:171},"56":{loc:{start:{line:176,column:1},end:{line:178,column:2}},type:"if",locations:[{start:{line:176,column:1},end:{line:178,column:2}},{start:{line:176,column:1},end:{line:178,column:2}}],line:176},"57":{loc:{start:{line:195,column:1},end:{line:211,column:2}},type:"if",locations:[{start:{line:195,column:1},end:{line:211,column:2}},{start:{line:195,column:1},end:{line:211,column:2}}],line:195},"58":{loc:{start:{line:199,column:10},end:{line:199,column:49}},type:"cond-expr",locations:[{start:{line:199,column:18},end:{line:199,column:44}},{start:{line:199,column:47},end:{line:199,column:49}}],line:199},"59":{loc:{start:{line:202,column:8},end:{line:211,column:2}},type:"if",locations:[{start:{line:202,column:8},end:{line:211,column:2}},{start:{line:202,column:8},end:{line:211,column:2}}],line:202},"60":{loc:{start:{line:204,column:8},end:{line:211,column:2}},type:"if",locations:[{start:{line:204,column:8},end:{line:211,column:2}},{start:{line:204,column:8},end:{line:211,column:2}}],line:204},"61":{loc:{start:{line:206,column:2},end:{line:208,column:3}},type:"if",locations:[{start:{line:206,column:2},end:{line:208,column:3}},{start:{line:206,column:2},end:{line:208,column:3}}],line:206},"62":{loc:{start:{line:206,column:6},end:{line:206,column:45}},type:"binary-expr",locations:[{start:{line:206,column:6},end:{line:206,column:13}},{start:{line:206,column:17},end:{line:206,column:45}}],line:206},"63":{loc:{start:{line:209,column:8},end:{line:211,column:2}},type:"if",locations:[{start:{line:209,column:8},end:{line:211,column:2}},{start:{line:209,column:8},end:{line:211,column:2}}],line:209},"64":{loc:{start:{line:212,column:1},end:{line:214,column:2}},type:"if",locations:[{start:{line:212,column:1},end:{line:214,column:2}},{start:{line:212,column:1},end:{line:214,column:2}}],line:212},"65":{loc:{start:{line:212,column:5},end:{line:212,column:35}},type:"binary-expr",locations:[{start:{line:212,column:5},end:{line:212,column:16}},{start:{line:212,column:20},end:{line:212,column:35}}],line:212},"66":{loc:{start:{line:213,column:8},end:{line:213,column:44}},type:"binary-expr",locations:[{start:{line:213,column:8},end:{line:213,column:38}},{start:{line:213,column:42},end:{line:213,column:44}}],line:213},"67":{loc:{start:{line:216,column:8},end:{line:216,column:17}},type:"binary-expr",locations:[{start:{line:216,column:8},end:{line:216,column:11}},{start:{line:216,column:15},end:{line:216,column:17}}],line:216},"68":{loc:{start:{line:218,column:1},end:{line:220,column:2}},type:"if",locations:[{start:{line:218,column:1},end:{line:220,column:2}},{start:{line:218,column:1},end:{line:220,column:2}}],line:218}},s:{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":0,"31":0,"32":0,"33":0,"34":0,"35":0,"36":0,"37":0,"38":0,"39":0,"40":0,"41":0,"42":0,"43":0,"44":0,"45":0,"46":0,"47":0,"48":0,"49":0,"50":0,"51":0,"52":0,"53":0,"54":0,"55":0,"56":0,"57":0,"58":0,"59":0,"60":0,"61":0,"62":0,"63":0,"64":0,"65":0,"66":0,"67":0,"68":0,"69":0,"70":0,"71":0,"72":0,"73":0,"74":0,"75":0,"76":0,"77":0,"78":0,"79":0,"80":0,"81":0,"82":0,"83":0,"84":0,"85":0,"86":0,"87":0,"88":0,"89":0,"90":0,"91":0,"92":0,"93":0,"94":0,"95":0,"96":0,"97":0,"98":0,"99":0,"100":0,"101":0,"102":0,"103":0,"104":0,"105":0,"106":0,"107":0,"108":0,"109":0,"110":0,"111":0,"112":0,"113":0,"114":0,"115":0,"116":0,"117":0,"118":0,"119":0,"120":0,"121":0,"122":0,"123":0,"124":0,"125":0,"126":0},f:{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0},b:{"0":[0,0],"1":[0,0],"2":[0,0],"3":[0,0],"4":[0,0],"5":[0,0],"6":[0,0],"7":[0,0],"8":[0,0],"9":[0,0],"10":[0,0],"11":[0,0],"12":[0,0],"13":[0,0],"14":[0,0],"15":[0,0],"16":[0,0],"17":[0,0],"18":[0,0],"19":[0,0],"20":[0,0],"21":[0,0],"22":[0,0],"23":[0,0],"24":[0,0],"25":[0,0],"26":[0,0],"27":[0,0],"28":[0,0,0],"29":[0,0],"30":[0,0],"31":[0,0],"32":[0,0,0],"33":[0,0],"34":[0,0],"35":[0,0],"36":[0,0,0],"37":[0,0],"38":[0,0],"39":[0,0],"40":[0,0],"41":[0,0],"42":[0,0],"43":[0,0],"44":[0,0],"45":[0,0],"46":[0,0],"47":[0,0],"48":[0,0,0,0,0],"49":[0,0],"50":[0,0],"51":[0,0],"52":[0,0],"53":[0,0],"54":[0,0],"55":[0,0,0],"56":[0,0],"57":[0,0],"58":[0,0],"59":[0,0],"60":[0,0],"61":[0,0],"62":[0,0],"63":[0,0],"64":[0,0],"65":[0,0],"66":[0,0],"67":[0,0],"68":[0,0]},_coverageSchema:"1a1c01bbd47fc00a2c39e90264f33305004495a9",hash:"33fb1e8c5c5d4b85b7cbe0185f2673ac454be0c8"};var coverage=global[gcv]||(global[gcv]={});if(!coverage[path]||coverage[path].hash!==hash){coverage[path]=coverageData;}var actualCoverage=coverage[path];{// @ts-ignore
+cov_22i8nvh4cs=function(){return actualCoverage;};}return actualCoverage;}cov_22i8nvh4cs();const constants=(cov_22i8nvh4cs().s[0]++,require('./constants.js'));const atree=(cov_22i8nvh4cs().s[1]++,require('./atree.js'));const query=(cov_22i8nvh4cs().s[2]++,require('./query.js'));cov_22i8nvh4cs().s[3]++;const addSpaces=function(text,el,pseudoSelector){cov_22i8nvh4cs().f[0]++;// https://github.com/w3c/accname/issues/3
+const styles=(cov_22i8nvh4cs().s[4]++,window.getComputedStyle(el,pseudoSelector));const inline=(cov_22i8nvh4cs().s[5]++,styles.display==='inline');cov_22i8nvh4cs().s[6]++;return inline?(cov_22i8nvh4cs().b[0][0]++,text):(cov_22i8nvh4cs().b[0][1]++,` ${text} `);};cov_22i8nvh4cs().s[7]++;const getPseudoContent=function(el,pseudoSelector){cov_22i8nvh4cs().f[1]++;const styles=(cov_22i8nvh4cs().s[8]++,window.getComputedStyle(el,pseudoSelector));let tail=(cov_22i8nvh4cs().s[9]++,styles.getPropertyValue('content').trim());let ret=(cov_22i8nvh4cs().s[10]++,[]);let match;cov_22i8nvh4cs().s[11]++;while(tail.length){cov_22i8nvh4cs().s[12]++;if(match=tail.match(/^"([^"]*)"/)){cov_22i8nvh4cs().b[1][0]++;cov_22i8nvh4cs().s[13]++;ret.push(match[1]);}else{cov_22i8nvh4cs().b[1][1]++;cov_22i8nvh4cs().s[14]++;if(match=tail.match(/^([a-z-]+)\(([^)]*)\)/)){cov_22i8nvh4cs().b[2][0]++;cov_22i8nvh4cs().s[15]++;if(match[1]==='attr'){cov_22i8nvh4cs().b[3][0]++;cov_22i8nvh4cs().s[16]++;ret.push((cov_22i8nvh4cs().b[4][0]++,el.getAttribute(match[2]))||(cov_22i8nvh4cs().b[4][1]++,''));}else{cov_22i8nvh4cs().b[3][1]++;}}else{cov_22i8nvh4cs().b[2][1]++;cov_22i8nvh4cs().s[17]++;if(match=tail.match(/^([a-z-]+)/)){cov_22i8nvh4cs().b[5][0]++;cov_22i8nvh4cs().s[18]++;if((cov_22i8nvh4cs().b[7][0]++,match[1]==='open-quote')||(cov_22i8nvh4cs().b[7][1]++,match[1]==='close-quote')){cov_22i8nvh4cs().b[6][0]++;cov_22i8nvh4cs().s[19]++;ret.push('"');}else{cov_22i8nvh4cs().b[6][1]++;}}else{cov_22i8nvh4cs().b[5][1]++;cov_22i8nvh4cs().s[20]++;if(match=tail.match(/^\//)){cov_22i8nvh4cs().b[8][0]++;cov_22i8nvh4cs().s[21]++;ret=[];}else{cov_22i8nvh4cs().b[8][1]++;cov_22i8nvh4cs().s[22]++;// invalid content, ignore
+return'';}}}}cov_22i8nvh4cs().s[23]++;tail=tail.slice(match[0].length).trim();}cov_22i8nvh4cs().s[24]++;return addSpaces(ret.join(''),el,pseudoSelector);};cov_22i8nvh4cs().s[25]++;const getContent=function(root,ongoingLabelledBy,visited){cov_22i8nvh4cs().f[2]++;const children=(cov_22i8nvh4cs().s[26]++,atree.getChildNodes(root));let ret=(cov_22i8nvh4cs().s[27]++,'');cov_22i8nvh4cs().s[28]++;for(let i=(cov_22i8nvh4cs().s[29]++,0);i<children.length;i++){const node=(cov_22i8nvh4cs().s[30]++,children[i]);cov_22i8nvh4cs().s[31]++;if(node.nodeType===node.TEXT_NODE){cov_22i8nvh4cs().b[9][0]++;cov_22i8nvh4cs().s[32]++;ret+=node.textContent;}else{cov_22i8nvh4cs().b[9][1]++;cov_22i8nvh4cs().s[33]++;if(node.nodeType===node.ELEMENT_NODE){cov_22i8nvh4cs().b[10][0]++;cov_22i8nvh4cs().s[34]++;if(node.tagName.toLowerCase()==='br'){cov_22i8nvh4cs().b[11][0]++;cov_22i8nvh4cs().s[35]++;ret+='\n';}else{cov_22i8nvh4cs().b[11][1]++;cov_22i8nvh4cs().s[36]++;ret+=getName(node,true,ongoingLabelledBy,visited);}}else{cov_22i8nvh4cs().b[10][1]++;}}}cov_22i8nvh4cs().s[37]++;return ret;};cov_22i8nvh4cs().s[38]++;const allowNameFromContent=function(el){cov_22i8nvh4cs().f[3]++;const role=(cov_22i8nvh4cs().s[39]++,query.getRole(el));cov_22i8nvh4cs().s[40]++;if(role){cov_22i8nvh4cs().b[12][0]++;cov_22i8nvh4cs().s[41]++;return constants.roles[role].nameFromContents;}else{cov_22i8nvh4cs().b[12][1]++;}};cov_22i8nvh4cs().s[42]++;const getName=function(el,recursive,ongoingLabelledBy,visited,directReference){cov_22i8nvh4cs().f[4]++;let ret=(cov_22i8nvh4cs().s[43]++,'');cov_22i8nvh4cs().s[44]++;visited=(cov_22i8nvh4cs().b[13][0]++,visited)||(cov_22i8nvh4cs().b[13][1]++,[]);cov_22i8nvh4cs().s[45]++;if(visited.includes(el)){cov_22i8nvh4cs().b[14][0]++;cov_22i8nvh4cs().s[46]++;if(!directReference){cov_22i8nvh4cs().b[15][0]++;cov_22i8nvh4cs().s[47]++;return'';}else{cov_22i8nvh4cs().b[15][1]++;}}else{cov_22i8nvh4cs().b[14][1]++;cov_22i8nvh4cs().s[48]++;visited.push(el);}// A
 // handled in atree
 // B
-cov_22i8nvh4cs().s[42]++;if((cov_22i8nvh4cs().b[14][0]++,!recursive)&&(cov_22i8nvh4cs().b[14][1]++,el.matches('[aria-labelledby]'))){cov_22i8nvh4cs().b[13][0]++;var ids=(cov_22i8nvh4cs().s[43]++,el.getAttribute('aria-labelledby').split(/\s+/));var strings=(cov_22i8nvh4cs().s[44]++,ids.map(id=>{cov_22i8nvh4cs().f[5]++;var label=(cov_22i8nvh4cs().s[45]++,document.getElementById(id));cov_22i8nvh4cs().s[46]++;return label?(cov_22i8nvh4cs().b[15][0]++,getName(label,true,visited,true)):(cov_22i8nvh4cs().b[15][1]++,'');}));cov_22i8nvh4cs().s[47]++;ret=strings.join(' ');}else{cov_22i8nvh4cs().b[13][1]++;}// C
-cov_22i8nvh4cs().s[48]++;if((cov_22i8nvh4cs().b[17][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[17][1]++,el.matches('[aria-label]'))){cov_22i8nvh4cs().b[16][0]++;cov_22i8nvh4cs().s[49]++;// FIXME: may skip to 2E
-ret=el.getAttribute('aria-label');}else{cov_22i8nvh4cs().b[16][1]++;}// D
-cov_22i8nvh4cs().s[50]++;if((cov_22i8nvh4cs().b[19][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[19][1]++,!recursive)&&(cov_22i8nvh4cs().b[19][2]++,el.labels)){cov_22i8nvh4cs().b[18][0]++;var strings=(cov_22i8nvh4cs().s[51]++,Array.prototype.map.call(el.labels,label=>{cov_22i8nvh4cs().f[6]++;cov_22i8nvh4cs().s[52]++;return getName(label,true,visited);}));cov_22i8nvh4cs().s[53]++;ret=strings.join(' ');}else{cov_22i8nvh4cs().b[18][1]++;}cov_22i8nvh4cs().s[54]++;if(!ret.trim()){cov_22i8nvh4cs().b[20][0]++;cov_22i8nvh4cs().s[55]++;ret=(cov_22i8nvh4cs().b[21][0]++,el.placeholder)||(cov_22i8nvh4cs().b[21][1]++,'');}else{cov_22i8nvh4cs().b[20][1]++;}cov_22i8nvh4cs().s[56]++;if(!ret.trim()){cov_22i8nvh4cs().b[22][0]++;cov_22i8nvh4cs().s[57]++;ret=(cov_22i8nvh4cs().b[23][0]++,el.alt)||(cov_22i8nvh4cs().b[23][1]++,'');}else{cov_22i8nvh4cs().b[22][1]++;}cov_22i8nvh4cs().s[58]++;if((cov_22i8nvh4cs().b[25][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[25][1]++,el.matches('abbr,acronym'))&&(cov_22i8nvh4cs().b[25][2]++,el.title)){cov_22i8nvh4cs().b[24][0]++;cov_22i8nvh4cs().s[59]++;ret=el.title;}else{cov_22i8nvh4cs().b[24][1]++;}cov_22i8nvh4cs().s[60]++;if(!ret.trim()){cov_22i8nvh4cs().b[26][0]++;cov_22i8nvh4cs().s[61]++;for(var selector in constants.nameFromDescendant){cov_22i8nvh4cs().s[62]++;if(el.matches(selector)){cov_22i8nvh4cs().b[27][0]++;var descendant=(cov_22i8nvh4cs().s[63]++,el.querySelector(constants.nameFromDescendant[selector]));cov_22i8nvh4cs().s[64]++;if(descendant){cov_22i8nvh4cs().b[28][0]++;cov_22i8nvh4cs().s[65]++;ret=getName(descendant,true,visited);}else{cov_22i8nvh4cs().b[28][1]++;}}else{cov_22i8nvh4cs().b[27][1]++;}}}else{cov_22i8nvh4cs().b[26][1]++;}cov_22i8nvh4cs().s[66]++;if((cov_22i8nvh4cs().b[30][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[30][1]++,el.matches('svg *'))){cov_22i8nvh4cs().b[29][0]++;var svgTitle=(cov_22i8nvh4cs().s[67]++,el.querySelector('title'));cov_22i8nvh4cs().s[68]++;if((cov_22i8nvh4cs().b[32][0]++,svgTitle)&&(cov_22i8nvh4cs().b[32][1]++,svgTitle.parentElement===el)){cov_22i8nvh4cs().b[31][0]++;cov_22i8nvh4cs().s[69]++;ret=svgTitle.textContent;}else{cov_22i8nvh4cs().b[31][1]++;}}else{cov_22i8nvh4cs().b[29][1]++;}// E
-cov_22i8nvh4cs().s[70]++;if((cov_22i8nvh4cs().b[34][0]++,!ret.trim())&&((cov_22i8nvh4cs().b[34][1]++,recursive)||(cov_22i8nvh4cs().b[34][2]++,isInLabelForOtherWidget(el))||(cov_22i8nvh4cs().b[34][3]++,query.matches(el,'button')))){cov_22i8nvh4cs().b[33][0]++;cov_22i8nvh4cs().s[71]++;if(query.matches(el,'textbox,button,combobox,listbox,range')){cov_22i8nvh4cs().b[35][0]++;cov_22i8nvh4cs().s[72]++;if(query.matches(el,'textbox,button')){cov_22i8nvh4cs().b[36][0]++;cov_22i8nvh4cs().s[73]++;ret=(cov_22i8nvh4cs().b[37][0]++,el.value)||(cov_22i8nvh4cs().b[37][1]++,el.textContent);}else{cov_22i8nvh4cs().b[36][1]++;cov_22i8nvh4cs().s[74]++;if(query.matches(el,'combobox,listbox')){cov_22i8nvh4cs().b[38][0]++;var selected=(cov_22i8nvh4cs().s[75]++,(cov_22i8nvh4cs().b[39][0]++,query.querySelector(el,':selected'))||(cov_22i8nvh4cs().b[39][1]++,query.querySelector(el,'option')));cov_22i8nvh4cs().s[76]++;if(selected){cov_22i8nvh4cs().b[40][0]++;cov_22i8nvh4cs().s[77]++;ret=getName(selected,recursive,visited);}else{cov_22i8nvh4cs().b[40][1]++;cov_22i8nvh4cs().s[78]++;ret=(cov_22i8nvh4cs().b[41][0]++,el.value)||(cov_22i8nvh4cs().b[41][1]++,'');}}else{cov_22i8nvh4cs().b[38][1]++;cov_22i8nvh4cs().s[79]++;if(query.matches(el,'range')){cov_22i8nvh4cs().b[42][0]++;cov_22i8nvh4cs().s[80]++;ret=''+((cov_22i8nvh4cs().b[43][0]++,query.getAttribute(el,'valuetext'))||(cov_22i8nvh4cs().b[43][1]++,query.getAttribute(el,'valuenow'))||(cov_22i8nvh4cs().b[43][2]++,el.value));}else{cov_22i8nvh4cs().b[42][1]++;}}}}else{cov_22i8nvh4cs().b[35][1]++;}}else{cov_22i8nvh4cs().b[33][1]++;}// F
+cov_22i8nvh4cs().s[49]++;if((cov_22i8nvh4cs().b[17][0]++,!ongoingLabelledBy)&&(cov_22i8nvh4cs().b[17][1]++,el.matches('[aria-labelledby]'))){cov_22i8nvh4cs().b[16][0]++;const ids=(cov_22i8nvh4cs().s[50]++,el.getAttribute('aria-labelledby').split(/\s+/));const strings=(cov_22i8nvh4cs().s[51]++,ids.map(id=>{cov_22i8nvh4cs().f[5]++;const label=(cov_22i8nvh4cs().s[52]++,document.getElementById(id));cov_22i8nvh4cs().s[53]++;return label?(cov_22i8nvh4cs().b[18][0]++,getName(label,true,true,visited,true)):(cov_22i8nvh4cs().b[18][1]++,'');}));cov_22i8nvh4cs().s[54]++;ret=strings.join(' ');}else{cov_22i8nvh4cs().b[16][1]++;}// E (the current draft has this at this high priority)
+cov_22i8nvh4cs().s[55]++;if((cov_22i8nvh4cs().b[20][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[20][1]++,recursive)){cov_22i8nvh4cs().b[19][0]++;cov_22i8nvh4cs().s[56]++;if(query.matches(el,'textbox')){cov_22i8nvh4cs().b[21][0]++;cov_22i8nvh4cs().s[57]++;ret=(cov_22i8nvh4cs().b[22][0]++,el.value)||(cov_22i8nvh4cs().b[22][1]++,el.textContent);}else{cov_22i8nvh4cs().b[21][1]++;cov_22i8nvh4cs().s[58]++;if(query.matches(el,'combobox,listbox')){cov_22i8nvh4cs().b[23][0]++;const selected=(cov_22i8nvh4cs().s[59]++,(cov_22i8nvh4cs().b[24][0]++,query.querySelector(el,':selected'))||(cov_22i8nvh4cs().b[24][1]++,query.querySelector(el,'option')));cov_22i8nvh4cs().s[60]++;if(selected){cov_22i8nvh4cs().b[25][0]++;cov_22i8nvh4cs().s[61]++;ret=getName(selected,recursive,ongoingLabelledBy,visited);}else{cov_22i8nvh4cs().b[25][1]++;cov_22i8nvh4cs().s[62]++;ret=(cov_22i8nvh4cs().b[26][0]++,el.value)||(cov_22i8nvh4cs().b[26][1]++,'');}}else{cov_22i8nvh4cs().b[23][1]++;cov_22i8nvh4cs().s[63]++;if(query.matches(el,'range')){cov_22i8nvh4cs().b[27][0]++;cov_22i8nvh4cs().s[64]++;ret=''+((cov_22i8nvh4cs().b[28][0]++,query.getAttribute(el,'valuetext'))||(cov_22i8nvh4cs().b[28][1]++,query.getAttribute(el,'valuenow'))||(cov_22i8nvh4cs().b[28][2]++,el.value));}else{cov_22i8nvh4cs().b[27][1]++;}}}}else{cov_22i8nvh4cs().b[19][1]++;}// C
+cov_22i8nvh4cs().s[65]++;if((cov_22i8nvh4cs().b[30][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[30][1]++,el.matches('[aria-label]'))){cov_22i8nvh4cs().b[29][0]++;cov_22i8nvh4cs().s[66]++;// FIXME: may skip to 2E
+ret=el.getAttribute('aria-label');}else{cov_22i8nvh4cs().b[29][1]++;}// D
+cov_22i8nvh4cs().s[67]++;if((cov_22i8nvh4cs().b[32][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[32][1]++,!recursive)&&(cov_22i8nvh4cs().b[32][2]++,el.labels)){cov_22i8nvh4cs().b[31][0]++;const strings=(cov_22i8nvh4cs().s[68]++,Array.prototype.map.call(el.labels,label=>{cov_22i8nvh4cs().f[6]++;cov_22i8nvh4cs().s[69]++;return getName(label,true,ongoingLabelledBy,visited);}));cov_22i8nvh4cs().s[70]++;ret=strings.join(' ');}else{cov_22i8nvh4cs().b[31][1]++;}cov_22i8nvh4cs().s[71]++;if(!ret.trim()){cov_22i8nvh4cs().b[33][0]++;cov_22i8nvh4cs().s[72]++;ret=(cov_22i8nvh4cs().b[34][0]++,el.alt)||(cov_22i8nvh4cs().b[34][1]++,'');}else{cov_22i8nvh4cs().b[33][1]++;}cov_22i8nvh4cs().s[73]++;if((cov_22i8nvh4cs().b[36][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[36][1]++,el.matches('abbr,acronym'))&&(cov_22i8nvh4cs().b[36][2]++,el.title)){cov_22i8nvh4cs().b[35][0]++;cov_22i8nvh4cs().s[74]++;ret=el.title;}else{cov_22i8nvh4cs().b[35][1]++;}cov_22i8nvh4cs().s[75]++;if(!ret.trim()){cov_22i8nvh4cs().b[37][0]++;cov_22i8nvh4cs().s[76]++;for(const selector in constants.nameFromDescendant){cov_22i8nvh4cs().s[77]++;if(el.matches(selector)){cov_22i8nvh4cs().b[38][0]++;const descendant=(cov_22i8nvh4cs().s[78]++,el.querySelector(constants.nameFromDescendant[selector]));cov_22i8nvh4cs().s[79]++;if(descendant){cov_22i8nvh4cs().b[39][0]++;cov_22i8nvh4cs().s[80]++;ret=getName(descendant,true,ongoingLabelledBy,visited);}else{cov_22i8nvh4cs().b[39][1]++;}}else{cov_22i8nvh4cs().b[38][1]++;}}}else{cov_22i8nvh4cs().b[37][1]++;}cov_22i8nvh4cs().s[81]++;if((cov_22i8nvh4cs().b[41][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[41][1]++,el.matches('svg *'))){cov_22i8nvh4cs().b[40][0]++;const svgTitle=(cov_22i8nvh4cs().s[82]++,el.querySelector('title'));cov_22i8nvh4cs().s[83]++;if((cov_22i8nvh4cs().b[43][0]++,svgTitle)&&(cov_22i8nvh4cs().b[43][1]++,svgTitle.parentElement===el)){cov_22i8nvh4cs().b[42][0]++;cov_22i8nvh4cs().s[84]++;ret=svgTitle.textContent;}else{cov_22i8nvh4cs().b[42][1]++;}}else{cov_22i8nvh4cs().b[40][1]++;}cov_22i8nvh4cs().s[85]++;if((cov_22i8nvh4cs().b[45][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[45][1]++,el.matches('a'))){cov_22i8nvh4cs().b[44][0]++;cov_22i8nvh4cs().s[86]++;ret=(cov_22i8nvh4cs().b[46][0]++,el.getAttribute('xlink:title'))||(cov_22i8nvh4cs().b[46][1]++,'');}else{cov_22i8nvh4cs().b[44][1]++;}// F
 // FIXME: menu is not mentioned in the spec
-cov_22i8nvh4cs().s[81]++;if((cov_22i8nvh4cs().b[45][0]++,!ret.trim())&&((cov_22i8nvh4cs().b[45][1]++,recursive)||(cov_22i8nvh4cs().b[45][2]++,allowNameFromContent(el))||(cov_22i8nvh4cs().b[45][3]++,el.closest('label')))&&(cov_22i8nvh4cs().b[45][4]++,!query.matches(el,'menu'))){cov_22i8nvh4cs().b[44][0]++;cov_22i8nvh4cs().s[82]++;ret=getContent(el,visited);}else{cov_22i8nvh4cs().b[44][1]++;}cov_22i8nvh4cs().s[83]++;if(!ret.trim()){cov_22i8nvh4cs().b[46][0]++;cov_22i8nvh4cs().s[84]++;for(var selector in constants.nameDefaults){cov_22i8nvh4cs().s[85]++;if(el.matches(selector)){cov_22i8nvh4cs().b[47][0]++;cov_22i8nvh4cs().s[86]++;ret=constants.nameDefaults[selector];}else{cov_22i8nvh4cs().b[47][1]++;}}}else{cov_22i8nvh4cs().b[46][1]++;}// G/H
+cov_22i8nvh4cs().s[87]++;if((cov_22i8nvh4cs().b[48][0]++,!ret.trim())&&((cov_22i8nvh4cs().b[48][1]++,recursive)||(cov_22i8nvh4cs().b[48][2]++,allowNameFromContent(el))||(cov_22i8nvh4cs().b[48][3]++,el.closest('label')))&&(cov_22i8nvh4cs().b[48][4]++,!query.matches(el,'menu'))){cov_22i8nvh4cs().b[47][0]++;cov_22i8nvh4cs().s[88]++;ret=getContent(el,ongoingLabelledBy,visited);}else{cov_22i8nvh4cs().b[47][1]++;}cov_22i8nvh4cs().s[89]++;if((cov_22i8nvh4cs().b[50][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[50][1]++,query.matches(el,'button'))){cov_22i8nvh4cs().b[49][0]++;cov_22i8nvh4cs().s[90]++;ret=(cov_22i8nvh4cs().b[51][0]++,el.value)||(cov_22i8nvh4cs().b[51][1]++,'');}else{cov_22i8nvh4cs().b[49][1]++;}cov_22i8nvh4cs().s[91]++;if(!ret.trim()){cov_22i8nvh4cs().b[52][0]++;cov_22i8nvh4cs().s[92]++;for(const selector in constants.nameDefaults){cov_22i8nvh4cs().s[93]++;if(el.matches(selector)){cov_22i8nvh4cs().b[53][0]++;cov_22i8nvh4cs().s[94]++;ret=constants.nameDefaults[selector];}else{cov_22i8nvh4cs().b[53][1]++;}}}else{cov_22i8nvh4cs().b[52][1]++;}// G/H
 // handled in getContent
 // I
-// FIXME: presentation not mentioned in the spec
-cov_22i8nvh4cs().s[87]++;if((cov_22i8nvh4cs().b[49][0]++,!ret.trim())&&((cov_22i8nvh4cs().b[49][1]++,directReference)||(cov_22i8nvh4cs().b[49][2]++,!query.matches(el,'presentation')))){cov_22i8nvh4cs().b[48][0]++;cov_22i8nvh4cs().s[88]++;ret=(cov_22i8nvh4cs().b[50][0]++,el.title)||(cov_22i8nvh4cs().b[50][1]++,'');}else{cov_22i8nvh4cs().b[48][1]++;}// FIXME: not exactly sure about this, but it reduces the number of failing
+cov_22i8nvh4cs().s[95]++;if(!ret.trim()){cov_22i8nvh4cs().b[54][0]++;cov_22i8nvh4cs().s[96]++;ret=(cov_22i8nvh4cs().b[55][0]++,el.title)||(cov_22i8nvh4cs().b[55][1]++,el.placeholder)||(cov_22i8nvh4cs().b[55][2]++,'');}else{cov_22i8nvh4cs().b[54][1]++;}// FIXME: not exactly sure about this, but it reduces the number of failing
 // WPT tests. Whitespace is hard.
-cov_22i8nvh4cs().s[89]++;if(!ret.trim()){cov_22i8nvh4cs().b[51][0]++;cov_22i8nvh4cs().s[90]++;ret=' ';}else{cov_22i8nvh4cs().b[51][1]++;}var before=(cov_22i8nvh4cs().s[91]++,getPseudoContent(el,':before'));var after=(cov_22i8nvh4cs().s[92]++,getPseudoContent(el,':after'));cov_22i8nvh4cs().s[93]++;return before+ret+after;};cov_22i8nvh4cs().s[94]++;var getNameTrimmed=function(el){cov_22i8nvh4cs().f[7]++;cov_22i8nvh4cs().s[95]++;return getName(el).replace(/\s+/g,' ').trim();};cov_22i8nvh4cs().s[96]++;var getDescription=function(el){cov_22i8nvh4cs().f[8]++;var ret=(cov_22i8nvh4cs().s[97]++,'');cov_22i8nvh4cs().s[98]++;if(el.matches('[aria-describedby]')){cov_22i8nvh4cs().b[52][0]++;var ids=(cov_22i8nvh4cs().s[99]++,el.getAttribute('aria-describedby').split(/\s+/));var strings=(cov_22i8nvh4cs().s[100]++,ids.map(id=>{cov_22i8nvh4cs().f[9]++;var label=(cov_22i8nvh4cs().s[101]++,document.getElementById(id));cov_22i8nvh4cs().s[102]++;return label?(cov_22i8nvh4cs().b[53][0]++,getName(label,true)):(cov_22i8nvh4cs().b[53][1]++,'');}));cov_22i8nvh4cs().s[103]++;ret=strings.join(' ');}else{cov_22i8nvh4cs().b[52][1]++;cov_22i8nvh4cs().s[104]++;if(el.matches('[aria-description]')){cov_22i8nvh4cs().b[54][0]++;cov_22i8nvh4cs().s[105]++;ret=el.getAttribute('aria-description');}else{cov_22i8nvh4cs().b[54][1]++;cov_22i8nvh4cs().s[106]++;if(el.matches('svg *')){cov_22i8nvh4cs().b[55][0]++;var svgDesc=(cov_22i8nvh4cs().s[107]++,el.querySelector('desc'));cov_22i8nvh4cs().s[108]++;if((cov_22i8nvh4cs().b[57][0]++,svgDesc)&&(cov_22i8nvh4cs().b[57][1]++,svgDesc.parentElement===el)){cov_22i8nvh4cs().b[56][0]++;cov_22i8nvh4cs().s[109]++;ret=svgDesc.textContent;}else{cov_22i8nvh4cs().b[56][1]++;}}else{cov_22i8nvh4cs().b[55][1]++;cov_22i8nvh4cs().s[110]++;if(el.title){cov_22i8nvh4cs().b[58][0]++;cov_22i8nvh4cs().s[111]++;ret=el.title;}else{cov_22i8nvh4cs().b[58][1]++;}}}}cov_22i8nvh4cs().s[112]++;ret=((cov_22i8nvh4cs().b[59][0]++,ret)||(cov_22i8nvh4cs().b[59][1]++,'')).trim().replace(/\s+/g,' ');cov_22i8nvh4cs().s[113]++;if(ret===getNameTrimmed(el)){cov_22i8nvh4cs().b[60][0]++;cov_22i8nvh4cs().s[114]++;ret='';}else{cov_22i8nvh4cs().b[60][1]++;}cov_22i8nvh4cs().s[115]++;return ret;};cov_22i8nvh4cs().s[116]++;module.exports={getName:getNameTrimmed,getDescription:getDescription};
+cov_22i8nvh4cs().s[97]++;if(!ret.trim()){cov_22i8nvh4cs().b[56][0]++;cov_22i8nvh4cs().s[98]++;ret=' ';}else{cov_22i8nvh4cs().b[56][1]++;}const before=(cov_22i8nvh4cs().s[99]++,getPseudoContent(el,':before'));const after=(cov_22i8nvh4cs().s[100]++,getPseudoContent(el,':after'));cov_22i8nvh4cs().s[101]++;return addSpaces(before+ret+after,el);};cov_22i8nvh4cs().s[102]++;const getNameTrimmed=function(el){cov_22i8nvh4cs().f[7]++;cov_22i8nvh4cs().s[103]++;return getName(el).replace(/[ \n\r\t\f]+/g,' ').replace(/^ /,'').replace(/ $/,'');};cov_22i8nvh4cs().s[104]++;const getDescription=function(el){cov_22i8nvh4cs().f[8]++;let ret=(cov_22i8nvh4cs().s[105]++,'');cov_22i8nvh4cs().s[106]++;if(el.matches('[aria-describedby]')){cov_22i8nvh4cs().b[57][0]++;const ids=(cov_22i8nvh4cs().s[107]++,el.getAttribute('aria-describedby').split(/\s+/));const strings=(cov_22i8nvh4cs().s[108]++,ids.map(id=>{cov_22i8nvh4cs().f[9]++;const label=(cov_22i8nvh4cs().s[109]++,document.getElementById(id));cov_22i8nvh4cs().s[110]++;return label?(cov_22i8nvh4cs().b[58][0]++,getName(label,true,true)):(cov_22i8nvh4cs().b[58][1]++,'');}));cov_22i8nvh4cs().s[111]++;ret=strings.join(' ');}else{cov_22i8nvh4cs().b[57][1]++;cov_22i8nvh4cs().s[112]++;if(el.matches('[aria-description]')){cov_22i8nvh4cs().b[59][0]++;cov_22i8nvh4cs().s[113]++;ret=el.getAttribute('aria-description');}else{cov_22i8nvh4cs().b[59][1]++;cov_22i8nvh4cs().s[114]++;if(el.matches('svg *')){cov_22i8nvh4cs().b[60][0]++;const svgDesc=(cov_22i8nvh4cs().s[115]++,el.querySelector('desc'));cov_22i8nvh4cs().s[116]++;if((cov_22i8nvh4cs().b[62][0]++,svgDesc)&&(cov_22i8nvh4cs().b[62][1]++,svgDesc.parentElement===el)){cov_22i8nvh4cs().b[61][0]++;cov_22i8nvh4cs().s[117]++;ret=svgDesc.textContent;}else{cov_22i8nvh4cs().b[61][1]++;}}else{cov_22i8nvh4cs().b[60][1]++;cov_22i8nvh4cs().s[118]++;if(el.title){cov_22i8nvh4cs().b[63][0]++;cov_22i8nvh4cs().s[119]++;ret=el.title;}else{cov_22i8nvh4cs().b[63][1]++;}}}}cov_22i8nvh4cs().s[120]++;if((cov_22i8nvh4cs().b[65][0]++,!ret.trim())&&(cov_22i8nvh4cs().b[65][1]++,el.matches('a'))){cov_22i8nvh4cs().b[64][0]++;cov_22i8nvh4cs().s[121]++;ret=(cov_22i8nvh4cs().b[66][0]++,el.getAttribute('xlink:title'))||(cov_22i8nvh4cs().b[66][1]++,'');}else{cov_22i8nvh4cs().b[64][1]++;}cov_22i8nvh4cs().s[122]++;ret=((cov_22i8nvh4cs().b[67][0]++,ret)||(cov_22i8nvh4cs().b[67][1]++,'')).trim().replace(/\s+/g,' ');cov_22i8nvh4cs().s[123]++;if(ret===getNameTrimmed(el)){cov_22i8nvh4cs().b[68][0]++;cov_22i8nvh4cs().s[124]++;ret='';}else{cov_22i8nvh4cs().b[68][1]++;}cov_22i8nvh4cs().s[125]++;return ret;};cov_22i8nvh4cs().s[126]++;module.exports={getName:getNameTrimmed,getDescription:getDescription};
 
 
 },{"./atree.js":5,"./constants.js":7,"./query.js":9}],9:[function(require,module,exports){
-var attrs = require('./attrs.js');
-var atree = require('./atree.js');
+const attrs = require('./attrs.js');
+const atree = require('./atree.js');
 
 
-var matches = function(el, selector) {
-	var actual;
-
+const matches = function(el, selector) {
 	if (selector.substr(0, 1) === ':') {
-		var attr = selector.substr(1);
+		const attr = selector.substr(1);
 		return attrs.getAttribute(el, attr);
 	} else if (selector.substr(0, 1) === '[') {
-		var match = /\[([a-z]+)="(.*)"\]/.exec(selector);
-		actual = attrs.getAttribute(el, match[1]);
-		var rawValue = match[2];
+		const match = /\[([a-z]+)="(.*)"\]/.exec(selector);
+		const actual = attrs.getAttribute(el, match[1]);
+		const rawValue = match[2];
 		return actual.toString() === rawValue;
 	} else {
 		return attrs.hasRole(el, selector.split(','));
 	}
 };
 
-var _querySelector = function(all) {
-	return function(root, role) {
-		var results = [];
+const _querySelector = function(all) {
+	return function(root, selector) {
+		const results = [];
 		try {
 			atree.walk(root, node => {
 				if (node.nodeType === node.ELEMENT_NODE) {
 					// FIXME: skip hidden elements
-					if (matches(node, role)) {
+					if (matches(node, selector)) {
 						results.push(node);
 						if (!all) {
 							throw 'StopIteration';
@@ -1223,7 +1365,7 @@ var _querySelector = function(all) {
 	};
 };
 
-var closest = function(el, selector) {
+const closest = function(el, selector) {
 	return atree.searchUp(el, candidate => {
 		if (candidate.nodeType === candidate.ELEMENT_NODE) {
 			return matches(candidate, selector);
@@ -1251,19 +1393,19 @@ https://github.com/whatsock/w3c-alternative-text-computation
 Distributed under the terms of the Open Source Initiative OSI - MIT License
 */
 
-(function() {
+(function () {
   var nameSpace = window.AccNamePrototypeNameSpace || window;
   if (nameSpace && typeof nameSpace === "string" && nameSpace.length) {
     window[nameSpace] = {};
     nameSpace = window[nameSpace];
   }
-  nameSpace.getAccNameVersion = "2.61";
+  nameSpace.getAccNameVersion = "2.62";
   // AccName Computation Prototype
-  nameSpace.getAccName = nameSpace.calcNames = function(
+  nameSpace.getAccName = nameSpace.calcNames = function (
     node,
     fnc,
     preventVisualARIASelfCSSRef,
-    overrides
+    overrides,
   ) {
     overrides = overrides || {};
     var docO = overrides.document || document;
@@ -1280,20 +1422,20 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
       // Separating Name and Description to prevent duplicate node references from suppressing one or the other from being fully computed.
       var nodes = {
         name: [],
-        desc: []
+        desc: [],
       };
       // Track aria-owns references to prevent duplicate parsing.
       var owns = [];
 
       // Recursively process a DOM node to compute an accessible name in accordance with the spec
-      var walk = function(
+      var walk = function (
         refNode,
         stop,
         skip,
         nodesToIgnoreValues,
         skipAbort,
         ownedBy,
-        skipTo
+        skipTo,
       ) {
         skipTo = skipTo || {};
         skipTo.tag = skipTo.tag || false;
@@ -1301,7 +1443,7 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
         skipTo.go = skipTo.go || false;
         var fullResult = {
           name: "",
-          title: ""
+          title: "",
         };
         var hasLabel = false;
 
@@ -1311,7 +1453,7 @@ Distributed under the terms of the Open Source Initiative OSI - MIT License
   https://lists.w3.org/Archives/Public/public-aria/2017Jun/0057.html
 Plus roles extended for the Role Parity project.
   */
-        var isException = function(node, refNode) {
+        var isException = function (node, refNode) {
           if (
             !refNode ||
             !node ||
@@ -1324,7 +1466,7 @@ Plus roles extended for the Role Parity project.
           var role = getRole(node);
           var tag = node.nodeName.toLowerCase();
 
-          var inList = function(node, list) {
+          var inList = function (node, list) {
             return (
               (role && list.roles.indexOf(role) >= 0) ||
               (!role && list.tags.indexOf(tag) >= 0)
@@ -1365,7 +1507,7 @@ Plus roles extended for the Role Parity project.
           }
         };
 
-        var inParent = function(node, parent) {
+        var inParent = function (node, parent) {
           var trackNodes = [];
           while (node) {
             if (
@@ -1391,7 +1533,7 @@ Plus roles extended for the Role Parity project.
         // Placeholder for storing CSS before and after pseudo element text values for the top level node
         var cssOP = {
           before: "",
-          after: ""
+          after: "",
         };
 
         if (
@@ -1422,10 +1564,10 @@ Plus roles extended for the Role Parity project.
         }
 
         // Recursively apply the same naming computation to all nodes within the referenced structure
-        var walkDOM = function(node, fn, refNode) {
+        var walkDOM = function (node, fn, refNode) {
           var res = {
             name: "",
-            title: ""
+            title: "",
           };
           if (!node) {
             return res;
@@ -1494,7 +1636,7 @@ Plus roles extended for the Role Parity project.
 
         fullResult = walkDOM(
           refNode,
-          function(node) {
+          function (node) {
             var i = 0;
             var element = null;
             var ids = [];
@@ -1503,7 +1645,7 @@ Plus roles extended for the Role Parity project.
               name: "",
               title: "",
               owns: "",
-              skip: false
+              skip: false,
             };
             var isEmbeddedNode = !!(
               node &&
@@ -1544,7 +1686,7 @@ Plus roles extended for the Role Parity project.
             // Placeholder for storing CSS before and after pseudo element text values for the current node container element
             var cssO = {
               before: "",
-              after: ""
+              after: "",
             };
 
             var parent = refNode === node ? node : node.parentNode;
@@ -1552,7 +1694,7 @@ Plus roles extended for the Role Parity project.
               !skipTo.tag &&
               !skipTo.role &&
               nodes[!ownedBy.computingDesc ? "name" : "desc"].indexOf(
-                parent
+                parent,
               ) === -1
             ) {
               nodes[!ownedBy.computingDesc ? "name" : "desc"].push(parent);
@@ -1666,8 +1808,8 @@ Plus roles extended for the Role Parity project.
                   parts.push(
                     walk(element, true, skip, [node], element === refNode, {
                       ref: ownedBy,
-                      top: element
-                    }).name
+                      top: element,
+                    }).name,
                   );
                 }
                 // Check for blank value, since whitespace chars alone are not valid as a name
@@ -1701,8 +1843,8 @@ Plus roles extended for the Role Parity project.
                       walk(element, true, false, [node], false, {
                         ref: ownedBy,
                         top: element,
-                        computingDesc: true
-                      }).name
+                        computingDesc: true,
+                      }).name,
                     );
                   }
                   // Check for blank value, since whitespace chars alone are not valid as a name
@@ -1775,8 +1917,8 @@ Plus roles extended for the Role Parity project.
                       lblName += addSpacing(
                         walk(labels[i], true, skip, [node], false, {
                           ref: ownedBy,
-                          top: labels[i]
-                        }).name
+                          top: labels[i],
+                        }).name,
                       );
                     }
                   }
@@ -1933,8 +2075,8 @@ Plus roles extended for the Role Parity project.
                     name = trim(
                       walk(fChild, stop, false, [], false, {
                         ref: ownedBy,
-                        top: fChild
-                      }).name
+                        top: fChild,
+                      }).name,
                     );
                   }
                   if (trim(name)) {
@@ -1958,8 +2100,8 @@ Plus roles extended for the Role Parity project.
                     name = trim(
                       walk(fChild, stop, false, [], false, {
                         ref: ownedBy,
-                        top: fChild
-                      }).name
+                        top: fChild,
+                      }).name,
                     );
                   }
                   if (trim(name)) {
@@ -1977,16 +2119,16 @@ Plus roles extended for the Role Parity project.
                     name = trim(
                       walk(svgT, true, false, [], false, {
                         ref: ownedBy,
-                        top: svgT
-                      }).name
+                        top: svgT,
+                      }).name,
                     );
                   }
                   if (!hasDesc && svgD) {
                     var dE = trim(
                       walk(svgD, true, false, [], false, {
                         ref: ownedBy,
-                        top: svgD
-                      }).name
+                        top: svgD,
+                      }).name,
                     );
                     if (trim(dE)) {
                       result.desc = dE;
@@ -2031,7 +2173,7 @@ Plus roles extended for the Role Parity project.
                       false,
                       false,
                       false,
-                      true
+                      true,
                     );
                   } else if (
                     isNativeFormField &&
@@ -2046,7 +2188,7 @@ Plus roles extended for the Role Parity project.
                       false,
                       false,
                       true,
-                      true
+                      true,
                     );
                   }
 
@@ -2087,11 +2229,11 @@ Plus roles extended for the Role Parity project.
                           "tel",
                           "text",
                           "url",
-                          "email"
+                          "email",
                         ].indexOf(nType) !== -1)))) &&
                 trim(
                   node.getAttribute("placeholder") ||
-                    node.getAttribute("aria-placeholder")
+                    node.getAttribute("aria-placeholder"),
                 );
 
               if (placeholder) {
@@ -2107,8 +2249,8 @@ Plus roles extended for the Role Parity project.
                 name = trim(
                   walk(node, stop, false, [], false, {
                     ref: ownedBy,
-                    top: node
-                  }).name
+                    top: node,
+                  }).name,
                 );
                 if (trim(name)) {
                   skip = true;
@@ -2133,11 +2275,11 @@ Plus roles extended for the Role Parity project.
                     oBy[ids[i]] = {
                       refNode: refNode,
                       node: node,
-                      target: element
+                      target: element,
                     };
                     if (!isParentHidden(element, docO.body, true)) {
                       parts.push(
-                        walk(element, true, skip, [], false, oBy).name
+                        walk(element, true, skip, [], false, oBy).name,
                       );
                     }
                   }
@@ -2168,7 +2310,7 @@ Plus roles extended for the Role Parity project.
 
             return result;
           },
-          refNode
+          refNode,
         );
 
         if (!hasLabel) {
@@ -2180,7 +2322,7 @@ Plus roles extended for the Role Parity project.
         return fullResult;
       };
 
-      var firstChild = function(e, t, r, s) {
+      var firstChild = function (e, t, r, s) {
         e = e ? e.firstChild : null;
         while (e) {
           var tr = getRole(e) || false;
@@ -2199,7 +2341,7 @@ Plus roles extended for the Role Parity project.
         return e;
       };
 
-      var lastChild = function(e, t, r, s) {
+      var lastChild = function (e, t, r, s) {
         e = e ? e.lastChild : null;
         while (e) {
           var tr = getRole(e) || false;
@@ -2218,7 +2360,7 @@ Plus roles extended for the Role Parity project.
         return e;
       };
 
-      var getRole = function(node) {
+      var getRole = function (node) {
         var role =
           node && node.getAttribute
             ? (node.getAttribute("role") || "").toLowerCase()
@@ -2226,7 +2368,7 @@ Plus roles extended for the Role Parity project.
         if (!trim(role)) {
           return "";
         }
-        var inList = function(list) {
+        var inList = function (list) {
           return trim(role).length > 0 && list.roles.indexOf(role) >= 0;
         };
         var roles = role.split(/\s+/);
@@ -2245,7 +2387,7 @@ Plus roles extended for the Role Parity project.
         return "";
       };
 
-      var isFocusable = function(node) {
+      var isFocusable = function (node) {
         var nodeName = node.nodeName.toLowerCase();
         if (node.getAttribute("tabindex")) {
           return true;
@@ -2285,7 +2427,7 @@ Plus roles extended for the Role Parity project.
           "columnheader",
           "rowheader",
           "tooltip",
-          "heading"
+          "heading",
         ],
         tags: [
           "a",
@@ -2302,8 +2444,8 @@ Plus roles extended for the Role Parity project.
           "option",
           "tr",
           "td",
-          "th"
-        ]
+          "th",
+        ],
       };
       // Never include name from content when current node matches list2
       // The rowgroup role was added to prevent 'name from content' in accordance with relevant ARIA 1.1 spec changes.
@@ -2322,6 +2464,7 @@ Plus roles extended for the Role Parity project.
           "form",
           "main",
           "navigation",
+          "progressbar",
           "region",
           "search",
           "article",
@@ -2347,7 +2490,7 @@ Plus roles extended for the Role Parity project.
           "treegrid",
           "separator",
           "rowgroup",
-          "group"
+          "group",
         ],
         tags: [
           "article",
@@ -2374,8 +2517,9 @@ Plus roles extended for the Role Parity project.
           "thead",
           "tbody",
           "tfoot",
-          "fieldset"
-        ]
+          "fieldset",
+          "progress",
+        ],
       };
       // As an override of list2, conditionally include name from content if current node is focusable, or if the current node matches list3 while the referenced parent node (root node) matches list1.
       var list3 = {
@@ -2387,9 +2531,9 @@ Plus roles extended for the Role Parity project.
           "note",
           "status",
           "table",
-          "contentinfo"
+          "contentinfo",
         ],
-        tags: ["dl", "ul", "ol", "dd", "details", "output", "table"]
+        tags: ["dl", "ul", "ol", "dd", "details", "output", "table"],
       };
       // Subsequent roles added as part of the Role Parity project for ARIA 1.2.
       // Tracks roles that don't specifically belong within the prior process lists.
@@ -2405,7 +2549,7 @@ Plus roles extended for the Role Parity project.
           "paragraph",
           "strong",
           "subscript",
-          "superscript"
+          "superscript",
         ],
         tags: [
           "legend",
@@ -2420,8 +2564,8 @@ Plus roles extended for the Role Parity project.
           "p",
           "strong",
           "sub",
-          "sup"
-        ]
+          "sup",
+        ],
       };
 
       var genericElements = ["div", "span"];
@@ -2437,7 +2581,7 @@ Plus roles extended for the Role Parity project.
         "presentation",
         "strong",
         "subscript",
-        "superscript"
+        "superscript",
       ];
       var nameProhibitedElements = [
         "caption",
@@ -2451,18 +2595,29 @@ Plus roles extended for the Role Parity project.
         "p",
         "strong",
         "sub",
-        "sup"
+        "sup",
       ];
 
-      var nativeFormFields = ["button", "input", "select", "textarea"];
-      var rangeWidgetRoles = ["scrollbar", "slider", "spinbutton"];
+      var nativeFormFields = [
+        "button",
+        "input",
+        "progress",
+        "select",
+        "textarea",
+      ];
+      var rangeWidgetRoles = [
+        "scrollbar",
+        "slider",
+        "spinbutton",
+        "progressbar",
+      ];
       var editWidgetRoles = ["searchbox", "textbox"];
       var selectWidgetRoles = [
         "grid",
         "listbox",
         "tablist",
         "tree",
-        "treegrid"
+        "treegrid",
       ];
       var otherWidgetRoles = [
         "button",
@@ -2478,11 +2633,11 @@ Plus roles extended for the Role Parity project.
         "radio",
         "tab",
         "treeitem",
-        "gridcell"
+        "gridcell",
       ];
       var presentationRoles = ["presentation", "none"];
 
-      var hasGlobalAttr = function(node) {
+      var hasGlobalAttr = function (node) {
         var globalPropsAndStates = [
           "labelledby",
           "label",
@@ -2501,7 +2656,7 @@ Plus roles extended for the Role Parity project.
           "keyshortcuts",
           "live",
           "owns",
-          "roledescription"
+          "roledescription",
         ];
         for (var i = 0; i < globalPropsAndStates.length; i++) {
           var a = trim(node.getAttribute("aria-" + globalPropsAndStates[i]));
@@ -2514,8 +2669,8 @@ Plus roles extended for the Role Parity project.
 
       var isHidden =
         overrides.isHidden ||
-        function(node, refNode) {
-          var hidden = function(node) {
+        function (node, refNode) {
+          var hidden = function (node) {
             if (!node || node.nodeType !== 1 || node === refNode) {
               return false;
             }
@@ -2533,7 +2688,7 @@ Plus roles extended for the Role Parity project.
           return hidden(node);
         };
 
-      var isParentHidden = function(node, refNode, skipOwned, skipCurrent) {
+      var isParentHidden = function (node, refNode, skipOwned, skipCurrent) {
         while (node && node !== refNode) {
           if (!skipCurrent && node.nodeType === 1 && isHidden(node, refNode)) {
             return true;
@@ -2545,7 +2700,7 @@ Plus roles extended for the Role Parity project.
 
       var getStyleObject =
         overrides.getStyleObject ||
-        function(node) {
+        function (node) {
           var style = {};
           if (docO.defaultView && docO.defaultView.getComputedStyle) {
             style = docO.defaultView.getComputedStyle(node, "");
@@ -2555,7 +2710,7 @@ Plus roles extended for the Role Parity project.
           return style;
         };
 
-      var cleanCSSText = function(node, text) {
+      var cleanCSSText = function (node, text) {
         var s = text;
         if (s.indexOf("attr(") !== -1) {
           var m = s.match(/attr\((.|\n|\r\n)*?\)/g);
@@ -2569,7 +2724,7 @@ Plus roles extended for the Role Parity project.
         return s;
       };
 
-      var isBlockLevelElement = function(node, cssObj) {
+      var isBlockLevelElement = function (node, cssObj) {
         var styleObject = cssObj || getStyleObject(node);
         for (var prop in blockStyles) {
           var values = blockStyles[prop];
@@ -2578,7 +2733,7 @@ Plus roles extended for the Role Parity project.
               styleObject[prop] &&
               ((values[i].indexOf("!") === 0 &&
                 [values[i].slice(1), "inherit", "initial", "unset"].indexOf(
-                  styleObject[prop]
+                  styleObject[prop],
                 ) === -1) ||
                 styleObject[prop].indexOf(values[i]) === 0)
             ) {
@@ -2609,7 +2764,7 @@ Plus roles extended for the Role Parity project.
         "column-count": ["!auto"],
         "column-width": ["!auto"],
         "column-span": ["all"],
-        contain: ["layout", "content", "strict"]
+        contain: ["layout", "content", "strict"],
       };
 
       // HTML5 Block Elements indexed from:
@@ -2658,16 +2813,16 @@ Plus roles extended for the Role Parity project.
         "th",
         "tr",
         "ul",
-        "video"
+        "video",
       ];
 
-      var getObjectValue = function(
+      var getObjectValue = function (
         role,
         node,
         isRange,
         isEdit,
         isSelect,
-        isNative
+        isNative,
       ) {
         var val = "";
         var bypass = false;
@@ -2694,7 +2849,7 @@ Plus roles extended for the Role Parity project.
             node,
             node.querySelectorAll('*[aria-selected="true"]'),
             false,
-            childRoles
+            childRoles,
           );
           bypass = true;
         }
@@ -2707,7 +2862,7 @@ Plus roles extended for the Role Parity project.
             val = joinSelectedParts(
               node,
               node.querySelectorAll("option[selected]"),
-              true
+              true,
             );
           } else {
             val = node.value;
@@ -2717,11 +2872,11 @@ Plus roles extended for the Role Parity project.
         return val;
       };
 
-      var addSpacing = function(s) {
+      var addSpacing = function (s) {
         return trim(s).length ? " " + s + " " : " ";
       };
 
-      var joinSelectedParts = function(node, nOA, isNative, childRoles) {
+      var joinSelectedParts = function (node, nOA, isNative, childRoles) {
         if (!nOA || !nOA.length) {
           return "";
         }
@@ -2733,7 +2888,7 @@ Plus roles extended for the Role Parity project.
             parts.push(
               isNative
                 ? getText(nOA[i])
-                : walk(nOA[i], true, false, [], false, { top: nOA[i] }).name
+                : walk(nOA[i], true, false, [], false, { top: nOA[i] }).name,
             );
           }
         }
@@ -2742,7 +2897,7 @@ Plus roles extended for the Role Parity project.
 
       var getPseudoElStyleObj =
         overrides.getPseudoElStyleObj ||
-        function(node, position) {
+        function (node, position) {
           var styleObj = {};
           for (var prop in blockStyles) {
             styleObj[prop] = docO.defaultView
@@ -2756,7 +2911,7 @@ Plus roles extended for the Role Parity project.
           return styleObj;
         };
 
-      var getText = function(node, position) {
+      var getText = function (node, position) {
         if (!position && node.nodeType === 1) {
           return node.innerText || node.textContent || "";
         }
@@ -2777,7 +2932,7 @@ Plus roles extended for the Role Parity project.
 
       var getCSSText =
         overrides.getCSSText ||
-        function(node, refNode) {
+        function (node, refNode) {
           if (
             (node && node.nodeType !== 1) ||
             node === refNode ||
@@ -2787,18 +2942,18 @@ Plus roles extended for the Role Parity project.
               "textarea",
               "img",
               "iframe",
-              "optgroup"
+              "optgroup",
             ].indexOf(node.nodeName.toLowerCase()) !== -1
           ) {
             return { before: "", after: "" };
           }
           return {
             before: cleanCSSText(node, getText(node, ":before")),
-            after: cleanCSSText(node, getText(node, ":after"))
+            after: cleanCSSText(node, getText(node, ":after")),
           };
         };
 
-      var getParent = function(node, nTag, nRole, noRole) {
+      var getParent = function (node, nTag, nRole, noRole) {
         noRole = !!noRole;
         while (node) {
           node = node.parentNode;
@@ -2816,11 +2971,11 @@ Plus roles extended for the Role Parity project.
         return {};
       };
 
-      var hasParentLabelOrHidden = function(
+      var hasParentLabelOrHidden = function (
         node,
         refNode,
         ownedBy,
-        ignoreHidden
+        ignoreHidden,
       ) {
         var trackNodes = [];
         while (node && node !== refNode) {
@@ -2853,7 +3008,7 @@ Plus roles extended for the Role Parity project.
           node,
           docO.body,
           true,
-          !!(node && node.nodeName && node.nodeName.toLowerCase() === "area")
+          !!(node && node.nodeName && node.nodeName.toLowerCase() === "area"),
         )
       ) {
         return props;
@@ -2878,7 +3033,7 @@ Plus roles extended for the Role Parity project.
       // Clear track variables
       nodes = {
         name: [],
-        desc: []
+        desc: [],
       };
       owns = [];
     } catch (e) {
@@ -2894,7 +3049,7 @@ Plus roles extended for the Role Parity project.
     }
   };
 
-  var trim = function(str) {
+  var trim = function (str) {
     if (typeof str !== "string") {
       return "";
     }
@@ -2903,7 +3058,7 @@ Plus roles extended for the Role Parity project.
 
   // Customize returned string for testable statements
 
-  nameSpace.getAccNameMsg = nameSpace.getNames = function(node, overrides) {
+  nameSpace.getAccNameMsg = nameSpace.getNames = function (node, overrides) {
     var props = nameSpace.getAccName(node, null, false, overrides);
     if (props.error) {
       return (
@@ -2929,7 +3084,7 @@ Plus roles extended for the Role Parity project.
   if (typeof module === "object" && module.exports) {
     module.exports = {
       getNames: nameSpace.getNames,
-      calcNames: nameSpace.calcNames
+      calcNames: nameSpace.calcNames,
     };
   }
 })();
