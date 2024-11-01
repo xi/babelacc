@@ -7,7 +7,6 @@
     "aria-api": "0.7.0",
     "axe-core": "4.9.1",
     "dom-accessibility-api": "0.6.3",
-    "nyc": "^15.1.0",
     "w3c-alternative-text-computation": "github:WhatSock/w3c-alternative-text-computation#4b59f9877c9ae6282408edb150f64003a59fdb95"
   },
   "repository": {
