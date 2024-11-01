@@ -4953,1331 +4953,1303 @@ axs.properties.getNativelySupportedAttributes = function(element) {
 })();
 
 },{}],9:[function(require,module,exports){
-var query = require('./lib/query.js');
-var name = require('./lib/name.js');
-var atree = require('./lib/atree.js');
+(function (global, factory) {
+	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
+	typeof define === 'function' && define.amd ? define(['exports'], factory) :
+	(global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.aria = {}));
+})(this, (function (exports) { 'use strict';
 
-module.exports = {
-	getRole: query.getRole,
-	getAttribute: query.getAttribute,
-	getName: name.getName,
-	getDescription: name.getDescription,
+	// https://www.w3.org/TR/wai-aria/#state_prop_def
+	const attributes = {
+		'activedescendant': 'id',
+		'atomic': 'bool',
+		'autocomplete': 'token',
+		'braillelabel': 'string',
+		'brailleroledescription': 'string',
+		'busy': 'bool',
+		'checked': 'tristate',
+		'colcount': 'int',
+		'colindex': 'int',
+		'colindextext': 'string',
+		'colspan': 'int',
+		'controls': 'id-list',
+		'current': 'token',
+		'describedby': 'id-list',
+		'description': 'string',
+		'details': 'id',
+		'disabled': 'bool',
+		'dropeffect': 'token-list',
+		'errormessage': 'id',
+		'expanded': 'bool-undefined',
+		'flowto': 'id-list',
+		'grabbed': 'bool-undefined',
+		'haspopup': 'token',
+		'hidden': 'bool-undefined',
+		'invalid': 'token',
+		'keyshortcuts': 'string',
+		'label': 'string',
+		'labelledby': 'id-list',
+		'level': 'int',
+		'live': 'token',
+		'modal': 'bool',
+		'multiline': 'bool',
+		'multiselectable': 'bool',
+		'orientation': 'token',
+		'owns': 'id-list',
+		'placeholder': 'string',
+		'posinset': 'int',
+		'pressed': 'tristate',
+		'readonly': 'bool',
+		'relevant': 'token-list',
+		'required': 'bool',
+		'roledescription': 'string',
+		'rowcount': 'int',
+		'rowindex': 'int',
+		'rowindextext': 'string',
+		'rowspan': 'int',
+		'selected': 'bool-undefined',
+		'setsize': 'int',
+		'sort': 'token',
+		'valuemax': 'number',
+		'valuemin': 'number',
+		'valuenow': 'number',
+		'valuetext': 'string',
+	};
 
-	matches: query.matches,
-	querySelector: query.querySelector,
-	querySelectorAll: query.querySelectorAll,
-	closest: query.closest,
+	const attributeStrongMapping = {
+		'disabled': 'disabled',
+		'placeholder': 'placeholder',
+		'readonly': 'readOnly',
+		'required': 'required',
+	};
 
-	getParentNode: atree.getParentNode,
-	getChildNodes: atree.getChildNodes,
-};
+	const attributeWeakMapping = {
+		'checked': 'checked',
+		'colspan': 'colSpan',
+		'expanded': 'open',
+		'multiselectable': 'multiple',
+		'rowspan': 'rowSpan',
+		'selected': 'selected',
+	};
 
-},{"./lib/atree.js":10,"./lib/name.js":13,"./lib/query.js":14}],10:[function(require,module,exports){
-const attrs = require('./attrs');
+	// https://www.w3.org/TR/html/dom.html#sectioning-content-2
+	const scoped = ['article *', 'aside *', 'nav *', 'section *'].join(',');
 
-const _getOwner = function(node, owners) {
-	if (node.nodeType === node.ELEMENT_NODE && node.id) {
-		const selector = '[aria-owns~="' + CSS.escape(node.id) + '"]';
-		if (owners) {
-			for (const owner of owners) {
-				if (owner.matches(selector)) {
-					return owner;
+	const svgSelectors = function(selector) {
+		return [
+			// `${selector}:has(> title:not(:empty))`,
+			// `${selector}:has(> desc:not(:empty))`,
+			`${selector}[aria-label]`,
+			`${selector}[aria-roledescription]`,
+			`${selector}[aria-labelledby]`,
+			`${selector}[aria-describedby]`,
+			`${selector}[tabindex]`,
+			`${selector}[role]`,
+		];
+	};
+
+	// https://www.w3.org/TR/html-aam-1.0/#html-element-role-mappings
+	// https://www.w3.org/TR/wai-aria/roles
+	const roles = {
+		alert: {
+			childRoles: ['alertdialog'],
+			defaults: {
+				'live': 'assertive',
+				'atomic': true,
+			},
+		},
+		alertdialog: {},
+		application: {},
+		article: {
+			selectors: ['article'],
+			childRoles: ['comment'],
+		},
+		banner: {
+			selectors: [`header:not(main *, ${scoped})`],
+		},
+		blockquote: {
+			selectors: ['blockquote'],
+		},
+		button: {
+			selectors: [
+				'button',
+				'input[type="button"]',
+				'input[type="image"]',
+				'input[type="reset"]',
+				'input[type="submit"]',
+				'summary',
+			],
+			nameFromContents: true,
+		},
+		caption: {
+			selectors: ['caption', 'figcaption'],
+		},
+		cell: {
+			selectors: ['td', 'td ~ th:not([scope])'],
+			childRoles: ['columnheader', 'gridcell', 'rowheader'],
+			nameFromContents: true,
+		},
+		checkbox: {
+			selectors: ['input[type="checkbox"]'],
+			childRoles: ['switch'],
+			nameFromContents: true,
+			defaults: {
+				'checked': 'false',
+			},
+		},
+		code: {
+			selectors: ['code'],
+		},
+		columnheader: {
+			selectors: ['th[scope="col"]'],
+			nameFromContents: true,
+		},
+		combobox: {
+			selectors: [
+				'input:not([type])[list]',
+				'input[type="email"][list]',
+				'input[type="search"][list]',
+				'input[type="tel"][list]',
+				'input[type="text"][list]',
+				'input[type="url"][list]',
+				'select:not([size]):not([multiple])',
+				'select[size="0"]:not([multiple])',
+				'select[size="1"]:not([multiple])',
+			],
+			defaults: {
+				'expanded': false,
+				'haspopup': 'listbox',
+			},
+		},
+		command: {
+			abstract: true,
+			childRoles: ['button', 'link', 'menuitem'],
+		},
+		comment: {
+			nameFromContents: true,
+		},
+		complementary: {
+			selectors: [
+				`aside:not(${scoped})`,
+				'aside[aria-label]',
+				'aside[aria-labelledby]',
+				'aside[title]',
+			],
+		},
+		composite: {
+			abstract: true,
+			childRoles: ['grid', 'select', 'spinbutton', 'tablist'],
+		},
+		contentinfo: {
+			selectors: [`footer:not(main *, ${scoped})`],
+		},
+		definition: {
+			selectors: ['dd'],
+		},
+		deletion: {
+			selectors: ['del', 's'],
+		},
+		dialog: {
+			selectors: ['dialog'],
+			childRoles: ['alertdialog'],
+		},
+		'doc-abstract': {},
+		'doc-acknowledgments': {},
+		'doc-afterword': {},
+		'doc-appendix': {},
+		'doc-backlink': {
+			nameFromContents: true,
+		},
+		'doc-biblioentry': {},
+		'doc-bibliography': {},
+		'doc-biblioref': {
+			nameFromContents: true,
+		},
+		'doc-chapter': {},
+		'doc-colophon': {},
+		'doc-conclusion': {},
+		'doc-cover': {},
+		'doc-credit': {},
+		'doc-credits': {},
+		'doc-dedication': {},
+		'doc-endnote': {},
+		'doc-endnotes': {},
+		'doc-epilogue': {},
+		'doc-epigraph': {},
+		'doc-errata': {},
+		'doc-example': {},
+		'doc-footnote': {},
+		'doc-foreword': {},
+		'doc-glossary': {},
+		'doc-glossref': {
+			nameFromContents: true,
+		},
+		'doc-index': {},
+		'doc-introduction': {},
+		'doc-noteref': {
+			nameFromContents: true,
+		},
+		'doc-notice': {},
+		'doc-pagebreak': {
+			nameFromContents: true,
+		},
+		'doc-pagefooter': {},
+		'doc-pageheader': {},
+		'doc-pagelist': {},
+		'doc-part': {},
+		'doc-preface': {},
+		'doc-prologue': {},
+		'doc-pullquote': {},
+		'doc-qna': {},
+		'doc-subtitle': {
+			nameFromContents: true,
+		},
+		'doc-tip': {},
+		'doc-toc': {},
+		document: {
+			selectors: ['html'],
+			childRoles: ['article', 'graphics-document'],
+		},
+		emphasis: {
+			selectors: ['em'],
+		},
+		feed: {},
+		figure: {
+			selectors: ['figure'],
+			childRoles: ['doc-example'],
+		},
+		form: {
+			selectors: ['form[aria-label]', 'form[aria-labelledby]', 'form[title]'],
+		},
+		generic: {
+			selectors: [
+				'a:not([*|href])',
+				'area:not([*|href])',
+				`aside:not(${scoped}):not([aria-label]):not([aria-labelledby]):not([title])`,
+				'b',
+				'bdi',
+				'bdo',
+				'body',
+				'data',
+				'div',
+				// footer scoped
+				// header scoped
+				'i',
+				'li:not(ul > li):not(ol > li)',
+				'pre',
+				'q',
+				'samp',
+				'section:not([aria-label]):not([aria-labelledby]):not([title])',
+				'small',
+				'span',
+				'u',
+			],
+		},
+		'graphics-document': {
+			selectors: ['svg'],
+		},
+		'graphics-object': {
+			selectors: [
+				...svgSelectors('symbol'),
+				...svgSelectors('use'),
+			],
+		},
+		'graphics-symbol': {
+			selectors: [
+				...svgSelectors('circle'),
+				...svgSelectors('ellipse'),
+				...svgSelectors('line'),
+				...svgSelectors('path'),
+				...svgSelectors('polygon'),
+				...svgSelectors('polyline'),
+				...svgSelectors('rect'),
+			],
+		},
+		grid: {
+			childRoles: ['treegrid'],
+		},
+		gridcell: {
+			childRoles: ['columnheader', 'rowheader'],
+			nameFromContents: true,
+		},
+		group: {
+			selectors: [
+				'address',
+				'details',
+				'fieldset',
+				'hgroup',
+				'optgroup',
+				...svgSelectors('foreignObject'),
+				...svgSelectors('g'),
+				'text',
+				...svgSelectors('textPath'),
+				...svgSelectors('tspan'),
+			],
+			childRoles: ['row', 'select', 'toolbar', 'graphics-object'],
+		},
+		heading: {
+			selectors: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+			nameFromContents: true,
+			defaults: {
+				'level': 2,
+			},
+		},
+		image: {
+			selectors: [
+				'img:not([alt=""])',
+				'graphics-symbol',
+				...svgSelectors('image'),
+				...svgSelectors('mesh'),
+			],
+			childRoles: ['doc-cover'],
+		},
+		input: {
+			abstract: true,
+			childRoles: [
+				'checkbox',
+				'combobox',
+				'option',
+				'radio',
+				'slider',
+				'spinbutton',
+				'textbox',
+			],
+		},
+		insertion: {
+			selectors: ['ins'],
+		},
+		landmark: {
+			abstract: true,
+			childRoles: [
+				'banner',
+				'complementary',
+				'contentinfo',
+				'doc-acknowledgments',
+				'doc-afterword',
+				'doc-appendix',
+				'doc-bibliography',
+				'doc-chapter',
+				'doc-conclusion',
+				'doc-credits',
+				'doc-endnotes',
+				'doc-epilogue',
+				'doc-errata',
+				'doc-foreword',
+				'doc-glossary',
+				'doc-introduction',
+				'doc-part',
+				'doc-preface',
+				'doc-prologue',
+				'form',
+				'main',
+				'navigation',
+				'region',
+				'search',
+			],
+		},
+		link: {
+			selectors: ['a[*|href]', 'area[*|href]'],
+			childRoles: ['doc-backlink', 'doc-biblioref', 'doc-glossref', 'doc-noteref'],
+			nameFromContents: true,
+		},
+		list: {
+			selectors: ['dl', 'ol', 'ul', 'menu'],
+			childRoles: ['feed'],
+		},
+		listbox: {
+			selectors: [
+				'datalist',
+				'select[multiple]',
+				'select[size]:not([size="0"]):not([size="1"])',
+			],
+			defaults: {
+				'orientation': 'vertical',
+			},
+		},
+		listitem: {
+			selectors: ['ol > li', 'ul > li'],
+			childRoles: ['doc-biblioentry', 'doc-endnote', 'treeitem'],
+		},
+		log: {
+			defaults: {
+				'live': 'polite',
+			},
+		},
+		main: {
+			selectors: ['main'],
+		},
+		mark: {
+			selectors: ['mark'],
+		},
+		marquee: {},
+		math: {
+			selectors: ['math'],
+		},
+		meter: {
+			selectors: ['meter'],
+			defaults: {
+				'valuemin': 0,
+				'valuemax': 100,
+			},
+		},
+		menu: {
+			childRoles: ['menubar'],
+			defaults: {
+				'orientation': 'vertical',
+			},
+		},
+		menubar: {
+			defaults: {
+				'orientation': 'horizontal',
+			},
+		},
+		menuitem: {
+			childRoles: ['menuitemcheckbox', 'menuitemradio'],
+			nameFromContents: true,
+		},
+		menuitemcheckbox: {
+			nameFromContents: true,
+			defaults: {
+				'checked': 'false',
+			},
+		},
+		menuitemradio: {
+			nameFromContents: true,
+			defaults: {
+				'checked': 'false',
+			},
+		},
+		navigation: {
+			selectors: ['nav'],
+			childRoles: ['doc-index', 'doc-pagelist', 'doc-toc'],
+		},
+		none: {
+			selectors: ['img[alt=""]'],
+		},
+		note: {
+			childRoles: ['doc-notice', 'doc-tip'],
+		},
+		option: {
+			selectors: ['option'],
+			childRoles: ['treeitem'],
+			nameFromContents: true,
+			defaults: {
+				'selected': 'false',
+			},
+		},
+		paragraph: {
+			selectors: ['p'],
+		},
+		progressbar: {
+			selectors: ['progress'],
+			defaults: {
+				'valuemin': 0,
+				'valuemax': 100,
+			},
+		},
+		radio: {
+			selectors: ['input[type="radio"]'],
+			childRoles: ['menuitemradio'],
+			nameFromContents: true,
+			defaults: {
+				'checked': 'false',
+			},
+		},
+		radiogroup: {},
+		range: {
+			abstract: true,
+			childRoles: ['meter', 'progressbar', 'scrollbar', 'slider', 'spinbutton'],
+		},
+		region: {
+			selectors: ['section[aria-label]', 'section[aria-labelledby]', 'section[title]'],
+		},
+		roletype: {
+			abstract: true,
+			childRoles: ['structure', 'widget', 'window'],
+		},
+		row: {
+			selectors: ['tr'],
+			nameFromContents: true,
+		},
+		rowgroup: {
+			selectors: ['tbody', 'thead', 'tfoot'],
+		},
+		rowheader: {
+			selectors: ['th[scope="row"]', 'th:not([scope]):not(td ~ th)'],
+			nameFromContents: true,
+		},
+		scrollbar: {
+			defaults: {
+				'orientation': 'vertical',
+				'valuemin': 0,
+				'valuemax': 100,
+			},
+		},
+		search: {
+			selectors: ['search'],
+		},
+		searchbox: {
+			selectors: ['input[type="search"]:not([list])'],
+		},
+		section: {
+			abstract: true,
+			childRoles: [
+				'alert',
+				'blockquote',
+				'caption',
+				'cell',
+				'code',
+				'definition',
+				'deletion',
+				'doc-abstract',
+				'doc-colophon',
+				'doc-credit',
+				'doc-dedication',
+				'doc-epigraph',
+				'doc-footnote',
+				'doc-pagefooter',
+				'doc-pageheader',
+				'doc-pullquote',
+				'doc-qna',
+				'emphasis',
+				'figure',
+				'group',
+				'image',
+				'insertion',
+				'landmark',
+				'list',
+				'listitem',
+				'log',
+				'mark',
+				'marquee',
+				'math',
+				'note',
+				'paragraph',
+				'status',
+				'strong',
+				'subscript',
+				'suggestion',
+				'superscript',
+				'table',
+				'tabpanel',
+				'term',
+				'time',
+				'tooltip',
+			],
+		},
+		sectionhead: {
+			abstract: true,
+			childRoles: [
+				'columnheader',
+				'doc-subtitle',
+				'heading',
+				'rowheader',
+				'tab',
+			],
+			nameFromContents: true,
+		},
+		select: {
+			abstract: true,
+			childRoles: ['listbox', 'menu', 'radiogroup', 'tree'],
+		},
+		separator: {
+			// assume not focussable because <hr> is not
+			selectors: ['hr'],
+			childRoles: ['doc-pagebreak'],
+			defaults: {
+				'orientation': 'horizontal',
+				'valuemin': 0,
+				'valuemax': 100,
+			},
+		},
+		slider: {
+			selectors: ['input[type="range"]'],
+			defaults: {
+				'orientation': 'horizontal',
+				'valuemin': 0,
+				'valuemax': 100,
+				// FIXME: halfway between actual valuemin and valuemax
+				'valuenow': 50,
+			},
+		},
+		spinbutton: {
+			selectors: ['input[type="number"]'],
+			defaults: {
+				// FIXME: no valuemin/valuemax/valuenow
+			},
+		},
+		status: {
+			selectors: ['output'],
+			childRoles: ['timer'],
+			defaults: {
+				'live': 'polite',
+				'atomic': true,
+			},
+		},
+		strong: {
+			selectors: ['strong'],
+		},
+		structure: {
+			abstract: true,
+			childRoles: [
+				'application',
+				'document',
+				'none',
+				'generic',
+				'range',
+				'rowgroup',
+				'section',
+				'sectionhead',
+				'separator',
+			],
+		},
+		suggestion: {},
+		subscript: {
+			selectors: ['sub'],
+		},
+		superscript: {
+			selectors: ['sup'],
+		},
+		switch: {
+			nameFromContents: true,
+			defaults: {
+				'checked': false,
+			},
+		},
+		tab: {
+			nameFromContents: true,
+			defaults: {
+				'selected': false,
+			},
+		},
+		table: {
+			selectors: ['table'],
+			childRoles: ['grid'],
+		},
+		tablist: {
+			defaults: {
+				'orientation': 'horizontal',
+			},
+		},
+		tabpanel: {},
+		term: {
+			selectors: ['dfn', 'dt'],
+		},
+		textbox: {
+			selectors: [
+				'input:not([type]):not([list])',
+				'input[type="email"]:not([list])',
+				'input[type="tel"]:not([list])',
+				'input[type="text"]:not([list])',
+				'input[type="url"]:not([list])',
+				'textarea',
+			],
+			childRoles: ['searchbox'],
+		},
+		time: {
+			selectors: ['time'],
+		},
+		timer: {
+			defaults: {
+				'live': 'off',
+			},
+		},
+		toolbar: {
+			defaults: {
+				'orientation': 'horizontal',
+			},
+		},
+		tooltip: {
+			nameFromContents: true,
+		},
+		tree: {
+			childRoles: ['treegrid'],
+			defaults: {
+				'orientation': 'vertical',
+			},
+		},
+		treegrid: {},
+		treeitem: {
+			nameFromContents: true,
+		},
+		widget: {
+			abstract: true,
+			childRoles: [
+				'command',
+				'composite',
+				'gridcell',
+				'input',
+				'progressbar',
+				'row',
+				'scrollbar',
+				'separator',
+				'tab',
+			],
+		},
+		window: {
+			abstract: true,
+			childRoles: ['dialog'],
+		},
+	};
+
+	const getSubRoles = function(role) {
+		const children = (roles[role]).childRoles || [];
+		const descendents = children.map(getSubRoles);
+
+		const result = [role];
+
+		descendents.forEach(list => {
+			list.forEach(r => {
+				if (!result.includes(r)) {
+					result.push(r);
+				}
+			});
+		});
+
+		return result;
+	};
+
+	const attrsWithDefaults = [];
+
+	for (const role in roles) {
+		roles[role].subRoles = getSubRoles(role);
+		for (const key in roles[role].defaults) {
+			if (!attrsWithDefaults.includes(key)) {
+				attrsWithDefaults.push(key);
+			}
+		}
+	}
+
+	const aliases = {
+		'presentation': 'none',
+		'directory': 'list',
+		'img': 'image',
+	};
+
+	const nameFromDescendant = {
+		'figure': 'figcaption',
+		'table': 'caption',
+		'fieldset': 'legend',
+	};
+
+	const nameDefaults = {
+		'input[type="submit"]': 'Submit',
+		'input[type="reset"]': 'Reset',
+		'summary': 'Details',
+	};
+
+	var unique = function(arr) {
+		return arr.filter((a, i) => arr.indexOf(a) === i);
+	};
+
+	var flatten = function(arr) {
+		return [].concat.apply([], arr);
+	};
+
+	var normalizeRoles = function(roles$1, includeAbstract) {
+		return unique(roles$1
+			.map(r => aliases[r] || r)
+			.filter(r => roles[r])
+			.filter(r => includeAbstract || !roles[r].abstract)
+		);
+	};
+
+	// candidates can be passed for performance optimization
+	const getRoleRaw = function(el, candidates) {
+		// TODO: filter out any invalid roles (e.g. name or context required)
+		const roles$1 = normalizeRoles(
+			(el.getAttribute('role') || '').toLowerCase().split(/\s+/)
+		);
+
+		if (roles$1.length > 1 && candidates) {
+			return [roles$1, candidates];
+		} else if (roles$1.length) {
+			for (const role of roles$1) {
+				if (!candidates || candidates.includes(role)) {
+					return role;
 				}
 			}
 		} else {
-			return document.querySelector(selector);
+			for (const role of (candidates || Object.keys(roles))) {
+				const r = roles[role];
+				if (!r.abstract && r.selectors && el.matches(r.selectors.join(','))) {
+					return role;
+				}
+			}
 		}
-	}
-};
+	};
 
-const _getParentNode = function(node, owners) {
-	return _getOwner(node, owners) || node.parentNode;
-};
+	const getRole = function(el) {
+		return getRoleRaw(el);
+	};
 
-const detectLoop = function(node, owners) {
-	const seen = [node];
-	while ((node = _getParentNode(node, owners))) {
-		if (seen.includes(node)) {
-			return true;
+	const hasRole = function(el, roles$1) {
+		const subRoles = normalizeRoles(roles$1, true).map(role => {
+			return roles[role].subRoles || [role];
+		});
+		return !!getRoleRaw(el, unique(flatten(subRoles)));
+	};
+
+	const getAttribute = function(el, key) {
+		if (attributeStrongMapping.hasOwnProperty(key)) {
+			const value = el[attributeStrongMapping[key]];
+			if (value) {
+				return value;
+			}
 		}
-		seen.push(node);
-	}
-};
-
-const getOwner = function(node, owners) {
-	const owner = _getOwner(node, owners);
-	if (owner && !detectLoop(node, owners)) {
-		return owner;
-	}
-};
-
-const getParentNode = function(node, owners) {
-	return getOwner(node, owners) || node.parentNode;
-};
-
-const isHidden = function(node) {
-	return node.nodeType === node.ELEMENT_NODE && attrs.getAttribute(node, 'hidden');
-};
-
-const getChildNodes = function(node, owners) {
-	const childNodes = [];
-
-	for (let i = 0; i < node.childNodes.length; i++) {
-		const child = node.childNodes[i];
-		if (!getOwner(child, owners) && !isHidden(child)) {
-			childNodes.push(child);
+		if (key === 'readonly' && el.contentEditable) {
+			return false;
+		} else if (key === 'invalid' && el.checkValidity) {
+			return !el.checkValidity();
+		} else if (key === 'hidden') {
+			// workaround for chromium
+			if (el.matches('noscript')) {
+				return true;
+			}
+			if (el.matches('details:not([open]) > :not(summary)')) {
+				return true;
+			}
+			const style = window.getComputedStyle(el);
+			if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+				return true;
+			}
 		}
-	}
 
-	if (node.nodeType === node.ELEMENT_NODE) {
-		const owns = attrs.getAttribute(node, 'owns') || [];
-		for (let i = 0; i < owns.length; i++) {
-			const child = document.getElementById(owns[i]);
-			// double check with getOwner for consistency
-			if (child && getOwner(child, owners) === node && !isHidden(child)) {
+		const type = attributes[key];
+		const raw = el.getAttribute('aria-' + key);
+
+		if (raw) {
+			if (type === 'bool') {
+				return raw === 'true';
+			} else if (type === 'tristate') {
+				return raw === 'true' ? true : raw === 'false' ? false : 'mixed';
+			} else if (type === 'bool-undefined') {
+				return raw === 'true' ? true : raw === 'false' ? false : undefined;
+			} else if (type === 'id-list') {
+				return raw.split(/\s+/);
+			} else if (type === 'integer') {
+				return parseInt(raw, 10);
+			} else if (type === 'number') {
+				return parseFloat(raw);
+			} else if (type === 'token-list') {
+				return raw.split(/\s+/);
+			} else {
+				return raw;
+			}
+		}
+
+		// TODO
+		// autocomplete
+		// contextmenu -> aria-haspopup
+		// indeterminate -> aria-checked="mixed"
+		// list -> aria-controls
+
+		if (key === 'level') {
+			for (let i = 1; i <= 6; i++) {
+				if (el.tagName.toLowerCase() === 'h' + i) {
+					return i;
+				}
+			}
+		} else if (attributeWeakMapping.hasOwnProperty(key)) {
+			return el[attributeWeakMapping[key]];
+		}
+
+		if (key in attrsWithDefaults) {
+			const role = getRole(el);
+			const defaults = roles[role].defaults;
+			if (defaults && defaults.hasOwnProperty(key)) {
+				return defaults[key];
+			}
+		}
+
+		if (type === 'bool' || type === 'tristate') {
+			return false;
+		}
+	};
+
+	const _getOwner = function(node, owners) {
+		if (node.nodeType === node.ELEMENT_NODE && node.id) {
+			const selector = '[aria-owns~="' + CSS.escape(node.id) + '"]';
+			if (owners) {
+				for (const owner of owners) {
+					if (owner.matches(selector)) {
+						return owner;
+					}
+				}
+			} else {
+				return document.querySelector(selector);
+			}
+		}
+	};
+
+	const _getParentNode = function(node, owners) {
+		return _getOwner(node, owners) || node.parentNode;
+	};
+
+	const detectLoop = function(node, owners) {
+		const seen = [node];
+		while ((node = _getParentNode(node, owners))) {
+			if (seen.includes(node)) {
+				return true;
+			}
+			seen.push(node);
+		}
+	};
+
+	const getOwner = function(node, owners) {
+		const owner = _getOwner(node, owners);
+		if (owner && !detectLoop(node, owners)) {
+			return owner;
+		}
+	};
+
+	const getParentNode = function(node, owners) {
+		return getOwner(node, owners) || node.parentNode;
+	};
+
+	const isHidden = function(node) {
+		return node.nodeType === node.ELEMENT_NODE && getAttribute(node, 'hidden');
+	};
+
+	const getChildNodes = function(node, owners) {
+		const childNodes = [];
+
+		for (let i = 0; i < node.childNodes.length; i++) {
+			const child = node.childNodes[i];
+			if (!getOwner(child, owners) && !isHidden(child)) {
 				childNodes.push(child);
 			}
 		}
-	}
 
-	return childNodes;
-};
-
-const walk = function(root, fn) {
-	const owners = document.querySelectorAll('[aria-owns]');
-	let queue = [root];
-	while (queue.length) {
-		const item = queue.shift();
-		fn(item);
-		queue = getChildNodes(item, owners).concat(queue);
-	}
-};
-
-const searchUp = function(node, test) {
-	const candidate = getParentNode(node);
-	if (candidate) {
-		if (test(candidate)) {
-			return candidate;
-		} else {
-			return searchUp(candidate, test);
-		}
-	}
-};
-
-module.exports = {
-	'getParentNode': getParentNode,
-	'getChildNodes': getChildNodes,
-	'walk': walk,
-	'searchUp': searchUp,
-};
-
-},{"./attrs":11}],11:[function(require,module,exports){
-const constants = require('./constants.js');
-
-var unique = function(arr) {
-	return arr.filter((a, i) => arr.indexOf(a) === i);
-};
-
-var flatten = function(arr) {
-	return [].concat.apply([], arr);
-};
-
-var normalizeRoles = function(roles, includeAbstract) {
-	return unique(roles
-		.map(r => constants.aliases[r] || r)
-		.filter(r => constants.roles[r])
-		.filter(r => includeAbstract || !constants.roles[r].abstract)
-	);
-};
-
-// candidates can be passed for performance optimization
-const getRole = function(el, candidates) {
-	// TODO: filter out any invalid roles (e.g. name or context required)
-	const roles = normalizeRoles(
-		(el.getAttribute('role') || '').toLowerCase().split(/\s+/)
-	);
-
-	if (roles.length > 1 && candidates) {
-		return [roles, candidates];
-	} else if (roles.length) {
-		for (const role of roles) {
-			if (!candidates || candidates.includes(role)) {
-				return role;
-			}
-		}
-	} else {
-		for (const role of (candidates || Object.keys(constants.roles))) {
-			const r = constants.roles[role];
-			if (!r.abstract && r.selectors && el.matches(r.selectors.join(','))) {
-				return role;
-			}
-		}
-	}
-};
-
-const hasRole = function(el, roles) {
-	const subRoles = normalizeRoles(roles, true).map(role => {
-		return constants.roles[role].subRoles || [role];
-	});
-	return !!getRole(el, unique(flatten(subRoles)));
-};
-
-const getAttribute = function(el, key) {
-	if (constants.attributeStrongMapping.hasOwnProperty(key)) {
-		const value = el[constants.attributeStrongMapping[key]];
-		if (value) {
-			return value;
-		}
-	}
-	if (key === 'readonly' && el.contentEditable) {
-		return false;
-	} else if (key === 'invalid' && el.checkValidity) {
-		return !el.checkValidity();
-	} else if (key === 'hidden') {
-		// workaround for chromium
-		if (el.matches('noscript')) {
-			return true;
-		}
-		if (el.matches('details:not([open]) > :not(summary)')) {
-			return true;
-		}
-		const style = window.getComputedStyle(el);
-		if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
-			return true;
-		}
-	}
-
-	const type = constants.attributes[key];
-	const raw = el.getAttribute('aria-' + key);
-
-	if (raw) {
-		if (type === 'bool') {
-			return raw === 'true';
-		} else if (type === 'tristate') {
-			return raw === 'true' ? true : raw === 'false' ? false : 'mixed';
-		} else if (type === 'bool-undefined') {
-			return raw === 'true' ? true : raw === 'false' ? false : undefined;
-		} else if (type === 'id-list') {
-			return raw.split(/\s+/);
-		} else if (type === 'integer') {
-			return parseInt(raw, 10);
-		} else if (type === 'number') {
-			return parseFloat(raw);
-		} else if (type === 'token-list') {
-			return raw.split(/\s+/);
-		} else {
-			return raw;
-		}
-	}
-
-	// TODO
-	// autocomplete
-	// contextmenu -> aria-haspopup
-	// indeterminate -> aria-checked="mixed"
-	// list -> aria-controls
-
-	if (key === 'level') {
-		for (let i = 1; i <= 6; i++) {
-			if (el.tagName.toLowerCase() === 'h' + i) {
-				return i;
-			}
-		}
-	} else if (constants.attributeWeakMapping.hasOwnProperty(key)) {
-		return el[constants.attributeWeakMapping[key]];
-	}
-
-	if (key in constants.attrsWithDefaults) {
-		const role = getRole(el);
-		const defaults = constants.roles[role].defaults;
-		if (defaults && defaults.hasOwnProperty(key)) {
-			return defaults[key];
-		}
-	}
-
-	if (type === 'bool' || type === 'tristate') {
-		return false;
-	}
-};
-
-module.exports = {
-	getRole: getRole,
-	hasRole: hasRole,
-	getAttribute: getAttribute,
-};
-
-},{"./constants.js":12}],12:[function(require,module,exports){
-// https://www.w3.org/TR/wai-aria/#state_prop_def
-exports.attributes = {
-	'activedescendant': 'id',
-	'atomic': 'bool',
-	'autocomplete': 'token',
-	'braillelabel': 'string',
-	'brailleroledescription': 'string',
-	'busy': 'bool',
-	'checked': 'tristate',
-	'colcount': 'int',
-	'colindex': 'int',
-	'colindextext': 'string',
-	'colspan': 'int',
-	'controls': 'id-list',
-	'current': 'token',
-	'describedby': 'id-list',
-	'description': 'string',
-	'details': 'id',
-	'disabled': 'bool',
-	'dropeffect': 'token-list',
-	'errormessage': 'id',
-	'expanded': 'bool-undefined',
-	'flowto': 'id-list',
-	'grabbed': 'bool-undefined',
-	'haspopup': 'token',
-	'hidden': 'bool-undefined',
-	'invalid': 'token',
-	'keyshortcuts': 'string',
-	'label': 'string',
-	'labelledby': 'id-list',
-	'level': 'int',
-	'live': 'token',
-	'modal': 'bool',
-	'multiline': 'bool',
-	'multiselectable': 'bool',
-	'orientation': 'token',
-	'owns': 'id-list',
-	'placeholder': 'string',
-	'posinset': 'int',
-	'pressed': 'tristate',
-	'readonly': 'bool',
-	'relevant': 'token-list',
-	'required': 'bool',
-	'roledescription': 'string',
-	'rowcount': 'int',
-	'rowindex': 'int',
-	'rowindextext': 'string',
-	'rowspan': 'int',
-	'selected': 'bool-undefined',
-	'setsize': 'int',
-	'sort': 'token',
-	'valuemax': 'number',
-	'valuemin': 'number',
-	'valuenow': 'number',
-	'valuetext': 'string',
-};
-
-exports.attributeStrongMapping = {
-	'disabled': 'disabled',
-	'placeholder': 'placeholder',
-	'readonly': 'readOnly',
-	'required': 'required',
-};
-
-exports.attributeWeakMapping = {
-	'checked': 'checked',
-	'colspan': 'colSpan',
-	'expanded': 'open',
-	'multiselectable': 'multiple',
-	'rowspan': 'rowSpan',
-	'selected': 'selected',
-};
-
-// https://www.w3.org/TR/html/dom.html#sectioning-content-2
-const scoped = ['article *', 'aside *', 'nav *', 'section *'].join(',');
-
-const svgSelectors = function(selector) {
-	return [
-		// `${selector}:has(> title:not(:empty))`,
-		// `${selector}:has(> desc:not(:empty))`,
-		`${selector}[aria-label]`,
-		`${selector}[aria-roledescription]`,
-		`${selector}[aria-labelledby]`,
-		`${selector}[aria-describedby]`,
-		`${selector}[tabindex]`,
-		`${selector}[role]`,
-	];
-};
-
-// https://www.w3.org/TR/html-aam-1.0/#html-element-role-mappings
-// https://www.w3.org/TR/wai-aria/roles
-exports.roles = {
-	alert: {
-		childRoles: ['alertdialog'],
-		defaults: {
-			'live': 'assertive',
-			'atomic': true,
-		},
-	},
-	alertdialog: {},
-	application: {},
-	article: {
-		selectors: ['article'],
-		childRoles: ['comment'],
-	},
-	banner: {
-		selectors: [`header:not(main *, ${scoped})`],
-	},
-	blockquote: {
-		selectors: ['blockquote'],
-	},
-	button: {
-		selectors: [
-			'button',
-			'input[type="button"]',
-			'input[type="image"]',
-			'input[type="reset"]',
-			'input[type="submit"]',
-			'summary',
-		],
-		nameFromContents: true,
-	},
-	caption: {
-		selectors: ['caption', 'figcaption'],
-	},
-	cell: {
-		selectors: ['td', 'td ~ th:not([scope])'],
-		childRoles: ['columnheader', 'gridcell', 'rowheader'],
-		nameFromContents: true,
-	},
-	checkbox: {
-		selectors: ['input[type="checkbox"]'],
-		childRoles: ['switch'],
-		nameFromContents: true,
-		defaults: {
-			'checked': 'false',
-		},
-	},
-	code: {
-		selectors: ['code'],
-	},
-	columnheader: {
-		selectors: ['th[scope="col"]'],
-		nameFromContents: true,
-	},
-	combobox: {
-		selectors: [
-			'input:not([type])[list]',
-			'input[type="email"][list]',
-			'input[type="search"][list]',
-			'input[type="tel"][list]',
-			'input[type="text"][list]',
-			'input[type="url"][list]',
-			'select:not([size]):not([multiple])',
-			'select[size="0"]:not([multiple])',
-			'select[size="1"]:not([multiple])',
-		],
-		defaults: {
-			'expanded': false,
-			'haspopup': 'listbox',
-		},
-	},
-	command: {
-		abstract: true,
-		childRoles: ['button', 'link', 'menuitem'],
-	},
-	comment: {
-		nameFromContents: true,
-	},
-	complementary: {
-		selectors: [
-			`aside:not(${scoped})`,
-			'aside[aria-label]',
-			'aside[aria-labelledby]',
-			'aside[title]',
-		],
-	},
-	composite: {
-		abstract: true,
-		childRoles: ['grid', 'select', 'spinbutton', 'tablist'],
-	},
-	contentinfo: {
-		selectors: [`footer:not(main *, ${scoped})`],
-	},
-	definition: {
-		selectors: ['dd'],
-	},
-	deletion: {
-		selectors: ['del', 's'],
-	},
-	dialog: {
-		selectors: ['dialog'],
-		childRoles: ['alertdialog'],
-	},
-	'doc-abstract': {},
-	'doc-acknowledgments': {},
-	'doc-afterword': {},
-	'doc-appendix': {},
-	'doc-backlink': {
-		nameFromContents: true,
-	},
-	'doc-biblioentry': {},
-	'doc-bibliography': {},
-	'doc-biblioref': {
-		nameFromContents: true,
-	},
-	'doc-chapter': {},
-	'doc-colophon': {},
-	'doc-conclusion': {},
-	'doc-cover': {},
-	'doc-credit': {},
-	'doc-credits': {},
-	'doc-dedication': {},
-	'doc-endnote': {},
-	'doc-endnotes': {},
-	'doc-epilogue': {},
-	'doc-epigraph': {},
-	'doc-errata': {},
-	'doc-example': {},
-	'doc-footnote': {},
-	'doc-foreword': {},
-	'doc-glossary': {},
-	'doc-glossref': {
-		nameFromContents: true,
-	},
-	'doc-index': {},
-	'doc-introduction': {},
-	'doc-noteref': {
-		nameFromContents: true,
-	},
-	'doc-notice': {},
-	'doc-pagebreak': {
-		nameFromContents: true,
-	},
-	'doc-pagefooter': {},
-	'doc-pageheader': {},
-	'doc-pagelist': {},
-	'doc-part': {},
-	'doc-preface': {},
-	'doc-prologue': {},
-	'doc-pullquote': {},
-	'doc-qna': {},
-	'doc-subtitle': {
-		nameFromContents: true,
-	},
-	'doc-tip': {},
-	'doc-toc': {},
-	document: {
-		selectors: ['html'],
-		childRoles: ['article', 'graphics-document'],
-	},
-	emphasis: {
-		selectors: ['em'],
-	},
-	feed: {},
-	figure: {
-		selectors: ['figure'],
-		childRoles: ['doc-example'],
-	},
-	form: {
-		selectors: ['form[aria-label]', 'form[aria-labelledby]', 'form[title]'],
-	},
-	generic: {
-		selectors: [
-			'a:not([*|href])',
-			'area:not([*|href])',
-			`aside:not(${scoped}):not([aria-label]):not([aria-labelledby]):not([title])`,
-			'b',
-			'bdi',
-			'bdo',
-			'body',
-			'data',
-			'div',
-			// footer scoped
-			// header scoped
-			'i',
-			'li:not(ul > li):not(ol > li)',
-			'pre',
-			'q',
-			'samp',
-			'section:not([aria-label]):not([aria-labelledby]):not([title])',
-			'small',
-			'span',
-			'u',
-		],
-	},
-	'graphics-document': {
-		selectors: ['svg'],
-	},
-	'graphics-object': {
-		selectors: [
-			...svgSelectors('symbol'),
-			...svgSelectors('use'),
-		],
-	},
-	'graphics-symbol': {
-		selectors: [
-			...svgSelectors('circle'),
-			...svgSelectors('ellipse'),
-			...svgSelectors('line'),
-			...svgSelectors('path'),
-			...svgSelectors('polygon'),
-			...svgSelectors('polyline'),
-			...svgSelectors('rect'),
-		],
-	},
-	grid: {
-		childRoles: ['treegrid'],
-	},
-	gridcell: {
-		childRoles: ['columnheader', 'rowheader'],
-		nameFromContents: true,
-	},
-	group: {
-		selectors: [
-			'address',
-			'details',
-			'fieldset',
-			'hgroup',
-			'optgroup',
-			...svgSelectors('foreignObject'),
-			...svgSelectors('g'),
-			'text',
-			...svgSelectors('textPath'),
-			...svgSelectors('tspan'),
-		],
-		childRoles: ['row', 'select', 'toolbar', 'graphics-object'],
-	},
-	heading: {
-		selectors: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-		nameFromContents: true,
-		defaults: {
-			'level': 2,
-		},
-	},
-	image: {
-		selectors: [
-			'img:not([alt=""])',
-			'graphics-symbol',
-			...svgSelectors('image'),
-			...svgSelectors('mesh'),
-		],
-		childRoles: ['doc-cover'],
-	},
-	input: {
-		abstract: true,
-		childRoles: [
-			'checkbox',
-			'combobox',
-			'option',
-			'radio',
-			'slider',
-			'spinbutton',
-			'textbox',
-		],
-	},
-	insertion: {
-		selectors: ['ins'],
-	},
-	landmark: {
-		abstract: true,
-		childRoles: [
-			'banner',
-			'complementary',
-			'contentinfo',
-			'doc-acknowledgments',
-			'doc-afterword',
-			'doc-appendix',
-			'doc-bibliography',
-			'doc-chapter',
-			'doc-conclusion',
-			'doc-credits',
-			'doc-endnotes',
-			'doc-epilogue',
-			'doc-errata',
-			'doc-foreword',
-			'doc-glossary',
-			'doc-introduction',
-			'doc-part',
-			'doc-preface',
-			'doc-prologue',
-			'form',
-			'main',
-			'navigation',
-			'region',
-			'search',
-		],
-	},
-	link: {
-		selectors: ['a[*|href]', 'area[href]'],
-		childRoles: ['doc-backlink', 'doc-biblioref', 'doc-glossref', 'doc-noteref'],
-		nameFromContents: true,
-	},
-	list: {
-		selectors: ['dl', 'ol', 'ul', 'menu'],
-		childRoles: ['feed'],
-	},
-	listbox: {
-		selectors: [
-			'datalist',
-			'select[multiple]',
-			'select[size]:not([size="0"]):not([size="1"])',
-		],
-		defaults: {
-			'orientation': 'vertical',
-		},
-	},
-	listitem: {
-		selectors: ['ol > li', 'ul > li'],
-		childRoles: ['doc-biblioentry', 'doc-endnote', 'treeitem'],
-	},
-	log: {
-		defaults: {
-			'live': 'polite',
-		},
-	},
-	main: {
-		selectors: ['main'],
-	},
-	mark: {
-		selectors: ['mark'],
-	},
-	marquee: {},
-	math: {
-		selectors: ['math'],
-	},
-	meter: {
-		selectors: ['meter'],
-		defaults: {
-			'valuemin': 0,
-			'valuemax': 100,
-		},
-	},
-	menu: {
-		childRoles: ['menubar'],
-		defaults: {
-			'orientation': 'vertical',
-		},
-	},
-	menubar: {
-		defaults: {
-			'orientation': 'horizontal',
-		},
-	},
-	menuitem: {
-		childRoles: ['menuitemcheckbox', 'menuitemradio'],
-		nameFromContents: true,
-	},
-	menuitemcheckbox: {
-		nameFromContents: true,
-		defaults: {
-			'checked': 'false',
-		},
-	},
-	menuitemradio: {
-		nameFromContents: true,
-		defaults: {
-			'checked': 'false',
-		},
-	},
-	navigation: {
-		selectors: ['nav'],
-		childRoles: ['doc-index', 'doc-pagelist', 'doc-toc'],
-	},
-	none: {
-		selectors: ['img[alt=""]'],
-	},
-	note: {
-		childRoles: ['doc-notice', 'doc-tip'],
-	},
-	option: {
-		selectors: ['option'],
-		childRoles: ['treeitem'],
-		nameFromContents: true,
-		defaults: {
-			'selected': 'false',
-		},
-	},
-	paragraph: {
-		selectors: ['p'],
-	},
-	progressbar: {
-		selectors: ['progress'],
-		defaults: {
-			'valuemin': 0,
-			'valuemax': 100,
-		},
-	},
-	radio: {
-		selectors: ['input[type="radio"]'],
-		childRoles: ['menuitemradio'],
-		nameFromContents: true,
-		defaults: {
-			'checked': 'false',
-		},
-	},
-	radiogroup: {},
-	range: {
-		abstract: true,
-		childRoles: ['meter', 'progressbar', 'scrollbar', 'slider', 'spinbutton'],
-	},
-	region: {
-		selectors: ['section[aria-label]', 'section[aria-labelledby]', 'section[title]'],
-	},
-	roletype: {
-		abstract: true,
-		childRoles: ['structure', 'widget', 'window'],
-	},
-	row: {
-		selectors: ['tr'],
-		nameFromContents: true,
-	},
-	rowgroup: {
-		selectors: ['tbody', 'thead', 'tfoot'],
-	},
-	rowheader: {
-		selectors: ['th[scope="row"]', 'th:not([scope]):not(td ~ th)'],
-		nameFromContents: true,
-	},
-	scrollbar: {
-		defaults: {
-			'orientation': 'vertical',
-			'valuemin': 0,
-			'valuemax': 100,
-		},
-	},
-	search: {
-		selectors: ['search'],
-	},
-	searchbox: {
-		selectors: ['input[type="search"]:not([list])'],
-	},
-	section: {
-		abstract: true,
-		childRoles: [
-			'alert',
-			'blockquote',
-			'caption',
-			'cell',
-			'code',
-			'definition',
-			'deletion',
-			'doc-abstract',
-			'doc-colophon',
-			'doc-credit',
-			'doc-dedication',
-			'doc-epigraph',
-			'doc-footnote',
-			'doc-pagefooter',
-			'doc-pageheader',
-			'doc-pullquote',
-			'doc-qna',
-			'emphasis',
-			'figure',
-			'group',
-			'image',
-			'insertion',
-			'landmark',
-			'list',
-			'listitem',
-			'log',
-			'mark',
-			'marquee',
-			'math',
-			'note',
-			'paragraph',
-			'status',
-			'strong',
-			'subscript',
-			'suggestion',
-			'superscript',
-			'table',
-			'tabpanel',
-			'term',
-			'time',
-			'tooltip',
-		],
-	},
-	sectionhead: {
-		abstract: true,
-		childRoles: [
-			'columnheader',
-			'doc-subtitle',
-			'heading',
-			'rowheader',
-			'tab',
-		],
-		nameFromContents: true,
-	},
-	select: {
-		abstract: true,
-		childRoles: ['listbox', 'menu', 'radiogroup', 'tree'],
-	},
-	separator: {
-		// assume not focussable because <hr> is not
-		selectors: ['hr'],
-		childRoles: ['doc-pagebreak'],
-		defaults: {
-			'orientation': 'horizontal',
-			'valuemin': 0,
-			'valuemax': 100,
-		},
-	},
-	slider: {
-		selectors: ['input[type="range"]'],
-		defaults: {
-			'orientation': 'horizontal',
-			'valuemin': 0,
-			'valuemax': 100,
-			// FIXME: halfway between actual valuemin and valuemax
-			'valuenow': 50,
-		},
-	},
-	spinbutton: {
-		selectors: ['input[type="number"]'],
-		defaults: {
-			// FIXME: no valuemin/valuemax/valuenow
-		},
-	},
-	status: {
-		selectors: ['output'],
-		childRoles: ['timer'],
-		defaults: {
-			'live': 'polite',
-			'atomic': true,
-		},
-	},
-	strong: {
-		selectors: ['strong'],
-	},
-	structure: {
-		abstract: true,
-		childRoles: [
-			'application',
-			'document',
-			'none',
-			'generic',
-			'range',
-			'rowgroup',
-			'section',
-			'sectionhead',
-			'separator',
-		],
-	},
-	suggestion: {},
-	subscript: {
-		selectors: ['sub'],
-	},
-	superscript: {
-		selectors: ['sup'],
-	},
-	switch: {
-		nameFromContents: true,
-		defaults: {
-			'checked': false,
-		},
-	},
-	tab: {
-		nameFromContents: true,
-		defaults: {
-			'selected': false,
-		},
-	},
-	table: {
-		selectors: ['table'],
-		childRoles: ['grid'],
-	},
-	tablist: {
-		defaults: {
-			'orientation': 'horizontal',
-		},
-	},
-	tabpanel: {},
-	term: {
-		selectors: ['dfn', 'dt'],
-	},
-	textbox: {
-		selectors: [
-			'input:not([type]):not([list])',
-			'input[type="email"]:not([list])',
-			'input[type="tel"]:not([list])',
-			'input[type="text"]:not([list])',
-			'input[type="url"]:not([list])',
-			'textarea',
-		],
-		childRoles: ['searchbox'],
-	},
-	time: {
-		selectors: ['time'],
-	},
-	timer: {
-		defaults: {
-			'live': 'off',
-		},
-	},
-	toolbar: {
-		defaults: {
-			'orientation': 'horizontal',
-		},
-	},
-	tooltip: {
-		nameFromContents: true,
-	},
-	tree: {
-		childRoles: ['treegrid'],
-		defaults: {
-			'orientation': 'vertical',
-		},
-	},
-	treegrid: {},
-	treeitem: {
-		nameFromContents: true,
-	},
-	widget: {
-		abstract: true,
-		childRoles: [
-			'command',
-			'composite',
-			'gridcell',
-			'input',
-			'progressbar',
-			'row',
-			'scrollbar',
-			'separator',
-			'tab',
-		],
-	},
-	window: {
-		abstract: true,
-		childRoles: ['dialog'],
-	},
-};
-
-const getSubRoles = function(role) {
-	const children = (exports.roles[role]).childRoles || [];
-	const descendents = children.map(getSubRoles);
-
-	const result = [role];
-
-	descendents.forEach(list => {
-		list.forEach(r => {
-			if (!result.includes(r)) {
-				result.push(r);
-			}
-		});
-	});
-
-	return result;
-};
-
-exports.attrsWithDefaults = [];
-
-for (const role in exports.roles) {
-	exports.roles[role].subRoles = getSubRoles(role);
-	for (const key in exports.roles[role].defaults) {
-		if (!exports.attrsWithDefaults.includes(key)) {
-			exports.attrsWithDefaults.push(key);
-		}
-	}
-}
-
-exports.aliases = {
-	'presentation': 'none',
-	'directory': 'list',
-	'img': 'image',
-};
-
-exports.nameFromDescendant = {
-	'figure': 'figcaption',
-	'table': 'caption',
-	'fieldset': 'legend',
-};
-
-exports.nameDefaults = {
-	'input[type="submit"]': 'Submit',
-	'input[type="reset"]': 'Reset',
-	'summary': 'Details',
-};
-
-},{}],13:[function(require,module,exports){
-const constants = require('./constants.js');
-const atree = require('./atree.js');
-const query = require('./query.js');
-
-const addSpaces = function(text, el, pseudoSelector) {
-	// https://github.com/w3c/accname/issues/3
-	const styles = window.getComputedStyle(el, pseudoSelector);
-	const inline = styles.display === 'inline';
-	return inline ? text : ` ${text} `;
-};
-
-const getPseudoContent = function(el, pseudoSelector) {
-	const styles = window.getComputedStyle(el, pseudoSelector);
-	let tail = styles.getPropertyValue('content').trim();
-	let ret = [];
-
-	let match;
-	while (tail.length) {
-		if (match = tail.match(/^"([^"]*)"/)) {
-			ret.push(match[1]);
-		} else if (match = tail.match(/^([a-z-]+)\(([^)]*)\)/)) {
-			if (match[1] === 'attr') {
-				ret.push(el.getAttribute(match[2]) || '');
-			}
-		} else if (match = tail.match(/^([a-z-]+)/)) {
-			if (match[1] === 'open-quote' || match[1] === 'close-quote') {
-				ret.push('"');
-			}
-		} else if (match = tail.match(/^\//)) {
-			ret = [];
-		} else {
-			// invalid content, ignore
-			return '';
-		}
-		tail = tail.slice(match[0].length).trim();
-	}
-
-	return addSpaces(ret.join(''), el, pseudoSelector);
-};
-
-const getContent = function(root, ongoingLabelledBy, visited) {
-	const children = atree.getChildNodes(root);
-
-	let ret = '';
-	for (let i = 0; i < children.length; i++) {
-		const node = children[i];
-		if (node.nodeType === node.TEXT_NODE) {
-			ret += node.textContent;
-		} else if (node.nodeType === node.ELEMENT_NODE) {
-			if (node.tagName.toLowerCase() === 'br') {
-				ret += '\n';
-			} else {
-				ret += getName(node, true, ongoingLabelledBy, visited);
-			}
-		}
-	}
-
-	return ret;
-};
-
-const allowNameFromContent = function(el) {
-	const role = query.getRole(el);
-	if (role) {
-		return constants.roles[role].nameFromContents;
-	}
-};
-
-const getName = function(el, recursive, ongoingLabelledBy, visited, directReference) {
-	let ret = '';
-
-	visited = visited || [];
-	if (visited.includes(el)) {
-		if (!directReference) {
-			return '';
-		}
-	} else {
-		visited.push(el);
-	}
-
-	// A
-	// handled in atree
-
-	// B
-	if (!ongoingLabelledBy && el.matches('[aria-labelledby]')) {
-		const ids = el.getAttribute('aria-labelledby').split(/\s+/);
-		const strings = ids.map(id => {
-			const label = document.getElementById(id);
-			return label ? getName(label, true, true, visited, true) : '';
-		});
-		ret = strings.join(' ');
-	}
-
-	// E (the current draft has this at this high priority)
-	if (!ret.trim() && recursive) {
-		if (query.matches(el, 'textbox')) {
-			ret = el.value || el.textContent;
-		} else if (query.matches(el, 'combobox,listbox')) {
-			const selected = query.querySelector(el, ':selected') || query.querySelector(el, 'option');
-			if (selected) {
-				ret = getName(selected, recursive, ongoingLabelledBy, visited);
-			} else {
-				ret = el.value || '';
-			}
-		} else if (query.matches(el, 'range')) {
-			ret = '' + (query.getAttribute(el, 'valuetext') || query.getAttribute(el, 'valuenow') || el.value);
-		}
-	}
-
-	// C
-	if (!ret.trim() && el.matches('[aria-label]')) {
-		// FIXME: may skip to 2E
-		ret = el.getAttribute('aria-label');
-	}
-
-	// D
-	if (!ret.trim() && !recursive && el.labels) {
-		const strings = Array.prototype.map.call(el.labels, label => {
-			return getName(label, true, ongoingLabelledBy, visited);
-		});
-		ret = strings.join(' ');
-	}
-	if (!ret.trim()) {
-		ret = el.alt || '';
-	}
-	if (!ret.trim() && el.matches('abbr,acronym') && el.title) {
-		ret = el.title;
-	}
-	if (!ret.trim()) {
-		for (const selector in constants.nameFromDescendant) {
-			if (el.matches(selector)) {
-				const descendant = el.querySelector(constants.nameFromDescendant[selector]);
-				if (descendant) {
-					ret = getName(descendant, true, ongoingLabelledBy, visited);
+		if (node.nodeType === node.ELEMENT_NODE) {
+			const owns = getAttribute(node, 'owns') || [];
+			for (let i = 0; i < owns.length; i++) {
+				const child = document.getElementById(owns[i]);
+				// double check with getOwner for consistency
+				if (child && getOwner(child, owners) === node && !isHidden(child)) {
+					childNodes.push(child);
 				}
 			}
 		}
-	}
-	if (!ret.trim() && el.matches('svg *')) {
-		const svgTitle = el.querySelector('title');
-		if (svgTitle && svgTitle.parentElement === el) {
-			ret = svgTitle.textContent;
+
+		return childNodes;
+	};
+
+	const walk = function(root, fn) {
+		const owners = document.querySelectorAll('[aria-owns]');
+		let queue = [root];
+		while (queue.length) {
+			const item = queue.shift();
+			fn(item);
+			queue = getChildNodes(item, owners).concat(queue);
 		}
-	}
-	if (!ret.trim() && el.matches('a')) {
-		ret = el.getAttribute('xlink:title') || '';
-	}
+	};
 
-	// F
-	// FIXME: menu is not mentioned in the spec
-	if (!ret.trim() && (recursive || allowNameFromContent(el) || el.closest('label')) && !query.matches(el, 'menu')) {
-		ret = getContent(el, ongoingLabelledBy, visited);
-	}
-
-	if (!ret.trim() && query.matches(el, 'button')) {
-		ret = el.value || '';
-	}
-
-	if (!ret.trim()) {
-		for (const selector in constants.nameDefaults) {
-			if (el.matches(selector)) {
-				ret = constants.nameDefaults[selector];
+	const searchUp = function(node, test) {
+		const candidate = getParentNode(node);
+		if (candidate) {
+			if (test(candidate)) {
+				return candidate;
+			} else {
+				return searchUp(candidate, test);
 			}
 		}
-	}
+	};
 
-	// G/H
-	// handled in getContent
-
-	// I
-	if (!ret.trim()) {
-		ret = el.title || el.placeholder || '';
-	}
-
-	// FIXME: not exactly sure about this, but it reduces the number of failing
-	// WPT tests. Whitespace is hard.
-	if (!ret.trim()) {
-		ret = ' ';
-	}
-
-	const before = getPseudoContent(el, ':before');
-	const after = getPseudoContent(el, ':after');
-	return addSpaces(before + ret + after, el);
-};
-
-const getNameTrimmed = function(el) {
-	return getName(el)
-		.replace(/[ \n\r\t\f]+/g, ' ')
-		.replace(/^ /, '')
-		.replace(/ $/, '');
-};
-
-const getDescription = function(el) {
-	let ret = '';
-
-	if (el.matches('[aria-describedby]')) {
-		const ids = el.getAttribute('aria-describedby').split(/\s+/);
-		const strings = ids.map(id => {
-			const label = document.getElementById(id);
-			return label ? getName(label, true, true) : '';
-		});
-		ret = strings.join(' ');
-	} else if (el.matches('[aria-description]')) {
-		ret = el.getAttribute('aria-description');
-	} else if (el.matches('svg *')) {
-		const svgDesc = el.querySelector('desc');
-		if (svgDesc && svgDesc.parentElement === el) {
-			ret = svgDesc.textContent;
+	const matches = function(el, selector) {
+		if (selector.substr(0, 1) === ':') {
+			const attr = selector.substr(1);
+			return getAttribute(el, attr);
+		} else if (selector.substr(0, 1) === '[') {
+			const match = /\[([a-z]+)="(.*)"\]/.exec(selector);
+			const actual = getAttribute(el, match[1]);
+			const rawValue = match[2];
+			return actual.toString() === rawValue;
+		} else {
+			return hasRole(el, selector.split(','));
 		}
-	} else if (el.title) {
-		ret = el.title;
-	}
-	if (!ret.trim() && el.matches('a')) {
-		ret = el.getAttribute('xlink:title') || '';
-	}
+	};
 
-	ret = (ret || '').trim().replace(/\s+/g, ' ');
-
-	if (ret === getNameTrimmed(el)) {
-		ret = '';
-	}
-
-	return ret;
-};
-
-module.exports = {
-	getName: getNameTrimmed,
-	getDescription: getDescription,
-};
-
-},{"./atree.js":10,"./constants.js":12,"./query.js":14}],14:[function(require,module,exports){
-const attrs = require('./attrs.js');
-const atree = require('./atree.js');
-
-
-const matches = function(el, selector) {
-	if (selector.substr(0, 1) === ':') {
-		const attr = selector.substr(1);
-		return attrs.getAttribute(el, attr);
-	} else if (selector.substr(0, 1) === '[') {
-		const match = /\[([a-z]+)="(.*)"\]/.exec(selector);
-		const actual = attrs.getAttribute(el, match[1]);
-		const rawValue = match[2];
-		return actual.toString() === rawValue;
-	} else {
-		return attrs.hasRole(el, selector.split(','));
-	}
-};
-
-const _querySelector = function(all) {
-	return function(root, selector) {
-		const results = [];
-		try {
-			atree.walk(root, node => {
-				if (node.nodeType === node.ELEMENT_NODE) {
-					// FIXME: skip hidden elements
-					if (matches(node, selector)) {
-						results.push(node);
-						if (!all) {
-							throw 'StopIteration';
+	const _querySelector = function(all) {
+		return function(root, selector) {
+			const results = [];
+			try {
+				walk(root, node => {
+					if (node.nodeType === node.ELEMENT_NODE) {
+						// FIXME: skip hidden elements
+						if (matches(node, selector)) {
+							results.push(node);
+							if (!all) {
+								throw 'StopIteration';
+							}
 						}
 					}
+				});
+			} catch (e) {
+				if (e !== 'StopIteration') {
+					throw e;
 				}
-			});
-		} catch (e) {
-			if (e !== 'StopIteration') {
-				throw e;
+			}
+			return all ? results : results[0];
+		};
+	};
+
+	const closest = function(el, selector) {
+		return searchUp(el, candidate => {
+			if (candidate.nodeType === candidate.ELEMENT_NODE) {
+				return matches(candidate, selector);
+			}
+		});
+	};
+
+	const querySelector = _querySelector();
+	const querySelectorAll = _querySelector(true);
+
+	const addSpaces = function(text, el, pseudoSelector) {
+		// https://github.com/w3c/accname/issues/3
+		const styles = window.getComputedStyle(el, pseudoSelector);
+		const inline = styles.display === 'inline';
+		return inline ? text : ` ${text} `;
+	};
+
+	const getPseudoContent = function(el, pseudoSelector) {
+		const styles = window.getComputedStyle(el, pseudoSelector);
+		let tail = styles.getPropertyValue('content').trim();
+		let ret = [];
+
+		let match;
+		while (tail.length) {
+			if ((match = tail.match(/^"([^"]*)"/))) {
+				ret.push(match[1]);
+			} else if ((match = tail.match(/^([a-z-]+)\(([^)]*)\)/))) {
+				if (match[1] === 'attr') {
+					ret.push(el.getAttribute(match[2]) || '');
+				}
+			} else if ((match = tail.match(/^([a-z-]+)/))) {
+				if (match[1] === 'open-quote' || match[1] === 'close-quote') {
+					ret.push('"');
+				}
+			} else if ((match = tail.match(/^\//))) {
+				ret = [];
+			} else {
+				// invalid content, ignore
+				return '';
+			}
+			tail = tail.slice(match[0].length).trim();
+		}
+
+		return addSpaces(ret.join(''), el, pseudoSelector);
+	};
+
+	const getContent = function(root, ongoingLabelledBy, visited) {
+		const children = getChildNodes(root);
+
+		let ret = '';
+		for (let i = 0; i < children.length; i++) {
+			const node = children[i];
+			if (node.nodeType === node.TEXT_NODE) {
+				const styles = window.getComputedStyle(node.parentElement);
+				if (styles.textTransform === 'uppercase') {
+					ret += node.textContent.toUpperCase();
+				} else if (styles.textTransform === 'lowercase') {
+					ret += node.textContent.toLowerCase();
+				} else if (styles.textTransform === 'capitalize') {
+					ret += node.textContent.replace(/\b\w/g, c => c.toUpperCase());
+				} else {
+					ret += node.textContent;
+				}
+			} else if (node.nodeType === node.ELEMENT_NODE) {
+				if (node.tagName.toLowerCase() === 'br') {
+					ret += '\n';
+				} else {
+					ret += getNameRaw(node, true, ongoingLabelledBy, visited);
+				}
 			}
 		}
-		return all ? results : results[0];
+
+		return ret;
 	};
-};
 
-const closest = function(el, selector) {
-	return atree.searchUp(el, candidate => {
-		if (candidate.nodeType === candidate.ELEMENT_NODE) {
-			return matches(candidate, selector);
+	const allowNameFromContent = function(el) {
+		const role = getRole(el);
+		if (role) {
+			return roles[role].nameFromContents;
 		}
-	});
-};
+	};
 
-module.exports = {
-	getRole: el => attrs.getRole(el),
-	getAttribute: attrs.getAttribute,
-	matches: matches,
-	querySelector: _querySelector(),
-	querySelectorAll: _querySelector(true),
-	closest: closest,
-};
+	const getNameRaw = function(el, recursive, ongoingLabelledBy, visited, directReference) {
+		let ret = '';
 
-},{"./atree.js":10,"./attrs.js":11}],15:[function(require,module,exports){
+		visited = visited || [];
+		if (visited.includes(el)) {
+			if (!directReference) {
+				return '';
+			}
+		} else {
+			visited.push(el);
+		}
+
+		// A
+		// handled in atree
+
+		// B
+		if (!ongoingLabelledBy && el.matches('[aria-labelledby]')) {
+			const ids = el.getAttribute('aria-labelledby').split(/\s+/);
+			const strings = ids.map(id => {
+				const label = document.getElementById(id);
+				return label ? getNameRaw(label, true, true, visited, true) : '';
+			});
+			ret = strings.join(' ');
+		}
+
+		// E (the current draft has this at this high priority)
+		if (!ret.trim() && recursive) {
+			if (matches(el, 'textbox')) {
+				ret = el.value || el.textContent;
+			} else if (matches(el, 'combobox,listbox')) {
+				const selected = querySelector(el, ':selected') || querySelector(el, 'option');
+				if (selected) {
+					ret = getNameRaw(selected, recursive, ongoingLabelledBy, visited);
+				} else {
+					ret = el.value || '';
+				}
+			} else if (matches(el, 'range')) {
+				ret = '' + (getAttribute(el, 'valuetext') || getAttribute(el, 'valuenow') || el.value);
+			}
+		}
+
+		// C
+		if (!ret.trim() && el.matches('[aria-label]')) {
+			// FIXME: may skip to 2E
+			ret = el.getAttribute('aria-label');
+		}
+
+		// D
+		if (!ret.trim() && !recursive && el.labels) {
+			const strings = Array.prototype.map.call(el.labels, label => {
+				return getNameRaw(label, true, ongoingLabelledBy, visited);
+			});
+			ret = strings.join(' ');
+		}
+		if (!ret.trim()) {
+			ret = el.alt || '';
+		}
+		if (!ret.trim() && el.matches('abbr,acronym') && el.title) {
+			ret = el.title;
+		}
+		if (!ret.trim()) {
+			for (const selector in nameFromDescendant) {
+				if (el.matches(selector)) {
+					const descendant = el.querySelector(nameFromDescendant[selector]);
+					if (descendant) {
+						ret = getNameRaw(descendant, true, ongoingLabelledBy, visited);
+					}
+				}
+			}
+		}
+		if (!ret.trim() && el.matches('svg *')) {
+			const svgTitle = el.querySelector('title');
+			if (svgTitle && svgTitle.parentElement === el) {
+				ret = svgTitle.textContent;
+			}
+		}
+		if (!ret.trim() && el.matches('a')) {
+			ret = el.getAttribute('xlink:title') || '';
+		}
+
+		// F
+		// FIXME: menu is not mentioned in the spec
+		if (!ret.trim() && (recursive || allowNameFromContent(el) || el.closest('label')) && !matches(el, 'menu')) {
+			ret = getContent(el, ongoingLabelledBy, visited);
+		}
+
+		if (!ret.trim() && matches(el, 'button')) {
+			ret = el.value || '';
+		}
+
+		if (!ret.trim()) {
+			for (const selector in nameDefaults) {
+				if (el.matches(selector)) {
+					ret = nameDefaults[selector];
+				}
+			}
+		}
+
+		// G/H
+		// handled in getContent
+
+		// I
+		if (!ret.trim()) {
+			ret = el.title || el.placeholder || '';
+		}
+
+		// FIXME: not exactly sure about this, but it reduces the number of failing
+		// WPT tests. Whitespace is hard.
+		if (!ret.trim()) {
+			ret = ' ';
+		}
+
+		const before = getPseudoContent(el, ':before');
+		const after = getPseudoContent(el, ':after');
+		return addSpaces(before + ret + after, el);
+	};
+
+	const getName = function(el) {
+		return getNameRaw(el)
+			.replace(/[ \n\r\t\f]+/g, ' ')
+			.replace(/^ /, '')
+			.replace(/ $/, '');
+	};
+
+	const getDescription = function(el) {
+		let ret = '';
+
+		if (el.matches('[aria-describedby]')) {
+			const ids = el.getAttribute('aria-describedby').split(/\s+/);
+			const strings = ids.map(id => {
+				const label = document.getElementById(id);
+				return label ? getNameRaw(label, true, true) : '';
+			});
+			ret = strings.join(' ');
+		} else if (el.matches('[aria-description]')) {
+			ret = el.getAttribute('aria-description');
+		} else if (el.matches('svg *')) {
+			const svgDesc = el.querySelector('desc');
+			if (svgDesc && svgDesc.parentElement === el) {
+				ret = svgDesc.textContent;
+			}
+		} else if (el.title) {
+			ret = el.title;
+		}
+		if (!ret.trim() && el.matches('a')) {
+			ret = el.getAttribute('xlink:title') || '';
+		}
+
+		ret = (ret || '').trim().replace(/\s+/g, ' ');
+
+		if (ret === getName(el)) {
+			ret = '';
+		}
+
+		return ret;
+	};
+
+	exports.closest = closest;
+	exports.getAttribute = getAttribute;
+	exports.getChildNodes = getChildNodes;
+	exports.getDescription = getDescription;
+	exports.getName = getName;
+	exports.getParentNode = getParentNode;
+	exports.getRole = getRole;
+	exports.matches = matches;
+	exports.querySelector = querySelector;
+	exports.querySelectorAll = querySelectorAll;
+
+}));
+
+},{}],10:[function(require,module,exports){
 (function (process,setImmediate){(function (){
-/*! axe v4.9.1
+/*! axe v4.10.2
  * Copyright (c) 2015 - 2024 Deque Systems, Inc.
  *
  * Your use of this Source Code Form is subject to the terms of the Mozilla Public
@@ -6301,7 +6273,7 @@ module.exports = {
     }, _typeof(o);
   }
   var axe = axe || {};
-  axe.version = '4.9.1';
+  axe.version = '4.10.2';
   if (typeof define === 'function' && define.amd) {
     define('axe-core', [], function() {
       return axe;
@@ -6329,22 +6301,16 @@ module.exports = {
   SupportError.prototype.constructor = SupportError;
   'use strict';
   var _excluded = [ 'node' ], _excluded2 = [ 'relatedNodes' ], _excluded3 = [ 'node' ], _excluded4 = [ 'variant' ], _excluded5 = [ 'matches' ], _excluded6 = [ 'chromium' ], _excluded7 = [ 'noImplicit' ], _excluded8 = [ 'noPresentational' ], _excluded9 = [ 'precision', 'format', 'inGamut' ], _excluded10 = [ 'space' ], _excluded11 = [ 'algorithm' ], _excluded12 = [ 'method' ], _excluded13 = [ 'maxDeltaE', 'deltaEMethod', 'steps', 'maxSteps' ], _excluded14 = [ 'node' ], _excluded15 = [ 'environmentData' ], _excluded16 = [ 'environmentData' ], _excluded17 = [ 'environmentData' ], _excluded18 = [ 'environmentData' ], _excluded19 = [ 'environmentData' ];
-  function _toArray(arr) {
-    return _arrayWithHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableRest();
+  function _toArray(r) {
+    return _arrayWithHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableRest();
   }
-  function _defineProperty(obj, key, value) {
-    key = _toPropertyKey(key);
-    if (key in obj) {
-      Object.defineProperty(obj, key, {
-        value: value,
-        enumerable: true,
-        configurable: true,
-        writable: true
-      });
-    } else {
-      obj[key] = value;
-    }
-    return obj;
+  function _defineProperty(e, r, t) {
+    return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
+      value: t,
+      enumerable: !0,
+      configurable: !0,
+      writable: !0
+    }) : e[r] = t, e;
   }
   function _construct(t, e, r) {
     if (_isNativeReflectConstruct()) {
@@ -6358,19 +6324,20 @@ module.exports = {
   function _callSuper(t, o, e) {
     return o = _getPrototypeOf(o), _possibleConstructorReturn(t, _isNativeReflectConstruct() ? Reflect.construct(o, e || [], _getPrototypeOf(t).constructor) : o.apply(t, e));
   }
-  function _possibleConstructorReturn(self, call) {
-    if (call && (_typeof(call) === 'object' || typeof call === 'function')) {
-      return call;
-    } else if (call !== void 0) {
+  function _possibleConstructorReturn(t, e) {
+    if (e && ('object' == _typeof(e) || 'function' == typeof e)) {
+      return e;
+    }
+    if (void 0 !== e) {
       throw new TypeError('Derived constructors may only return object or undefined');
     }
-    return _assertThisInitialized(self);
+    return _assertThisInitialized(t);
   }
-  function _assertThisInitialized(self) {
-    if (self === void 0) {
+  function _assertThisInitialized(e) {
+    if (void 0 === e) {
       throw new ReferenceError('this hasn\'t been initialised - super() hasn\'t been called');
     }
-    return self;
+    return e;
   }
   function _isNativeReflectConstruct() {
     try {
@@ -6380,47 +6347,38 @@ module.exports = {
       return !!t;
     })();
   }
-  function _getPrototypeOf(o) {
-    _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
-      return o.__proto__ || Object.getPrototypeOf(o);
-    };
-    return _getPrototypeOf(o);
+  function _getPrototypeOf(t) {
+    return _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(t) {
+      return t.__proto__ || Object.getPrototypeOf(t);
+    }, _getPrototypeOf(t);
   }
-  function _inherits(subClass, superClass) {
-    if (typeof superClass !== 'function' && superClass !== null) {
+  function _inherits(t, e) {
+    if ('function' != typeof e && null !== e) {
       throw new TypeError('Super expression must either be null or a function');
     }
-    subClass.prototype = Object.create(superClass && superClass.prototype, {
+    t.prototype = Object.create(e && e.prototype, {
       constructor: {
-        value: subClass,
-        writable: true,
-        configurable: true
+        value: t,
+        writable: !0,
+        configurable: !0
       }
-    });
-    Object.defineProperty(subClass, 'prototype', {
-      writable: false
-    });
-    if (superClass) {
-      _setPrototypeOf(subClass, superClass);
-    }
+    }), Object.defineProperty(t, 'prototype', {
+      writable: !1
+    }), e && _setPrototypeOf(t, e);
   }
-  function _setPrototypeOf(o, p) {
-    _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
-      o.__proto__ = p;
-      return o;
-    };
-    return _setPrototypeOf(o, p);
+  function _setPrototypeOf(t, e) {
+    return _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t, e) {
+      return t.__proto__ = e, t;
+    }, _setPrototypeOf(t, e);
   }
-  function _classPrivateFieldInitSpec(obj, privateMap, value) {
-    _checkPrivateRedeclaration(obj, privateMap);
-    privateMap.set(obj, value);
+  function _classPrivateFieldInitSpec(e, t, a) {
+    _checkPrivateRedeclaration(e, t), t.set(e, a);
   }
-  function _classPrivateMethodInitSpec(obj, privateSet) {
-    _checkPrivateRedeclaration(obj, privateSet);
-    privateSet.add(obj);
+  function _classPrivateMethodInitSpec(e, a) {
+    _checkPrivateRedeclaration(e, a), a.add(e);
   }
-  function _checkPrivateRedeclaration(obj, privateCollection) {
-    if (privateCollection.has(obj)) {
+  function _checkPrivateRedeclaration(e, t) {
+    if (t.has(e)) {
       throw new TypeError('Cannot initialize the same private elements twice on an object');
     }
   }
@@ -6436,75 +6394,63 @@ module.exports = {
     }
     throw new TypeError('Private element is not present on this object');
   }
-  function _objectWithoutProperties(source, excluded) {
-    if (source == null) {
+  function _objectWithoutProperties(e, t) {
+    if (null == e) {
       return {};
     }
-    var target = _objectWithoutPropertiesLoose(source, excluded);
-    var key, i;
+    var o, r, i = _objectWithoutPropertiesLoose(e, t);
     if (Object.getOwnPropertySymbols) {
-      var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
-      for (i = 0; i < sourceSymbolKeys.length; i++) {
-        key = sourceSymbolKeys[i];
-        if (excluded.indexOf(key) >= 0) {
-          continue;
-        }
-        if (!Object.prototype.propertyIsEnumerable.call(source, key)) {
-          continue;
-        }
-        target[key] = source[key];
+      var s = Object.getOwnPropertySymbols(e);
+      for (r = 0; r < s.length; r++) {
+        o = s[r], t.includes(o) || {}.propertyIsEnumerable.call(e, o) && (i[o] = e[o]);
       }
     }
-    return target;
+    return i;
   }
-  function _objectWithoutPropertiesLoose(source, excluded) {
-    if (source == null) {
+  function _objectWithoutPropertiesLoose(r, e) {
+    if (null == r) {
       return {};
     }
-    var target = {};
-    var sourceKeys = Object.keys(source);
-    var key, i;
-    for (i = 0; i < sourceKeys.length; i++) {
-      key = sourceKeys[i];
-      if (excluded.indexOf(key) >= 0) {
-        continue;
+    var t = {};
+    for (var n in r) {
+      if ({}.hasOwnProperty.call(r, n)) {
+        if (e.includes(n)) {
+          continue;
+        }
+        t[n] = r[n];
       }
-      target[key] = source[key];
     }
-    return target;
+    return t;
   }
-  function _toConsumableArray(arr) {
-    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
+  function _toConsumableArray(r) {
+    return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread();
   }
   function _nonIterableSpread() {
     throw new TypeError('Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.');
   }
-  function _iterableToArray(iter) {
-    if (typeof Symbol !== 'undefined' && iter[Symbol.iterator] != null || iter['@@iterator'] != null) {
-      return Array.from(iter);
+  function _iterableToArray(r) {
+    if ('undefined' != typeof Symbol && null != r[Symbol.iterator] || null != r['@@iterator']) {
+      return Array.from(r);
     }
   }
-  function _arrayWithoutHoles(arr) {
-    if (Array.isArray(arr)) {
-      return _arrayLikeToArray(arr);
+  function _arrayWithoutHoles(r) {
+    if (Array.isArray(r)) {
+      return _arrayLikeToArray(r);
     }
   }
   function _extends() {
-    _extends = Object.assign ? Object.assign.bind() : function(target) {
-      for (var i = 1; i < arguments.length; i++) {
-        var source = arguments[i];
-        for (var key in source) {
-          if (Object.prototype.hasOwnProperty.call(source, key)) {
-            target[key] = source[key];
-          }
+    return _extends = Object.assign ? Object.assign.bind() : function(n) {
+      for (var e = 1; e < arguments.length; e++) {
+        var t = arguments[e];
+        for (var r in t) {
+          ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]);
         }
       }
-      return target;
-    };
-    return _extends.apply(this, arguments);
+      return n;
+    }, _extends.apply(null, arguments);
   }
-  function _slicedToArray(arr, i) {
-    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+  function _slicedToArray(r, e) {
+    return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest();
   }
   function _nonIterableRest() {
     throw new TypeError('Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.');
@@ -6538,38 +6484,28 @@ module.exports = {
       return a;
     }
   }
-  function _arrayWithHoles(arr) {
-    if (Array.isArray(arr)) {
-      return arr;
+  function _arrayWithHoles(r) {
+    if (Array.isArray(r)) {
+      return r;
     }
   }
-  function _classCallCheck(instance, Constructor) {
-    if (!(instance instanceof Constructor)) {
+  function _classCallCheck(a, n) {
+    if (!(a instanceof n)) {
       throw new TypeError('Cannot call a class as a function');
     }
   }
-  function _defineProperties(target, props) {
-    for (var i = 0; i < props.length; i++) {
-      var descriptor = props[i];
-      descriptor.enumerable = descriptor.enumerable || false;
-      descriptor.configurable = true;
-      if ('value' in descriptor) {
-        descriptor.writable = true;
-      }
-      Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor);
+  function _defineProperties(e, r) {
+    for (var t = 0; t < r.length; t++) {
+      var o = r[t];
+      o.enumerable = o.enumerable || !1, o.configurable = !0, 'value' in o && (o.writable = !0), 
+      Object.defineProperty(e, _toPropertyKey(o.key), o);
     }
   }
-  function _createClass(Constructor, protoProps, staticProps) {
-    if (protoProps) {
-      _defineProperties(Constructor.prototype, protoProps);
-    }
-    if (staticProps) {
-      _defineProperties(Constructor, staticProps);
-    }
-    Object.defineProperty(Constructor, 'prototype', {
-      writable: false
-    });
-    return Constructor;
+  function _createClass(e, r, t) {
+    return r && _defineProperties(e.prototype, r), t && _defineProperties(e, t), 
+    Object.defineProperty(e, 'prototype', {
+      writable: !1
+    }), e;
   }
   function _toPropertyKey(t) {
     var i = _toPrimitive(t, 'string');
@@ -6589,89 +6525,68 @@ module.exports = {
     }
     return ('string' === r ? String : Number)(t);
   }
-  function _createForOfIteratorHelper(o, allowArrayLike) {
-    var it = typeof Symbol !== 'undefined' && o[Symbol.iterator] || o['@@iterator'];
-    if (!it) {
-      if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === 'number') {
-        if (it) {
-          o = it;
-        }
-        var i = 0;
-        var F = function F() {};
+  function _createForOfIteratorHelper(r, e) {
+    var t = 'undefined' != typeof Symbol && r[Symbol.iterator] || r['@@iterator'];
+    if (!t) {
+      if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && 'number' == typeof r.length) {
+        t && (r = t);
+        var _n = 0, F = function F() {};
         return {
           s: F,
           n: function n() {
-            if (i >= o.length) {
-              return {
-                done: true
-              };
-            }
-            return {
-              done: false,
-              value: o[i++]
+            return _n >= r.length ? {
+              done: !0
+            } : {
+              done: !1,
+              value: r[_n++]
             };
           },
-          e: function e(_e) {
-            throw _e;
+          e: function e(r) {
+            throw r;
           },
           f: F
         };
       }
       throw new TypeError('Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.');
     }
-    var normalCompletion = true, didErr = false, err;
+    var o, a = !0, u = !1;
     return {
       s: function s() {
-        it = it.call(o);
+        t = t.call(r);
       },
       n: function n() {
-        var step = it.next();
-        normalCompletion = step.done;
-        return step;
+        var r = t.next();
+        return a = r.done, r;
       },
-      e: function e(_e2) {
-        didErr = true;
-        err = _e2;
+      e: function e(r) {
+        u = !0, o = r;
       },
       f: function f() {
         try {
-          if (!normalCompletion && it['return'] != null) {
-            it['return']();
-          }
+          a || null == t['return'] || t['return']();
         } finally {
-          if (didErr) {
-            throw err;
+          if (u) {
+            throw o;
           }
         }
       }
     };
   }
-  function _unsupportedIterableToArray(o, minLen) {
-    if (!o) {
-      return;
-    }
-    if (typeof o === 'string') {
-      return _arrayLikeToArray(o, minLen);
-    }
-    var n = Object.prototype.toString.call(o).slice(8, -1);
-    if (n === 'Object' && o.constructor) {
-      n = o.constructor.name;
-    }
-    if (n === 'Map' || n === 'Set') {
-      return Array.from(o);
-    }
-    if (n === 'Arguments' || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) {
-      return _arrayLikeToArray(o, minLen);
+  function _unsupportedIterableToArray(r, a) {
+    if (r) {
+      if ('string' == typeof r) {
+        return _arrayLikeToArray(r, a);
+      }
+      var t = {}.toString.call(r).slice(8, -1);
+      return 'Object' === t && r.constructor && (t = r.constructor.name), 'Map' === t || 'Set' === t ? Array.from(r) : 'Arguments' === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0;
     }
   }
-  function _arrayLikeToArray(arr, len) {
-    if (len == null || len > arr.length) {
-      len = arr.length;
+  function _arrayLikeToArray(r, a) {
+    (null == a || a > r.length) && (a = r.length);
+    for (var e = 0, n = Array(a); e < a; e++) {
+      n[e] = r[e];
     }
-    for (var i = 0, arr2 = new Array(len); i < len; i++) {
-      arr2[i] = arr[i];
-    }
-    return arr2;
+    return n;
   }
   function _typeof(o) {
     '@babel/helpers - typeof';
@@ -6681,7 +6596,7 @@ module.exports = {
       return o && 'function' == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? 'symbol' : typeof o;
     }, _typeof(o);
   }
-  (function(_Class_brand, _path, _space, _r, _g, _b, _red, _green, _blue, _Class3_brand) {
+  (function(_Class_brand, _path, _CSS, _space, _r, _g, _b, _red, _green, _blue, _Class3_brand) {
     var __create = Object.create;
     var __defProp = Object.defineProperty;
     var __getProtoOf = Object.getPrototypeOf;
@@ -11620,8 +11535,8 @@ module.exports = {
       var createNonEnumerableProperty = require_create_non_enumerable_property();
       var hasOwn2 = require_has_own_property();
       var wrapConstructor = function wrapConstructor(NativeConstructor) {
-        var Wrapper = function Wrapper(a2, b2, c4) {
-          if (this instanceof Wrapper) {
+        var _Wrapper = function Wrapper(a2, b2, c4) {
+          if (this instanceof _Wrapper) {
             switch (arguments.length) {
              case 0:
               return new NativeConstructor();
@@ -11636,8 +11551,8 @@ module.exports = {
           }
           return apply(NativeConstructor, this, arguments);
         };
-        Wrapper.prototype = NativeConstructor.prototype;
-        return Wrapper;
+        _Wrapper.prototype = NativeConstructor.prototype;
+        return _Wrapper;
       };
       module.exports = function(options, source) {
         var TARGET = options.target;
@@ -12999,6 +12914,7 @@ module.exports = {
     var constants = {
       helpUrlBase: 'https://dequeuniversity.com/rules/',
       gridSize: 200,
+      selectorSimilarFilterLimit: 700,
       results: [],
       resultGroups: [],
       resultGroupMap: {},
@@ -13183,7 +13099,7 @@ module.exports = {
         return get_scroll_state_default;
       },
       getSelector: function getSelector() {
-        return _getSelector;
+        return get_selector_default;
       },
       getSelectorData: function getSelectorData() {
         return _getSelectorData;
@@ -13203,11 +13119,29 @@ module.exports = {
       injectStyle: function injectStyle() {
         return inject_style_default;
       },
+      isArrayLike: function isArrayLike() {
+        return _isArrayLike;
+      },
+      isContextObject: function isContextObject() {
+        return _isContextObject;
+      },
+      isContextProp: function isContextProp() {
+        return _isContextProp;
+      },
+      isContextSpec: function isContextSpec() {
+        return _isContextSpec;
+      },
       isHidden: function isHidden() {
         return is_hidden_default;
       },
       isHtmlElement: function isHtmlElement() {
         return is_html_element_default;
+      },
+      isLabelledFramesSelector: function isLabelledFramesSelector() {
+        return _isLabelledFramesSelector;
+      },
+      isLabelledShadowDomSelector: function isLabelledShadowDomSelector() {
+        return _isLabelledShadowDomSelector;
       },
       isNodeInContext: function isNodeInContext() {
         return _isNodeInContext;
@@ -13247,6 +13181,9 @@ module.exports = {
       },
       nodeSorter: function nodeSorter() {
         return node_sorter_default;
+      },
+      objectHasOwn: function objectHasOwn() {
+        return _objectHasOwn;
       },
       parseCrossOriginStylesheet: function parseCrossOriginStylesheet() {
         return parse_crossorigin_stylesheet_default;
@@ -13648,7 +13585,9 @@ module.exports = {
     var matchesSelector = function() {
       var method;
       function getMethod(node) {
-        var index, candidate, candidates = [ 'matches', 'matchesSelector', 'mozMatchesSelector', 'webkitMatchesSelector', 'msMatchesSelector' ], length = candidates.length;
+        var candidates = [ 'matches', 'matchesSelector', 'mozMatchesSelector', 'webkitMatchesSelector', 'msMatchesSelector' ];
+        var length = candidates.length;
+        var index, candidate;
         for (index = 0; index < length; index++) {
           candidate = candidates[index];
           if (node[candidate]) {
@@ -13909,8 +13848,8 @@ module.exports = {
         } else {
           selector = features;
         }
-        if (!similar) {
-          similar = Array.from(doc.querySelectorAll(selector));
+        if (!similar || similar.length > constants_default.selectorSimilarFilterLimit) {
+          similar = findSimilar(doc, selector);
         } else {
           similar = similar.filter(function(item) {
             return element_matches_default(item, selector);
@@ -13925,21 +13864,26 @@ module.exports = {
       }
       return ':root';
     }
-    function _getSelector(elm, options) {
+    function getSelector(elm, options) {
       return _getShadowSelector(generateSelector, elm, options);
     }
+    var get_selector_default = memoize_default(getSelector);
+    var findSimilar = memoize_default(function(doc, selector) {
+      return Array.from(doc.querySelectorAll(selector));
+    });
     function generateAncestry(node) {
       var nodeName2 = node.nodeName.toLowerCase();
-      var parent = node.parentElement;
-      if (!parent) {
-        return nodeName2;
-      }
+      var parentElement = node.parentElement;
+      var parentNode = node.parentNode;
       var nthChild = '';
-      if (nodeName2 !== 'head' && nodeName2 !== 'body' && parent.children.length > 1) {
-        var index = Array.prototype.indexOf.call(parent.children, node) + 1;
+      if (nodeName2 !== 'head' && nodeName2 !== 'body' && (parentNode === null || parentNode === void 0 ? void 0 : parentNode.children.length) > 1) {
+        var index = Array.prototype.indexOf.call(parentNode.children, node) + 1;
         nthChild = ':nth-child('.concat(index, ')');
       }
-      return generateAncestry(parent) + ' > ' + nodeName2 + nthChild;
+      if (!parentElement) {
+        return nodeName2 + nthChild;
+      }
+      return generateAncestry(parentElement) + ' > ' + nodeName2 + nthChild;
     }
     function _getAncestry(elm, options) {
       return _getShadowSelector(generateAncestry, elm, options);
@@ -14065,10 +14009,10 @@ module.exports = {
       }
       return truncate(source || '');
     }
-    function DqElement(elm) {
-      var _this$spec$selector, _this$_virtualNode;
-      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
-      var spec = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    var DqElement = memoize_default(function DqElement2(elm, options, spec) {
+      var _options, _spec, _this$spec$selector, _this$_virtualNode;
+      (_options = options) !== null && _options !== void 0 ? _options : options = null;
+      (_spec = spec) !== null && _spec !== void 0 ? _spec : spec = {};
       if (!options) {
         var _cache_default$get;
         options = (_cache_default$get = cache_default.get(CACHE_KEY)) !== null && _cache_default$get !== void 0 ? _cache_default$get : {};
@@ -14099,10 +14043,11 @@ module.exports = {
         var _this$spec$source;
         this.source = (_this$spec$source = this.spec.source) !== null && _this$spec$source !== void 0 ? _this$spec$source : getSource(this._element);
       }
-    }
+      return this;
+    });
     DqElement.prototype = {
       get selector() {
-        return this.spec.selector || [ _getSelector(this.element, this._options) ];
+        return this.spec.selector || [ get_selector_default(this.element, this._options) ];
       },
       get ancestry() {
         return this.spec.ancestry || [ _getAncestry(this.element) ];
@@ -14533,15 +14478,14 @@ module.exports = {
     var _rng;
     var _crypto = window.crypto || window.msCrypto;
     if (!_rng && _crypto && _crypto.getRandomValues) {
-      _rnds8 = new Uint8Array(16);
+      var _rnds8 = new Uint8Array(16);
       _rng = function whatwgRNG() {
         _crypto.getRandomValues(_rnds8);
         return _rnds8;
       };
     }
-    var _rnds8;
     if (!_rng) {
-      _rnds = new Array(16);
+      var _rnds = new Array(16);
       _rng = function _rng() {
         for (var i = 0, r; i < 16; i++) {
           if ((i & 3) === 0) {
@@ -14552,7 +14496,6 @@ module.exports = {
         return _rnds;
       };
     }
-    var _rnds;
     var BufferClass = typeof window.Buffer == 'function' ? window.Buffer : Array;
     var _byteToHex = [];
     var _hexToByte = {};
@@ -14671,7 +14614,7 @@ module.exports = {
       var data;
       try {
         data = JSON.parse(dataString);
-      } catch (e) {
+      } catch (_unused) {
         return;
       }
       if (!isRespondableMessage(data)) {
@@ -14977,7 +14920,7 @@ module.exports = {
     function err(message, node) {
       var selector;
       if (axe._tree) {
-        selector = _getSelector(node);
+        selector = get_selector_default(node);
       }
       return new Error(message + ': ' + (selector || node));
     }
@@ -15074,8 +15017,9 @@ module.exports = {
     }
     function spliceNodes(target, to2) {
       var firstFromFrame = to2[0].node;
+      var node;
       for (var _i3 = 0; _i3 < target.length; _i3++) {
-        var node = target[_i3].node;
+        node = target[_i3].node;
         var resultSort = nodeIndexSort(node.nodeIndexes, firstFromFrame.nodeIndexes);
         if (resultSort > 0 || resultSort === 0 && firstFromFrame.selector.length < node.selector.length) {
           target.splice.apply(target, [ _i3, 0 ].concat(_toConsumableArray(to2)));
@@ -15229,7 +15173,7 @@ module.exports = {
         to2[prop] = null;
         try {
           to2[prop] = from[prop](to2);
-        } catch (e) {}
+        } catch (_unused2) {}
       });
     }
     var extend_meta_data_default = extendMetaData;
@@ -16788,7 +16732,7 @@ module.exports = {
           }
         }
         return result;
-      } catch (e) {
+      } catch (_unused3) {
         throw new TypeError('Cannot resolve id references for non-DOM nodes');
       }
     }
@@ -18051,7 +17995,7 @@ module.exports = {
       },
       form: {
         contentTypes: [ 'flow' ],
-        allowedRoles: [ 'search', 'none', 'presentation' ]
+        allowedRoles: [ 'form', 'search', 'none', 'presentation' ]
       },
       h1: {
         contentTypes: [ 'heading', 'flow' ],
@@ -18806,20 +18750,20 @@ module.exports = {
     function toGrid(node) {
       var table = [];
       var rows = node.rows;
-      for (var i = 0, rowLength = rows.length; i < rowLength; i++) {
-        var cells = rows[i].cells;
-        table[i] = table[i] || [];
+      for (var _i9 = 0, rowLength = rows.length; _i9 < rowLength; _i9++) {
+        var cells = rows[_i9].cells;
+        table[_i9] = table[_i9] || [];
         var columnIndex = 0;
         for (var j = 0, cellLength = cells.length; j < cellLength; j++) {
           for (var colSpan = 0; colSpan < cells[j].colSpan; colSpan++) {
             var rowspanAttr = cells[j].getAttribute('rowspan');
             var rowspanValue = parseInt(rowspanAttr) === 0 || cells[j].rowspan === 0 ? rows.length : cells[j].rowSpan;
             for (var rowSpan = 0; rowSpan < rowspanValue; rowSpan++) {
-              table[i + rowSpan] = table[i + rowSpan] || [];
-              while (table[i + rowSpan][columnIndex]) {
+              table[_i9 + rowSpan] = table[_i9 + rowSpan] || [];
+              while (table[_i9 + rowSpan][columnIndex]) {
                 columnIndex++;
               }
-              table[i + rowSpan][columnIndex] = cells[j];
+              table[_i9 + rowSpan][columnIndex] = cells[j];
             }
             columnIndex++;
           }
@@ -18897,17 +18841,21 @@ module.exports = {
       return str.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ').replace(/[\s]{2,}/g, ' ').trim();
     }
     var sanitize_default = sanitize;
-    var getSectioningElementSelector = function getSectioningElementSelector() {
-      return cache_default.get('sectioningElementSelector', function() {
+    var getSectioningContentSelector = function getSectioningContentSelector() {
+      return cache_default.get('sectioningContentSelector', function() {
         return get_elements_by_content_type_default('sectioning').map(function(nodeName2) {
           return ''.concat(nodeName2, ':not([role])');
-        }).join(', ') + ' , main:not([role]), [role=article], [role=complementary], [role=main], [role=navigation], [role=region]';
+        }).join(', ') + ' , [role=article], [role=complementary], [role=navigation], [role=region]';
+      });
+    };
+    var getSectioningContentPlusMainSelector = function getSectioningContentPlusMainSelector() {
+      return cache_default.get('sectioningContentPlusMainSelector', function() {
+        return getSectioningContentSelector() + ' , main:not([role]), [role=main]';
       });
     };
     function hasAccessibleName(vNode) {
-      var ariaLabelledby = sanitize_default(arialabelledby_text_default(vNode));
-      var ariaLabel = sanitize_default(_arialabelText(vNode));
-      return !!(ariaLabelledby || ariaLabel);
+      var _ref28 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref28$checkTitle = _ref28.checkTitle, checkTitle = _ref28$checkTitle === void 0 ? false : _ref28$checkTitle;
+      return !!(sanitize_default(arialabelledby_text_default(vNode)) || sanitize_default(_arialabelText(vNode)) || checkTitle && (vNode === null || vNode === void 0 ? void 0 : vNode.props.nodeType) === 1 && sanitize_default(vNode.attr('title')));
     }
     var implicitHtmlRoles = {
       a: function a(vNode) {
@@ -18917,7 +18865,14 @@ module.exports = {
         return vNode.hasAttr('href') ? 'link' : null;
       },
       article: 'article',
-      aside: 'complementary',
+      aside: function aside(vNode) {
+        if (closest_default(vNode.parent, getSectioningContentSelector()) && !hasAccessibleName(vNode, {
+          checkTitle: true
+        })) {
+          return null;
+        }
+        return 'complementary';
+      },
       body: 'document',
       button: 'button',
       datalist: 'listbox',
@@ -18929,7 +18884,7 @@ module.exports = {
       fieldset: 'group',
       figure: 'figure',
       footer: function footer(vNode) {
-        var sectioningElement = closest_default(vNode, getSectioningElementSelector());
+        var sectioningElement = closest_default(vNode, getSectioningContentPlusMainSelector());
         return !sectioningElement ? 'contentinfo' : null;
       },
       form: function form(vNode) {
@@ -18942,7 +18897,7 @@ module.exports = {
       h5: 'heading',
       h6: 'heading',
       header: function header(vNode) {
-        var sectioningElement = closest_default(vNode, getSectioningElementSelector());
+        var sectioningElement = closest_default(vNode, getSectioningContentPlusMainSelector());
         return !sectioningElement ? 'banner' : null;
       },
       hr: 'separator',
@@ -19150,7 +19105,7 @@ module.exports = {
     matches_default.semanticRole = semantic_role_default;
     var matches_default2 = matches_default;
     function getElementSpec(vNode) {
-      var _ref28 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref28$noMatchAccessi = _ref28.noMatchAccessibleName, noMatchAccessibleName = _ref28$noMatchAccessi === void 0 ? false : _ref28$noMatchAccessi;
+      var _ref29 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref29$noMatchAccessi = _ref29.noMatchAccessibleName, noMatchAccessibleName = _ref29$noMatchAccessi === void 0 ? false : _ref29$noMatchAccessi;
       var standard = standards_default.htmlElms[vNode.props.nodeName];
       if (!standard) {
         return {};
@@ -19165,8 +19120,8 @@ module.exports = {
         }
         var _variant$variantName = variant[variantName], matches4 = _variant$variantName.matches, props = _objectWithoutProperties(_variant$variantName, _excluded5);
         var matchProperties = Array.isArray(matches4) ? matches4 : [ matches4 ];
-        for (var _i9 = 0; _i9 < matchProperties.length && noMatchAccessibleName; _i9++) {
-          if (matchProperties[_i9].hasOwnProperty('hasAccessibleName')) {
+        for (var _i10 = 0; _i10 < matchProperties.length && noMatchAccessibleName; _i10++) {
+          if (matchProperties[_i10].hasOwnProperty('hasAccessibleName')) {
             return standard;
           }
         }
@@ -19187,7 +19142,7 @@ module.exports = {
     }
     var get_element_spec_default = getElementSpec;
     function implicitRole2(node) {
-      var _ref29 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, chromium = _ref29.chromium;
+      var _ref30 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, chromium = _ref30.chromium;
       var vNode = node instanceof abstract_virtual_node_default ? node : get_node_from_tree_default(node);
       node = vNode.actualNode;
       if (!vNode) {
@@ -19240,8 +19195,8 @@ module.exports = {
       }
       return getInheritedRole(vNode.parent, explicitRoleOptions);
     }
-    function resolveImplicitRole(vNode, _ref30) {
-      var chromium = _ref30.chromium, explicitRoleOptions = _objectWithoutProperties(_ref30, _excluded6);
+    function resolveImplicitRole(vNode, _ref31) {
+      var chromium = _ref31.chromium, explicitRoleOptions = _objectWithoutProperties(_ref31, _excluded6);
       var implicitRole3 = implicit_role_default(vNode, {
         chromium: chromium
       });
@@ -19261,8 +19216,8 @@ module.exports = {
       return hasGlobalAria || _isFocusable(vNode);
     }
     function resolveRole(node) {
-      var _ref31 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var noImplicit = _ref31.noImplicit, roleOptions = _objectWithoutProperties(_ref31, _excluded7);
+      var _ref32 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var noImplicit = _ref32.noImplicit, roleOptions = _objectWithoutProperties(_ref32, _excluded7);
       var _nodeLookup10 = _nodeLookup(node), vNode = _nodeLookup10.vNode;
       if (vNode.props.nodeType !== 1) {
         return null;
@@ -19280,8 +19235,8 @@ module.exports = {
       return explicitRole2;
     }
     function getRole(node) {
-      var _ref32 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var noPresentational = _ref32.noPresentational, options = _objectWithoutProperties(_ref32, _excluded8);
+      var _ref33 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var noPresentational = _ref33.noPresentational, options = _objectWithoutProperties(_ref33, _excluded8);
       var role = resolveRole(node, options);
       if (noPresentational && [ 'presentation', 'none' ].includes(role)) {
         return null;
@@ -19302,7 +19257,7 @@ module.exports = {
     }
     var title_text_default = titleText;
     function namedFromContents(vNode) {
-      var _ref33 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, strict = _ref33.strict;
+      var _ref34 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, strict = _ref34.strict;
       vNode = vNode instanceof abstract_virtual_node_default ? vNode : get_node_from_tree_default(vNode);
       if (vNode.props.nodeType !== 1) {
         return false;
@@ -19601,13 +19556,11 @@ module.exports = {
       button: ''
     };
     var nativeTextMethods = {
-      valueText: function valueText(_ref34) {
-        var actualNode = _ref34.actualNode;
-        return actualNode.value || '';
+      valueText: function valueText(vNode) {
+        return vNode.props.value || '';
       },
-      buttonDefaultText: function buttonDefaultText(_ref35) {
-        var actualNode = _ref35.actualNode;
-        return defaultButtonValues[actualNode.type] || '';
+      buttonDefaultText: function buttonDefaultText(vNode) {
+        return defaultButtonValues[vNode.props.type] || '';
       },
       tableCaptionText: descendantText.bind(null, 'caption'),
       figureText: descendantText.bind(null, 'figcaption'),
@@ -19626,8 +19579,8 @@ module.exports = {
     function attrText(attr, vNode) {
       return vNode.attr(attr) || '';
     }
-    function descendantText(nodeName2, _ref36, context) {
-      var actualNode = _ref36.actualNode;
+    function descendantText(nodeName2, _ref35, context) {
+      var actualNode = _ref35.actualNode;
       nodeName2 = nodeName2.toLowerCase();
       var nodeNames2 = [ nodeName2, actualNode.nodeName.toLowerCase() ].join(',');
       var candidate = actualNode.querySelector(nodeNames2);
@@ -19674,7 +19627,7 @@ module.exports = {
       return /[\xAD\u0600-\u0605\u061C\u06DD\u070F\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]|\uD804[\uDCBD\uDCCD]|\uD80D[\uDC30-\uDC38]|\uD82F[\uDCA0-\uDCA3]|\uD834[\uDD73-\uDD7A]|\uDB40[\uDC01\uDC20-\uDC7F]/g;
     }
     var emoji_regex_default = function emoji_regex_default() {
-      return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26D3\uFE0F?(?:\u200D\uD83D\uDCA5)?|\u26F9(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF43\uDF45-\uDF4A\uDF4C-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF5\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDF44(?:\u200D\uD83D\uDFEB)?|\uDF4B(?:\u200D\uD83D\uDFE9)?|\uDFC3(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E\uDC70\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4\uDEB5](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE41\uDE43\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED7\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC08(?:\u200D\u2B1B)?|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC26(?:\u200D(?:\u2B1B|\uD83D\uDD25))?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE])))?))?|\uDC6F(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDD75(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?|\uDE42(?:\u200D[\u2194\u2195]\uFE0F?)?|\uDEB6(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE88\uDE90-\uDEBD\uDEBF-\uDEC2\uDECE-\uDEDB\uDEE0-\uDEE8]|\uDD3C(?:\u200D[\u2640\u2642]\uFE0F?|\uD83C[\uDFFB-\uDFFF])?|\uDDCE(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1|\uDDD1\u200D\uD83E\uDDD2(?:\u200D\uD83E\uDDD2)?|\uDDD2(?:\u200D\uD83E\uDDD2)?))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
+      return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26D3\uFE0F?(?:\u200D\uD83D\uDCA5)?|\u26F9(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF43\uDF45-\uDF4A\uDF4C-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDF44(?:\u200D\uD83D\uDFEB)?|\uDF4B(?:\u200D\uD83D\uDFE9)?|\uDFC3(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E\uDC70\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4\uDEB5](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE41\uDE43\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED7\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC08(?:\u200D\u2B1B)?|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC26(?:\u200D(?:\u2B1B|\uD83D\uDD25))?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE])))?))?|\uDC6F(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDD75(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?|\uDE42(?:\u200D[\u2194\u2195]\uFE0F?)?|\uDEB6(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE89\uDE8F-\uDEC2\uDEC6\uDECE-\uDEDC\uDEDF-\uDEE9]|\uDD3C(?:\u200D[\u2640\u2642]\uFE0F?|\uD83C[\uDFFB-\uDFFF])?|\uDDCE(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1|\uDDD1\u200D\uD83E\uDDD2(?:\u200D\uD83E\uDDD2)?|\uDDD2(?:\u200D\uD83E\uDDD2)?))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
     };
     function hasUnicode(str, options) {
       var emoji = options.emoji, nonBmp = options.nonBmp, punctuations = options.punctuations;
@@ -19895,7 +19848,7 @@ module.exports = {
       locations: [ 'billing', 'shipping' ]
     };
     function isValidAutocomplete(autocompleteValue) {
-      var _ref37 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref37$looseTyped = _ref37.looseTyped, looseTyped = _ref37$looseTyped === void 0 ? false : _ref37$looseTyped, _ref37$stateTerms = _ref37.stateTerms, stateTerms = _ref37$stateTerms === void 0 ? [] : _ref37$stateTerms, _ref37$locations = _ref37.locations, locations = _ref37$locations === void 0 ? [] : _ref37$locations, _ref37$qualifiers = _ref37.qualifiers, qualifiers = _ref37$qualifiers === void 0 ? [] : _ref37$qualifiers, _ref37$standaloneTerm = _ref37.standaloneTerms, standaloneTerms = _ref37$standaloneTerm === void 0 ? [] : _ref37$standaloneTerm, _ref37$qualifiedTerms = _ref37.qualifiedTerms, qualifiedTerms = _ref37$qualifiedTerms === void 0 ? [] : _ref37$qualifiedTerms;
+      var _ref36 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref36$looseTyped = _ref36.looseTyped, looseTyped = _ref36$looseTyped === void 0 ? false : _ref36$looseTyped, _ref36$stateTerms = _ref36.stateTerms, stateTerms = _ref36$stateTerms === void 0 ? [] : _ref36$stateTerms, _ref36$locations = _ref36.locations, locations = _ref36$locations === void 0 ? [] : _ref36$locations, _ref36$qualifiers = _ref36.qualifiers, qualifiers = _ref36$qualifiers === void 0 ? [] : _ref36$qualifiers, _ref36$standaloneTerm = _ref36.standaloneTerms, standaloneTerms = _ref36$standaloneTerm === void 0 ? [] : _ref36$standaloneTerm, _ref36$qualifiedTerms = _ref36.qualifiedTerms, qualifiedTerms = _ref36$qualifiedTerms === void 0 ? [] : _ref36$qualifiedTerms, _ref36$ignoredValues = _ref36.ignoredValues, ignoredValues = _ref36$ignoredValues === void 0 ? [] : _ref36$ignoredValues;
       autocompleteValue = autocompleteValue.toLowerCase().trim();
       stateTerms = stateTerms.concat(_autocomplete.stateTerms);
       if (stateTerms.includes(autocompleteValue) || autocompleteValue === '') {
@@ -19928,6 +19881,9 @@ module.exports = {
         }
       }
       var purposeTerm = autocompleteTerms[autocompleteTerms.length - 1];
+      if (ignoredValues.includes(purposeTerm)) {
+        return void 0;
+      }
       return standaloneTerms.includes(purposeTerm) || qualifiedTerms.includes(purposeTerm);
     }
     var is_valid_autocomplete_default = isValidAutocomplete;
@@ -20160,8 +20116,8 @@ module.exports = {
       if (hiddenTextElms.includes(elm.props.nodeName)) {
         return false;
       }
-      return elm.children.some(function(_ref38) {
-        var props = _ref38.props;
+      return elm.children.some(function(_ref37) {
+        var props = _ref37.props;
         return props.nodeType === 3 && props.nodeValue.trim();
       });
     }
@@ -20351,7 +20307,7 @@ module.exports = {
         return Array.from(document.elementsFromPoint(point.x, point.y));
       });
       var _loop4 = function _loop4() {
-        var modalElement = stacks[_i10].find(function(elm) {
+        var modalElement = stacks[_i11].find(function(elm) {
           var style = window.getComputedStyle(elm);
           return parseInt(style.width, 10) >= percentWidth && parseInt(style.height, 10) >= percentHeight && style.getPropertyValue('pointer-events') !== 'none' && (style.position === 'absolute' || style.position === 'fixed');
         });
@@ -20364,7 +20320,7 @@ module.exports = {
           };
         }
       }, _ret;
-      for (var _i10 = 0; _i10 < stacks.length; _i10++) {
+      for (var _i11 = 0; _i11 < stacks.length; _i11++) {
         _ret = _loop4();
         if (_ret) {
           return _ret.v;
@@ -20454,7 +20410,7 @@ module.exports = {
         return import_from2['default'];
       },
       Colorjs: function Colorjs() {
-        return Color;
+        return _Color;
       },
       CssSelectorParser: function CssSelectorParser() {
         return import_css_selector_parser2.CssSelectorParser;
@@ -20533,9 +20489,9 @@ module.exports = {
           var length = list.length >>> 0;
           var thisArg = arguments[1];
           var value;
-          for (var i = 0; i < length; i++) {
-            value = list[i];
-            if (predicate.call(thisArg, value, i, list)) {
+          for (var _i12 = 0; _i12 < length; _i12++) {
+            value = list[_i12];
+            if (predicate.call(thisArg, value, _i12, list)) {
               return value;
             }
           }
@@ -20555,10 +20511,10 @@ module.exports = {
           var list = Object(this);
           var length = list.length >>> 0;
           var value;
-          for (var i = 0; i < length; i++) {
-            value = list[i];
-            if (predicate.call(thisArg, value, i, list)) {
-              return i;
+          for (var _i13 = 0; _i13 < length; _i13++) {
+            value = list[_i13];
+            if (predicate.call(thisArg, value, _i13, list)) {
+              return _i13;
             }
           }
           return -1;
@@ -20607,8 +20563,8 @@ module.exports = {
           var t = Object(this);
           var len = t.length >>> 0;
           var thisArg = arguments.length >= 2 ? arguments[1] : void 0;
-          for (var i = 0; i < len; i++) {
-            if (i in t && fun.call(thisArg, t[i], i, t)) {
+          for (var _i14 = 0; _i14 < len; _i14++) {
+            if (_i14 in t && fun.call(thisArg, t[_i14], _i14, t)) {
               return true;
             }
           }
@@ -20691,8 +20647,8 @@ module.exports = {
             }
             return ret;
           }
-          for (var _i11 = 0; _i11 < row.length; _i11++) {
-            ret += row[_i11] * (col[_i11] || 0);
+          for (var _i15 = 0; _i15 < row.length; _i15++) {
+            ret += row[_i15] * (col[_i15] || 0);
           }
           return ret;
         });
@@ -20884,15 +20840,15 @@ module.exports = {
       }
     }
     var \u03b5$4 = 75e-6;
-    var _ColorSpace = (_Class_brand = new WeakSet(), _path = new WeakMap(), function() {
+    var _ColorSpace2 = (_Class_brand = new WeakSet(), _path = new WeakMap(), function() {
       function _ColorSpace(options) {
-        var _options$coords, _ref39, _options$white, _options$formats, _this$formats$functio, _this$formats, _this$formats2;
+        var _options$coords, _ref38, _options$white, _options$formats, _this$formats$functio, _this$formats, _this$formats2;
         _classCallCheck(this, _ColorSpace);
         _classPrivateMethodInitSpec(this, _Class_brand);
         _classPrivateFieldInitSpec(this, _path, void 0);
         this.id = options.id;
         this.name = options.name;
-        this.base = options.base ? _ColorSpace.get(options.base) : null;
+        this.base = options.base ? _ColorSpace2.get(options.base) : null;
         this.aliases = options.aliases;
         if (this.base) {
           this.fromBase = options.fromBase;
@@ -20900,7 +20856,7 @@ module.exports = {
         }
         var _coords = (_options$coords = options.coords) !== null && _options$coords !== void 0 ? _options$coords : this.base.coords;
         this.coords = _coords;
-        var white2 = (_ref39 = (_options$white = options.white) !== null && _options$white !== void 0 ? _options$white : this.base.white) !== null && _ref39 !== void 0 ? _ref39 : 'D65';
+        var white2 = (_ref38 = (_options$white = options.white) !== null && _options$white !== void 0 ? _options$white : this.base.white) !== null && _ref38 !== void 0 ? _ref38 : 'D65';
         this.white = getWhite(white2);
         this.formats = (_options$formats = options.formats) !== null && _options$formats !== void 0 ? _options$formats : {};
         for (var name in this.formats) {
@@ -20925,7 +20881,7 @@ module.exports = {
       return _createClass(_ColorSpace, [ {
         key: 'inGamut',
         value: function inGamut(coords) {
-          var _ref40 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref40$epsilon = _ref40.epsilon, epsilon = _ref40$epsilon === void 0 ? \u03b5$4 : _ref40$epsilon;
+          var _ref39 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref39$epsilon = _ref39.epsilon, epsilon = _ref39$epsilon === void 0 ? \u03b5$4 : _ref39$epsilon;
           if (this.isPolar) {
             coords = this.toBase(coords);
             return this.base.inGamut(coords, {
@@ -20984,11 +20940,11 @@ module.exports = {
         key: 'to',
         value: function to(space, coords) {
           if (arguments.length === 1) {
-            var _ref41 = [ space.space, space.coords ];
-            space = _ref41[0];
-            coords = _ref41[1];
+            var _ref40 = [ space.space, space.coords ];
+            space = _ref40[0];
+            coords = _ref40[1];
           }
-          space = _ColorSpace.get(space);
+          space = _ColorSpace2.get(space);
           if (this === space) {
             return coords;
           }
@@ -20998,10 +20954,10 @@ module.exports = {
           var myPath = _classPrivateFieldGet(_path, this);
           var otherPath = _classPrivateFieldGet(_path, space);
           var connectionSpace, connectionSpaceIndex;
-          for (var _i12 = 0; _i12 < myPath.length; _i12++) {
-            if (myPath[_i12] === otherPath[_i12]) {
-              connectionSpace = myPath[_i12];
-              connectionSpaceIndex = _i12;
+          for (var _i16 = 0; _i16 < myPath.length; _i16++) {
+            if (myPath[_i16] === otherPath[_i16]) {
+              connectionSpace = myPath[_i16];
+              connectionSpaceIndex = _i16;
             } else {
               break;
             }
@@ -21009,11 +20965,11 @@ module.exports = {
           if (!connectionSpace) {
             throw new Error('Cannot convert between color spaces '.concat(this, ' and ').concat(space, ': no connection space was found'));
           }
-          for (var _i13 = myPath.length - 1; _i13 > connectionSpaceIndex; _i13--) {
-            coords = myPath[_i13].toBase(coords);
+          for (var _i17 = myPath.length - 1; _i17 > connectionSpaceIndex; _i17--) {
+            coords = myPath[_i17].toBase(coords);
           }
-          for (var _i14 = connectionSpaceIndex + 1; _i14 < otherPath.length; _i14++) {
-            coords = otherPath[_i14].fromBase(coords);
+          for (var _i18 = connectionSpaceIndex + 1; _i18 < otherPath.length; _i18++) {
+            coords = otherPath[_i18].fromBase(coords);
           }
           return coords;
         }
@@ -21021,11 +20977,11 @@ module.exports = {
         key: 'from',
         value: function from(space, coords) {
           if (arguments.length === 1) {
-            var _ref42 = [ space.space, space.coords ];
-            space = _ref42[0];
-            coords = _ref42[1];
+            var _ref41 = [ space.space, space.coords ];
+            space = _ref41[0];
+            coords = _ref41[1];
           }
-          space = _ColorSpace.get(space);
+          space = _ColorSpace2.get(space);
           return space.to(this, coords);
         }
       }, {
@@ -21048,7 +21004,7 @@ module.exports = {
       } ], [ {
         key: 'all',
         get: function get() {
-          return _toConsumableArray(new Set(Object.values(_ColorSpace.registry)));
+          return _toConsumableArray(new Set(Object.values(_ColorSpace2.registry)));
         }
       }, {
         key: 'register',
@@ -21080,12 +21036,12 @@ module.exports = {
       }, {
         key: 'get',
         value: function get(space) {
-          if (!space || space instanceof _ColorSpace) {
+          if (!space || space instanceof _ColorSpace2) {
             return space;
           }
           var argType = type(space);
           if (argType === 'string') {
-            var ret = _ColorSpace.registry[space.toLowerCase()];
+            var ret = _ColorSpace2.registry[space.toLowerCase()];
             if (!ret) {
               throw new TypeError('No color space found with id = "'.concat(space, '"'));
             }
@@ -21095,7 +21051,7 @@ module.exports = {
             alternatives[_key2 - 1] = arguments[_key2];
           }
           if (alternatives.length) {
-            return _ColorSpace.get.apply(_ColorSpace, alternatives);
+            return _ColorSpace2.get.apply(_ColorSpace2, alternatives);
           }
           throw new TypeError(''.concat(space, ' is not a valid color space'));
         }
@@ -21115,14 +21071,14 @@ module.exports = {
               coord = ref;
             }
           } else if (Array.isArray(ref)) {
-            var _ref43 = _slicedToArray(ref, 2);
-            space = _ref43[0];
-            coord = _ref43[1];
+            var _ref42 = _slicedToArray(ref, 2);
+            space = _ref42[0];
+            coord = _ref42[1];
           } else {
             space = ref.space;
             coord = ref.coordId;
           }
-          space = _ColorSpace.get(space);
+          space = _ColorSpace2.get(space);
           if (!space) {
             space = workingSpace;
           }
@@ -21140,7 +21096,7 @@ module.exports = {
               }, meta[1]);
             }
           }
-          space = _ColorSpace.get(space);
+          space = _ColorSpace2.get(space);
           var normalizedCoord = coord.toLowerCase();
           var i = 0;
           for (var id in space.coords) {
@@ -21164,8 +21120,8 @@ module.exports = {
         format.type || (format.type = 'function');
         format.name || (format.name = 'color');
         format.coordGrammar = parseCoordGrammar(format.coords);
-        var coordFormats = Object.entries(this.coords).map(function(_ref151, i) {
-          var _ref152 = _slicedToArray(_ref151, 2), id = _ref152[0], coordMeta = _ref152[1];
+        var coordFormats = Object.entries(this.coords).map(function(_ref150, i) {
+          var _ref151 = _slicedToArray(_ref150, 2), id = _ref151[0], coordMeta = _ref151[1];
           var outputType = format.coordGrammar[i][0];
           var fromRange = coordMeta.range || coordMeta.refRange;
           var toRange = outputType.range, suffix = '';
@@ -21204,7 +21160,7 @@ module.exports = {
       }
       return ret;
     }
-    var ColorSpace = _ColorSpace;
+    var ColorSpace = _ColorSpace2;
     __publicField(ColorSpace, 'registry', {});
     __publicField(ColorSpace, 'DEFAULT_FORMAT', {
       type: 'functions',
@@ -21232,7 +21188,7 @@ module.exports = {
       },
       aliases: [ 'xyz' ]
     });
-    var RGBColorSpace = function(_ColorSpace2) {
+    var RGBColorSpace = function(_ColorSpace3) {
       function RGBColorSpace(options) {
         var _options$referred;
         var _this;
@@ -21273,7 +21229,7 @@ module.exports = {
         (_options$referred = options.referred) !== null && _options$referred !== void 0 ? _options$referred : options.referred = 'display';
         return _this = _callSuper(this, RGBColorSpace, [ options ]);
       }
-      _inherits(RGBColorSpace, _ColorSpace2);
+      _inherits(RGBColorSpace, _ColorSpace3);
       return _createClass(RGBColorSpace);
     }(ColorSpace);
     function parse2(str) {
@@ -21347,9 +21303,9 @@ module.exports = {
                 }
                 var coords = env.parsed.args;
                 if (format.coordGrammar) {
-                  Object.entries(space.coords).forEach(function(_ref44, i) {
+                  Object.entries(space.coords).forEach(function(_ref43, i) {
                     var _coords$i;
-                    var _ref45 = _slicedToArray(_ref44, 2), id = _ref45[0], coordMeta = _ref45[1];
+                    var _ref44 = _slicedToArray(_ref43, 2), id = _ref44[0], coordMeta = _ref44[1];
                     var coordGrammar2 = format.coordGrammar[i];
                     var providedType = (_coords$i = coords[i]) === null || _coords$i === void 0 ? void 0 : _coords$i.type;
                     coordGrammar2 = coordGrammar2.find(function(c4) {
@@ -21613,7 +21569,7 @@ module.exports = {
     var r2d = 180 / \u03c0$1;
     var d2r$1 = \u03c0$1 / 180;
     function deltaE2000(color, sample) {
-      var _ref46 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref46$kL = _ref46.kL, kL = _ref46$kL === void 0 ? 1 : _ref46$kL, _ref46$kC = _ref46.kC, kC = _ref46$kC === void 0 ? 1 : _ref46$kC, _ref46$kH = _ref46.kH, kH = _ref46$kH === void 0 ? 1 : _ref46$kH;
+      var _ref45 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref45$kL = _ref45.kL, kL = _ref45$kL === void 0 ? 1 : _ref45$kL, _ref45$kC = _ref45.kC, kC = _ref45$kC === void 0 ? 1 : _ref45$kC, _ref45$kH = _ref45.kH, kH = _ref45$kH === void 0 ? 1 : _ref45$kH;
       var _lab$from = lab.from(color), _lab$from2 = _slicedToArray(_lab$from, 3), L1 = _lab$from2[0], a1 = _lab$from2[1], b1 = _lab$from2[2];
       var C1 = lch.from(lab, [ L1, a1, b1 ])[1];
       var _lab$from3 = lab.from(sample), _lab$from4 = _slicedToArray(_lab$from3, 3), L2 = _lab$from4[0], a2 = _lab$from4[1], b2 = _lab$from4[2];
@@ -21693,7 +21649,7 @@ module.exports = {
     var \u03b5$2 = 75e-6;
     function inGamut(color) {
       var space = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : color.space;
-      var _ref47 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref47$epsilon = _ref47.epsilon, epsilon = _ref47$epsilon === void 0 ? \u03b5$2 : _ref47$epsilon;
+      var _ref46 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref46$epsilon = _ref46.epsilon, epsilon = _ref46$epsilon === void 0 ? \u03b5$2 : _ref46$epsilon;
       color = getColor(color);
       space = ColorSpace.get(space);
       var coords = color.coords;
@@ -21712,7 +21668,7 @@ module.exports = {
       };
     }
     function toGamut(color) {
-      var _ref48 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref48$method = _ref48.method, method = _ref48$method === void 0 ? defaults.gamut_mapping : _ref48$method, _ref48$space = _ref48.space, space = _ref48$space === void 0 ? color.space : _ref48$space;
+      var _ref47 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref47$method = _ref47.method, method = _ref47$method === void 0 ? defaults.gamut_mapping : _ref47$method, _ref47$space = _ref47.space, space = _ref47$space === void 0 ? color.space : _ref47$space;
       if (isString(arguments[1])) {
         space = arguments[1];
       }
@@ -21782,7 +21738,7 @@ module.exports = {
     }
     toGamut.returns = 'color';
     function to(color, space) {
-      var _ref49 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, inGamut2 = _ref49.inGamut;
+      var _ref48 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, inGamut2 = _ref48.inGamut;
       color = getColor(color);
       space = ColorSpace.get(space);
       var coords = space.from(color);
@@ -21798,13 +21754,13 @@ module.exports = {
     }
     to.returns = 'color';
     function serialize(color) {
-      var _ref51, _color$space$getForma;
-      var _ref50 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var _ref50$precision = _ref50.precision, precision = _ref50$precision === void 0 ? defaults.precision : _ref50$precision, _ref50$format = _ref50.format, format = _ref50$format === void 0 ? 'default' : _ref50$format, _ref50$inGamut = _ref50.inGamut, inGamut$1 = _ref50$inGamut === void 0 ? true : _ref50$inGamut, customOptions = _objectWithoutProperties(_ref50, _excluded9);
+      var _ref50, _color$space$getForma;
+      var _ref49 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var _ref49$precision = _ref49.precision, precision = _ref49$precision === void 0 ? defaults.precision : _ref49$precision, _ref49$format = _ref49.format, format = _ref49$format === void 0 ? 'default' : _ref49$format, _ref49$inGamut = _ref49.inGamut, inGamut$1 = _ref49$inGamut === void 0 ? true : _ref49$inGamut, customOptions = _objectWithoutProperties(_ref49, _excluded9);
       var ret;
       color = getColor(color);
       var formatId = format;
-      format = (_ref51 = (_color$space$getForma = color.space.getFormat(format)) !== null && _color$space$getForma !== void 0 ? _color$space$getForma : color.space.getFormat('default')) !== null && _ref51 !== void 0 ? _ref51 : ColorSpace.DEFAULT_FORMAT;
+      format = (_ref50 = (_color$space$getForma = color.space.getFormat(format)) !== null && _color$space$getForma !== void 0 ? _color$space$getForma : color.space.getFormat('default')) !== null && _ref50 !== void 0 ? _ref50 : ColorSpace.DEFAULT_FORMAT;
       inGamut$1 || (inGamut$1 = format.toGamut);
       var coords = color.coords;
       coords = coords.map(function(c4) {
@@ -22123,7 +22079,7 @@ module.exports = {
             };
           },
           serialize: function serialize(coords, alpha) {
-            var _ref52 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref52$collapse = _ref52.collapse, collapse = _ref52$collapse === void 0 ? true : _ref52$collapse;
+            var _ref51 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref51$collapse = _ref51.collapse, collapse = _ref51$collapse === void 0 ? true : _ref51$collapse;
             if (alpha < 1) {
               coords.push(alpha);
             }
@@ -22180,9 +22136,9 @@ module.exports = {
       }
     });
     defaults.display_space = sRGB;
-    if (typeof CSS !== 'undefined' && CSS.supports) {
-      for (var _i15 = 0, _arr2 = [ lab, REC2020, P3 ]; _i15 < _arr2.length; _i15++) {
-        var space = _arr2[_i15];
+    if (typeof CSS !== 'undefined' && (_CSS = CSS) !== null && _CSS !== void 0 && _CSS.supports) {
+      for (var _i19 = 0, _arr2 = [ lab, REC2020, P3 ]; _i19 < _arr2.length; _i19++) {
+        var space = _arr2[_i19];
         var coords = space.getMinCoords();
         var color = {
           space: space,
@@ -22197,10 +22153,11 @@ module.exports = {
       }
     }
     function _display(color) {
-      var _ref53 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-      var _ref53$space = _ref53.space, space = _ref53$space === void 0 ? defaults.display_space : _ref53$space, options = _objectWithoutProperties(_ref53, _excluded10);
+      var _CSS2;
+      var _ref52 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var _ref52$space = _ref52.space, space = _ref52$space === void 0 ? defaults.display_space : _ref52$space, options = _objectWithoutProperties(_ref52, _excluded10);
       var ret = serialize(color, options);
-      if (typeof CSS === 'undefined' || CSS.supports('color', ret) || !defaults.display_space) {
+      if (typeof CSS === 'undefined' || (_CSS2 = CSS) !== null && _CSS2 !== void 0 && _CSS2.supports('color', ret) || !defaults.display_space) {
         ret = new String(ret);
         ret.color = color;
       } else {
@@ -22258,9 +22215,9 @@ module.exports = {
       var Y1 = Math.max(getLuminance(color1), 0);
       var Y2 = Math.max(getLuminance(color2), 0);
       if (Y2 > Y1) {
-        var _ref54 = [ Y2, Y1 ];
-        Y1 = _ref54[0];
-        Y2 = _ref54[1];
+        var _ref53 = [ Y2, Y1 ];
+        Y1 = _ref53[0];
+        Y2 = _ref53[1];
       }
       return (Y1 + .05) / (Y2 + .05);
     }
@@ -22334,9 +22291,9 @@ module.exports = {
       var Y1 = Math.max(getLuminance(color1), 0);
       var Y2 = Math.max(getLuminance(color2), 0);
       if (Y2 > Y1) {
-        var _ref55 = [ Y2, Y1 ];
-        Y1 = _ref55[0];
-        Y2 = _ref55[1];
+        var _ref54 = [ Y2, Y1 ];
+        Y1 = _ref54[0];
+        Y2 = _ref54[1];
       }
       var denom = Y1 + Y2;
       return denom === 0 ? 0 : (Y1 - Y2) / denom;
@@ -22348,9 +22305,9 @@ module.exports = {
       var Y1 = Math.max(getLuminance(color1), 0);
       var Y2 = Math.max(getLuminance(color2), 0);
       if (Y2 > Y1) {
-        var _ref56 = [ Y2, Y1 ];
-        Y1 = _ref56[0];
-        Y2 = _ref56[1];
+        var _ref55 = [ Y2, Y1 ];
+        Y1 = _ref55[0];
+        Y2 = _ref55[1];
       }
       return Y2 === 0 ? max : (Y1 - Y2) / Y2;
     }
@@ -22483,7 +22440,7 @@ module.exports = {
     var \u03c0 = Math.PI;
     var d2r = \u03c0 / 180;
     function deltaECMC(color, sample) {
-      var _ref57 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref57$l = _ref57.l, l = _ref57$l === void 0 ? 2 : _ref57$l, _ref57$c = _ref57.c, c4 = _ref57$c === void 0 ? 1 : _ref57$c;
+      var _ref56 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {}, _ref56$l = _ref56.l, l = _ref56$l === void 0 ? 2 : _ref56$l, _ref56$c = _ref56.c, c4 = _ref56$c === void 0 ? 1 : _ref56$c;
       var _lab$from5 = lab.from(color), _lab$from6 = _slicedToArray(_lab$from5, 3), L1 = _lab$from6[0], a1 = _lab$from6[1], b1 = _lab$from6[2];
       var _lch$from = lch.from(lab, [ L1, a1, b1 ]), _lch$from2 = _slicedToArray(_lch$from, 3), C1 = _lch$from2[1], H1 = _lch$from2[2];
       var _lab$from7 = lab.from(sample), _lab$from8 = _slicedToArray(_lab$from7, 3), L2 = _lab$from8[0], a2 = _lab$from8[1], b2 = _lab$from8[2];
@@ -22831,13 +22788,13 @@ module.exports = {
     function mix(c12, c22) {
       var p2 = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : .5;
       var o = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
-      var _ref58 = [ getColor(c12), getColor(c22) ];
-      c12 = _ref58[0];
-      c22 = _ref58[1];
+      var _ref57 = [ getColor(c12), getColor(c22) ];
+      c12 = _ref57[0];
+      c22 = _ref57[1];
       if (type(p2) === 'object') {
-        var _ref59 = [ .5, p2 ];
-        p2 = _ref59[0];
-        o = _ref59[1];
+        var _ref58 = [ .5, p2 ];
+        p2 = _ref58[0];
+        o = _ref58[1];
       }
       var _o3 = o, space = _o3.space, outputSpace = _o3.outputSpace, premultiplied = _o3.premultiplied;
       var r = range(c12, c22, {
@@ -22857,11 +22814,11 @@ module.exports = {
         c12 = _colorRange$rangeArgs[0];
         c22 = _colorRange$rangeArgs[1];
       }
-      var _options = options, maxDeltaE = _options.maxDeltaE, deltaEMethod = _options.deltaEMethod, _options$steps = _options.steps, steps2 = _options$steps === void 0 ? 2 : _options$steps, _options$maxSteps = _options.maxSteps, maxSteps = _options$maxSteps === void 0 ? 1e3 : _options$maxSteps, rangeOptions = _objectWithoutProperties(_options, _excluded13);
+      var _options2 = options, maxDeltaE = _options2.maxDeltaE, deltaEMethod = _options2.deltaEMethod, _options2$steps = _options2.steps, steps2 = _options2$steps === void 0 ? 2 : _options2$steps, _options2$maxSteps = _options2.maxSteps, maxSteps = _options2$maxSteps === void 0 ? 1e3 : _options2$maxSteps, rangeOptions = _objectWithoutProperties(_options2, _excluded13);
       if (!colorRange) {
-        var _ref60 = [ getColor(c12), getColor(c22) ];
-        c12 = _ref60[0];
-        c22 = _ref60[1];
+        var _ref59 = [ getColor(c12), getColor(c22) ];
+        c12 = _ref59[0];
+        c22 = _ref59[1];
         colorRange = range(c12, c22, rangeOptions);
       }
       var totalDelta = deltaE(c12, c22);
@@ -22897,17 +22854,17 @@ module.exports = {
         }, 0);
         while (maxDelta > maxDeltaE) {
           maxDelta = 0;
-          for (var _i16 = 1; _i16 < ret.length && ret.length < maxSteps; _i16++) {
-            var prev = ret[_i16 - 1];
-            var cur = ret[_i16];
+          for (var _i20 = 1; _i20 < ret.length && ret.length < maxSteps; _i20++) {
+            var prev = ret[_i20 - 1];
+            var cur = ret[_i20];
             var p2 = (cur.p + prev.p) / 2;
             var _color = colorRange(p2);
             maxDelta = Math.max(maxDelta, deltaE(_color, prev.color), deltaE(_color, cur.color));
-            ret.splice(_i16, 0, {
+            ret.splice(_i20, 0, {
               p: p2,
               color: colorRange(p2)
             });
-            _i16++;
+            _i20++;
           }
         }
       }
@@ -22944,7 +22901,7 @@ module.exports = {
       if (space.coords.h && space.coords.h.type === 'angle') {
         var arc = options.hue = options.hue || 'shorter';
         var hue = [ space, 'h' ];
-        var _ref61 = [ get(color1, hue), get(color2, hue) ], \u03b81 = _ref61[0], \u03b82 = _ref61[1];
+        var _ref60 = [ get(color1, hue), get(color2, hue) ], \u03b81 = _ref60[0], \u03b82 = _ref60[1];
         var _adjust = adjust(arc, [ \u03b81, \u03b82 ]);
         var _adjust2 = _slicedToArray(_adjust, 2);
         \u03b81 = _adjust2[0];
@@ -23346,8 +23303,8 @@ module.exports = {
         env.M = adapt(env.W1, env.W2, env.options.method);
       }
     });
-    function defineCAT(_ref62) {
-      var id = _ref62.id, toCone_M = _ref62.toCone_M, fromCone_M = _ref62.fromCone_M;
+    function defineCAT(_ref61) {
+      var id = _ref61.id, toCone_M = _ref61.toCone_M, fromCone_M = _ref61.fromCone_M;
       CATs[id] = arguments[0];
     }
     function adapt(W1, W2) {
@@ -23498,7 +23455,7 @@ module.exports = {
       ACEScg: ACEScg,
       ACEScc: acescc
     });
-    var Color = (_space = new WeakMap(), function() {
+    var _Color = (_space = new WeakMap(), function() {
       function Color() {
         var _this2 = this;
         _classCallCheck(this, Color);
@@ -23523,9 +23480,9 @@ module.exports = {
         _classPrivateFieldSet(_space, this, ColorSpace.get(space));
         this.coords = coords ? coords.slice() : [ 0, 0, 0 ];
         this.alpha = alpha < 1 ? alpha : 1;
-        for (var _i17 = 0; _i17 < this.coords.length; _i17++) {
-          if (this.coords[_i17] === 'NaN') {
-            this.coords[_i17] = NaN;
+        for (var _i21 = 0; _i21 < this.coords.length; _i21++) {
+          if (this.coords[_i21] === 'NaN') {
+            this.coords[_i21] = NaN;
           }
         }
         var _loop7 = function _loop7(id) {
@@ -23555,7 +23512,7 @@ module.exports = {
       }, {
         key: 'clone',
         value: function clone() {
-          return new Color(this.space, this.coords, this.alpha);
+          return new _Color(this.space, this.coords, this.alpha);
         }
       }, {
         key: 'toJSON',
@@ -23573,19 +23530,19 @@ module.exports = {
             args[_key4] = arguments[_key4];
           }
           var ret = _display.apply(void 0, [ this ].concat(args));
-          ret.color = new Color(ret.color);
+          ret.color = new _Color(ret.color);
           return ret;
         }
       } ], [ {
         key: 'get',
         value: function get(color) {
-          if (color instanceof Color) {
+          if (color instanceof _Color) {
             return color;
           }
           for (var _len5 = arguments.length, args = new Array(_len5 > 1 ? _len5 - 1 : 0), _key5 = 1; _key5 < _len5; _key5++) {
             args[_key5 - 1] = arguments[_key5];
           }
-          return _construct(Color, [ color ].concat(args));
+          return _construct(_Color, [ color ].concat(args));
         }
       }, {
         key: 'defineFunction',
@@ -23595,26 +23552,26 @@ module.exports = {
           var func = function func() {
             var ret = code.apply(void 0, arguments);
             if (returns === 'color') {
-              ret = Color.get(ret);
+              ret = _Color.get(ret);
             } else if (returns === 'function<color>') {
               var f = ret;
               ret = function ret() {
                 var ret2 = f.apply(void 0, arguments);
-                return Color.get(ret2);
+                return _Color.get(ret2);
               };
               Object.assign(ret, f);
             } else if (returns === 'array<color>') {
               ret = ret.map(function(c4) {
-                return Color.get(c4);
+                return _Color.get(c4);
               });
             }
             return ret;
           };
-          if (!(name in Color)) {
-            Color[name] = func;
+          if (!(name in _Color)) {
+            _Color[name] = func;
           }
           if (instance) {
-            Color.prototype[name] = function() {
+            _Color.prototype[name] = function() {
               for (var _len6 = arguments.length, args = new Array(_len6), _key6 = 0; _key6 < _len6; _key6++) {
                 args[_key6] = arguments[_key6];
               }
@@ -23626,23 +23583,23 @@ module.exports = {
         key: 'defineFunctions',
         value: function defineFunctions(o) {
           for (var name in o) {
-            Color.defineFunction(name, o[name], o[name]);
+            _Color.defineFunction(name, o[name], o[name]);
           }
         }
       }, {
         key: 'extend',
         value: function extend(exports) {
           if (exports.register) {
-            exports.register(Color);
+            exports.register(_Color);
           } else {
             for (var name in exports) {
-              Color.defineFunction(name, exports[name]);
+              _Color.defineFunction(name, exports[name]);
             }
           }
         }
       } ]);
     }());
-    Color.defineFunctions({
+    _Color.defineFunctions({
       get: get,
       getAll: getAll,
       set: set,
@@ -23654,7 +23611,7 @@ module.exports = {
       distance: distance,
       toString: serialize
     });
-    Object.assign(Color, {
+    Object.assign(_Color, {
       util: util,
       hooks: hooks,
       WHITES: WHITES,
@@ -23663,8 +23620,8 @@ module.exports = {
       parse: parse2,
       defaults: defaults
     });
-    for (var _i18 = 0, _Object$keys2 = Object.keys(spaces); _i18 < _Object$keys2.length; _i18++) {
-      var key = _Object$keys2[_i18];
+    for (var _i22 = 0, _Object$keys2 = Object.keys(spaces); _i22 < _Object$keys2.length; _i22++) {
+      var key = _Object$keys2[_i22];
       ColorSpace.register(spaces[key]);
     }
     for (var id in ColorSpace.registry) {
@@ -23683,7 +23640,7 @@ module.exports = {
         return c4.name;
       });
       var propId = id.replace(/-/g, '_');
-      Object.defineProperty(Color.prototype, propId, {
+      Object.defineProperty(_Color.prototype, propId, {
         get: function get() {
           var _this3 = this;
           var ret = this.getAll(id);
@@ -23727,23 +23684,23 @@ module.exports = {
         enumerable: true
       });
     }
-    Color.extend(deltaEMethods);
-    Color.extend({
+    _Color.extend(deltaEMethods);
+    _Color.extend({
       deltaE: deltaE
     });
-    Color.extend(variations);
-    Color.extend({
+    _Color.extend(variations);
+    _Color.extend({
       contrast: contrast
     });
-    Color.extend(chromaticity);
-    Color.extend(luminance);
-    Color.extend(interpolation);
-    Color.extend(contrastMethods);
+    _Color.extend(chromaticity);
+    _Color.extend(luminance);
+    _Color.extend(interpolation);
+    _Color.extend(contrastMethods);
     var import_from2 = __toModule(require_from4());
     import_dot['default'].templateSettings.strip = false;
     var hexRegex = /^#[0-9a-f]{3,8}$/i;
     var hslRegex = /hsl\(\s*([-\d.]+)(rad|turn)/;
-    var Color2 = (_r = new WeakMap(), _g = new WeakMap(), _b = new WeakMap(), _red = new WeakMap(), 
+    var _Color2 = (_r = new WeakMap(), _g = new WeakMap(), _b = new WeakMap(), _red = new WeakMap(), 
     _green = new WeakMap(), _blue = new WeakMap(), _Class3_brand = new WeakSet(), 
     function() {
       function Color2(red, green, blue) {
@@ -23756,7 +23713,7 @@ module.exports = {
         _classPrivateFieldInitSpec(this, _red, void 0);
         _classPrivateFieldInitSpec(this, _green, void 0);
         _classPrivateFieldInitSpec(this, _blue, void 0);
-        if (red instanceof Color2) {
+        if (red instanceof _Color2) {
           var r = red.r, g2 = red.g, b2 = red.b;
           this.r = r;
           this.g = g2;
@@ -23861,7 +23818,7 @@ module.exports = {
               prototypeArrayFrom = Array.from;
               Array.from = import_from2['default'];
             }
-            var _color2 = new Color(colorString).to('srgb');
+            var _color2 = new _Color(colorString).to('srgb');
             if (prototypeArrayFrom) {
               Array.from = prototypeArrayFrom;
               prototypeArrayFrom = null;
@@ -23870,7 +23827,7 @@ module.exports = {
             this.g = _color2.g;
             this.b = _color2.b;
             this.alpha = +_color2.alpha;
-          } catch (err2) {
+          } catch (_unused4) {
             throw new Error('Unable to parse color "'.concat(colorString, '"'));
           }
           return this;
@@ -23921,7 +23878,7 @@ module.exports = {
       }, {
         key: 'setSaturation',
         value: function setSaturation(s) {
-          var C = new Color2(this);
+          var C = new _Color2(this);
           var colorEntires = [ {
             name: 'r',
             value: C.r
@@ -23950,7 +23907,7 @@ module.exports = {
       }, {
         key: 'clip',
         value: function clip() {
-          var C = new Color2(this);
+          var C = new _Color2(this);
           var L = C.getLuminosity();
           var n2 = Math.min(C.r, C.g, C.b);
           var x = Math.max(C.r, C.g, C.b);
@@ -23969,13 +23926,13 @@ module.exports = {
       } ]);
     }());
     function _add(value) {
-      var C = new Color2(this);
+      var C = new _Color2(this);
       C.r += value;
       C.g += value;
       C.b += value;
       return C;
     }
-    var color_default = Color2;
+    var color_default = _Color2;
     function clamp(value, min, max2) {
       return Math.min(Math.max(min, value), max2);
     }
@@ -24064,8 +24021,8 @@ module.exports = {
       if (!refs || !refs.length) {
         return false;
       }
-      return refs.some(function(_ref63) {
-        var actualNode = _ref63.actualNode;
+      return refs.some(function(_ref62) {
+        var actualNode = _ref62.actualNode;
         return isVisible(actualNode, screenReader, recursed);
       });
     }
@@ -24077,7 +24034,7 @@ module.exports = {
       var vNode = el instanceof abstract_virtual_node_default ? el : get_node_from_tree_default(el);
       el = vNode ? vNode.actualNode : el;
       var cacheName = '_isVisible' + (screenReader ? 'ScreenReader' : '');
-      var _ref64 = (_window$Node2 = window.Node) !== null && _window$Node2 !== void 0 ? _window$Node2 : {}, DOCUMENT_NODE = _ref64.DOCUMENT_NODE, DOCUMENT_FRAGMENT_NODE = _ref64.DOCUMENT_FRAGMENT_NODE;
+      var _ref63 = (_window$Node2 = window.Node) !== null && _window$Node2 !== void 0 ? _window$Node2 : {}, DOCUMENT_NODE = _ref63.DOCUMENT_NODE, DOCUMENT_FRAGMENT_NODE = _ref63.DOCUMENT_FRAGMENT_NODE;
       var nodeType = vNode ? vNode.props.nodeType : el.nodeType;
       var nodeName2 = vNode ? vNode.props.nodeName : el.nodeName.toLowerCase();
       if (vNode && typeof vNode[cacheName] !== 'undefined') {
@@ -24466,8 +24423,8 @@ module.exports = {
         return;
       }
       var shadowId = domTree[0].shadowId;
-      for (var _i19 = 0; _i19 < expressions.length; _i19++) {
-        if (expressions[_i19].length > 1 && expressions[_i19].some(function(expression) {
+      for (var _i23 = 0; _i23 < expressions.length; _i23++) {
+        if (expressions[_i23].length > 1 && expressions[_i23].some(function(expression) {
           return isGlobalSelector(expression);
         })) {
           return;
@@ -24528,9 +24485,9 @@ module.exports = {
           nodes = nodes ? getSharedValues(_cachedNodes, nodes) : _cachedNodes;
         }
         if (exp.attributes) {
-          for (var _i20 = 0; _i20 < exp.attributes.length; _i20++) {
+          for (var _i24 = 0; _i24 < exp.attributes.length; _i24++) {
             var _selectorMap;
-            var attr = exp.attributes[_i20];
+            var attr = exp.attributes[_i24];
             if (attr.type === 'attrValue') {
               isComplexSelector = true;
             }
@@ -24605,7 +24562,7 @@ module.exports = {
       return vNode;
     }
     function flattenTree(node, shadowId, parent) {
-      var retVal, realArray, nodeName2;
+      var retVal, realArray;
       function reduceShadowDOM(res, child, parentVNode) {
         var replacements = flattenTree(child, shadowId, parentVNode);
         if (replacements) {
@@ -24616,7 +24573,7 @@ module.exports = {
       if (node.documentElement) {
         node = node.documentElement;
       }
-      nodeName2 = node.nodeName.toLowerCase();
+      var nodeName2 = node.nodeName.toLowerCase();
       if (is_shadow_root_default(node)) {
         hasShadowRoot = true;
         retVal = createNode(node, parent, shadowId);
@@ -24884,7 +24841,7 @@ module.exports = {
         return {};
       }
       var navigator2 = win.navigator, innerHeight = win.innerHeight, innerWidth = win.innerWidth;
-      var _ref65 = getOrientation(win) || {}, angle = _ref65.angle, type2 = _ref65.type;
+      var _ref64 = getOrientation(win) || {}, angle = _ref64.angle, type2 = _ref64.type;
       return {
         userAgent: navigator2.userAgent,
         windowWidth: innerWidth,
@@ -24893,12 +24850,12 @@ module.exports = {
         orientationType: type2
       };
     }
-    function getOrientation(_ref66) {
-      var screen = _ref66.screen;
+    function getOrientation(_ref65) {
+      var screen = _ref65.screen;
       return screen.orientation || screen.msOrientation || screen.mozOrientation;
     }
-    function createFrameContext(frame, _ref67) {
-      var focusable = _ref67.focusable, page = _ref67.page;
+    function createFrameContext(frame, _ref66) {
+      var focusable = _ref66.focusable, page = _ref66.page;
       return {
         node: frame,
         include: [],
@@ -24931,11 +24888,11 @@ module.exports = {
       };
     }
     function normalizeContext(contextSpec) {
-      if (isContextObject(contextSpec)) {
+      if (_isContextObject(contextSpec)) {
         var msg = ' must be used inside include or exclude. It should not be on the same object.';
-        assert2(!objectHasOwn(contextSpec, 'fromFrames'), 'fromFrames' + msg);
-        assert2(!objectHasOwn(contextSpec, 'fromShadowDom'), 'fromShadowDom' + msg);
-      } else if (isContextProp(contextSpec)) {
+        assert2(!_objectHasOwn(contextSpec, 'fromFrames'), 'fromFrames' + msg);
+        assert2(!_objectHasOwn(contextSpec, 'fromShadowDom'), 'fromShadowDom' + msg);
+      } else if (_isContextProp(contextSpec)) {
         contextSpec = {
           include: contextSpec,
           exclude: []
@@ -24956,17 +24913,14 @@ module.exports = {
         exclude: exclude
       };
     }
-    function isContextSpec(contextSpec) {
-      return isContextObject(contextSpec) || isContextProp(contextSpec);
-    }
     function normalizeContextList() {
       var selectorList = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
       var normalizedList = [];
-      if (!isArrayLike(selectorList)) {
+      if (!_isArrayLike(selectorList)) {
         selectorList = [ selectorList ];
       }
-      for (var _i21 = 0; _i21 < selectorList.length; _i21++) {
-        var normalizedSelector = normalizeContextSelector(selectorList[_i21]);
+      for (var _i25 = 0; _i25 < selectorList.length; _i25++) {
+        var normalizedSelector = normalizeContextSelector(selectorList[_i25]);
         if (normalizedSelector) {
           normalizedList.push(normalizedSelector);
         }
@@ -24980,10 +24934,10 @@ module.exports = {
       if (typeof selector === 'string') {
         return [ selector ];
       }
-      if (isLabelledFramesSelector(selector)) {
+      if (_isLabelledFramesSelector(selector)) {
         assertLabelledFrameSelector(selector);
         selector = selector.fromFrames;
-      } else if (isLabelledShadowDomSelector(selector)) {
+      } else if (_isLabelledShadowDomSelector(selector)) {
         selector = [ selector ];
       }
       return normalizeFrameSelectors(selector);
@@ -24997,7 +24951,7 @@ module.exports = {
       try {
         for (_iterator11.s(); !(_step11 = _iterator11.n()).done; ) {
           var selector = _step11.value;
-          if (isLabelledShadowDomSelector(selector)) {
+          if (_isLabelledShadowDomSelector(selector)) {
             assertLabelledShadowDomSelector(selector);
             selector = selector.fromShadowDom;
           }
@@ -25013,34 +24967,20 @@ module.exports = {
       }
       return normalizedSelectors;
     }
-    function isContextObject(contextSpec) {
-      return [ 'include', 'exclude' ].some(function(prop) {
-        return objectHasOwn(contextSpec, prop) && isContextProp(contextSpec[prop]);
-      });
-    }
-    function isContextProp(contextList) {
-      return typeof contextList === 'string' || contextList instanceof window.Node || isLabelledFramesSelector(contextList) || isLabelledShadowDomSelector(contextList) || isArrayLike(contextList);
-    }
-    function isLabelledFramesSelector(selector) {
-      return objectHasOwn(selector, 'fromFrames');
-    }
-    function isLabelledShadowDomSelector(selector) {
-      return objectHasOwn(selector, 'fromShadowDom');
-    }
     function assertLabelledFrameSelector(selector) {
       assert2(Array.isArray(selector.fromFrames), 'fromFrames property must be an array');
       assert2(selector.fromFrames.every(function(fromFrameSelector) {
-        return !objectHasOwn(fromFrameSelector, 'fromFrames');
+        return !_objectHasOwn(fromFrameSelector, 'fromFrames');
       }), 'Invalid context; fromFrames selector must be appended, rather than nested');
-      assert2(!objectHasOwn(selector, 'fromShadowDom'), 'fromFrames and fromShadowDom cannot be used on the same object');
+      assert2(!_objectHasOwn(selector, 'fromShadowDom'), 'fromFrames and fromShadowDom cannot be used on the same object');
     }
     function assertLabelledShadowDomSelector(selector) {
       assert2(Array.isArray(selector.fromShadowDom), 'fromShadowDom property must be an array');
       assert2(selector.fromShadowDom.every(function(fromShadowDomSelector) {
-        return !objectHasOwn(fromShadowDomSelector, 'fromFrames');
+        return !_objectHasOwn(fromShadowDomSelector, 'fromFrames');
       }), 'shadow selector must be inside fromFrame instead');
       assert2(selector.fromShadowDom.every(function(fromShadowDomSelector) {
-        return !objectHasOwn(fromShadowDomSelector, 'fromShadowDom');
+        return !_objectHasOwn(fromShadowDomSelector, 'fromShadowDom');
       }), 'fromShadowDom selector must be appended, rather than nested');
     }
     function isShadowSelector(selector) {
@@ -25048,22 +24988,13 @@ module.exports = {
         return typeof str === 'string';
       });
     }
-    function isArrayLike(arr) {
-      return arr && _typeof(arr) === 'object' && typeof arr.length === 'number' && arr instanceof window.Node === false;
-    }
     function assert2(bool, str) {
       assert_default(bool, 'Invalid context; '.concat(str, '\nSee: https://github.com/dequelabs/axe-core/blob/master/doc/context.md'));
     }
-    function objectHasOwn(obj, prop) {
-      if (!obj || _typeof(obj) !== 'object') {
-        return false;
-      }
-      return Object.prototype.hasOwnProperty.call(obj, prop);
-    }
     function parseSelectorArray(context, type2) {
       var result = [];
-      for (var _i22 = 0, l = context[type2].length; _i22 < l; _i22++) {
-        var item = context[type2][_i22];
+      for (var _i26 = 0, l = context[type2].length; _i26 < l; _i26++) {
+        var item = context[type2][_i26];
         if (item instanceof window.Node) {
           if (item.documentElement instanceof window.Node) {
             result.push(context.flatTree[0]);
@@ -25101,13 +25032,13 @@ module.exports = {
       });
     }
     function Context(spec, flatTree) {
-      var _spec, _spec2, _spec3, _spec4, _this5 = this;
+      var _spec2, _spec3, _spec4, _spec5, _this5 = this;
       spec = _clone(spec);
       this.frames = [];
-      this.page = typeof ((_spec = spec) === null || _spec === void 0 ? void 0 : _spec.page) === 'boolean' ? spec.page : void 0;
-      this.initiator = typeof ((_spec2 = spec) === null || _spec2 === void 0 ? void 0 : _spec2.initiator) === 'boolean' ? spec.initiator : true;
-      this.focusable = typeof ((_spec3 = spec) === null || _spec3 === void 0 ? void 0 : _spec3.focusable) === 'boolean' ? spec.focusable : true;
-      this.size = _typeof((_spec4 = spec) === null || _spec4 === void 0 ? void 0 : _spec4.size) === 'object' ? spec.size : {};
+      this.page = typeof ((_spec2 = spec) === null || _spec2 === void 0 ? void 0 : _spec2.page) === 'boolean' ? spec.page : void 0;
+      this.initiator = typeof ((_spec3 = spec) === null || _spec3 === void 0 ? void 0 : _spec3.initiator) === 'boolean' ? spec.initiator : true;
+      this.focusable = typeof ((_spec4 = spec) === null || _spec4 === void 0 ? void 0 : _spec4.focusable) === 'boolean' ? spec.focusable : true;
+      this.size = _typeof((_spec5 = spec) === null || _spec5 === void 0 ? void 0 : _spec5.size) === 'object' ? spec.size : {};
       spec = normalizeContext(spec);
       this.flatTree = flatTree !== null && flatTree !== void 0 ? flatTree : _getFlattenedTree(getRootNode2(spec));
       this.exclude = spec.exclude;
@@ -25137,8 +25068,8 @@ module.exports = {
       }
       context.frames.push(createFrameContext(frame, context));
     }
-    function isPageContext(_ref68) {
-      var include = _ref68.include;
+    function isPageContext(_ref67) {
+      var include = _ref67.include;
       return include.length === 1 && include[0].actualNode === document.documentElement;
     }
     function validateContext(context) {
@@ -25147,11 +25078,11 @@ module.exports = {
         throw new Error('No elements found for include in ' + env + ' Context');
       }
     }
-    function getRootNode2(_ref69) {
-      var include = _ref69.include, exclude = _ref69.exclude;
+    function getRootNode2(_ref68) {
+      var include = _ref68.include, exclude = _ref68.exclude;
       var selectors = Array.from(include).concat(Array.from(exclude));
-      for (var _i23 = 0; _i23 < selectors.length; _i23++) {
-        var item = selectors[_i23];
+      for (var _i27 = 0; _i27 < selectors.length; _i27++) {
+        var item = selectors[_i27];
         if (item instanceof window.Element) {
           return item.ownerDocument.documentElement;
         }
@@ -25167,8 +25098,8 @@ module.exports = {
         return [];
       }
       var _Context = new Context(context), frames = _Context.frames;
-      return frames.map(function(_ref70) {
-        var node = _ref70.node, frameContext = _objectWithoutProperties(_ref70, _excluded14);
+      return frames.map(function(_ref69) {
+        var node = _ref69.node, frameContext = _objectWithoutProperties(_ref69, _excluded14);
         frameContext.initiator = false;
         var frameSelector = _getAncestry(node);
         return {
@@ -25178,8 +25109,8 @@ module.exports = {
       });
     }
     function _getRule(ruleId) {
-      var rule = axe._audit.rules.find(function(_ref71) {
-        var id = _ref71.id;
+      var rule = axe._audit.rules.find(function(_ref70) {
+        var id = _ref70.id;
         return id === ruleId;
       });
       if (!rule) {
@@ -25286,6 +25217,32 @@ module.exports = {
       return styleSheet;
     }
     var inject_style_default = injectStyle;
+    function _isArrayLike(arr) {
+      return !!arr && _typeof(arr) === 'object' && typeof arr.length === 'number' && arr instanceof window.Node === false;
+    }
+    function _objectHasOwn(obj, prop) {
+      if (!obj || _typeof(obj) !== 'object') {
+        return false;
+      }
+      return Object.prototype.hasOwnProperty.call(obj, prop);
+    }
+    function _isContextSpec(contextSpec) {
+      return _isContextObject(contextSpec) || _isContextProp(contextSpec);
+    }
+    function _isContextObject(contextSpec) {
+      return [ 'include', 'exclude' ].some(function(prop) {
+        return _objectHasOwn(contextSpec, prop) && _isContextProp(contextSpec[prop]);
+      });
+    }
+    function _isContextProp(contextList) {
+      return typeof contextList === 'string' || contextList instanceof window.Node || _isLabelledFramesSelector(contextList) || _isLabelledShadowDomSelector(contextList) || _isArrayLike(contextList);
+    }
+    function _isLabelledFramesSelector(selector) {
+      return _objectHasOwn(selector, 'fromFrames');
+    }
+    function _isLabelledShadowDomSelector(selector) {
+      return _objectHasOwn(selector, 'fromShadowDom');
+    }
     function isHidden(el, recursed) {
       var node = get_node_from_tree_default(el);
       if (el.nodeType === 9) {
@@ -25318,8 +25275,8 @@ module.exports = {
       return !!standards_default.htmlElms[nodeName2];
     }
     var is_html_element_default = isHtmlElement;
-    function _isNodeInContext(node, _ref72) {
-      var _ref72$include = _ref72.include, include = _ref72$include === void 0 ? [] : _ref72$include, _ref72$exclude = _ref72.exclude, exclude = _ref72$exclude === void 0 ? [] : _ref72$exclude;
+    function _isNodeInContext(node, _ref71) {
+      var _ref71$include = _ref71.include, include = _ref71$include === void 0 ? [] : _ref71$include, _ref71$exclude = _ref71.exclude, exclude = _ref71$exclude === void 0 ? [] : _ref71$exclude;
       var filterInclude = include.filter(function(candidate) {
         return _contains(candidate, node);
       });
@@ -25526,16 +25483,16 @@ module.exports = {
           }
         },
         logMeasures: function logMeasures(measureName) {
-          function logMeasure(req2) {
-            log_default('Measure ' + req2.name + ' took ' + req2.duration + 'ms');
+          function logMeasure(req) {
+            log_default('Measure ' + req.name + ' took ' + req.duration + 'ms');
           }
           if (window.performance && window.performance.getEntriesByType !== void 0) {
             var axeStart = window.performance.getEntriesByName('mark_axe_start')[0];
             var measures = window.performance.getEntriesByType('measure').filter(function(measure) {
               return measure.startTime >= axeStart.startTime;
             });
-            for (var i = 0; i < measures.length; ++i) {
-              var req = measures[i];
+            for (var _i28 = 0; _i28 < measures.length; ++_i28) {
+              var req = measures[_i28];
               if (req.name === measureName) {
                 logMeasure(req);
                 return;
@@ -25629,9 +25586,9 @@ module.exports = {
         var childAny = null;
         var combinedLength = (((_currentLevel$anyLeve = currentLevel.anyLevel) === null || _currentLevel$anyLeve === void 0 ? void 0 : _currentLevel$anyLeve.length) || 0) + (((_currentLevel$thisLev = currentLevel.thisLevel) === null || _currentLevel$thisLev === void 0 ? void 0 : _currentLevel$thisLev.length) || 0);
         var added = false;
-        for (var _i24 = 0; _i24 < combinedLength; _i24++) {
+        for (var _i29 = 0; _i29 < combinedLength; _i29++) {
           var _currentLevel$anyLeve2, _currentLevel$anyLeve3, _currentLevel$anyLeve4;
-          var exp = _i24 < (((_currentLevel$anyLeve2 = currentLevel.anyLevel) === null || _currentLevel$anyLeve2 === void 0 ? void 0 : _currentLevel$anyLeve2.length) || 0) ? currentLevel.anyLevel[_i24] : currentLevel.thisLevel[_i24 - (((_currentLevel$anyLeve3 = currentLevel.anyLevel) === null || _currentLevel$anyLeve3 === void 0 ? void 0 : _currentLevel$anyLeve3.length) || 0)];
+          var exp = _i29 < (((_currentLevel$anyLeve2 = currentLevel.anyLevel) === null || _currentLevel$anyLeve2 === void 0 ? void 0 : _currentLevel$anyLeve2.length) || 0) ? currentLevel.anyLevel[_i29] : currentLevel.thisLevel[_i29 - (((_currentLevel$anyLeve3 = currentLevel.anyLevel) === null || _currentLevel$anyLeve3 === void 0 ? void 0 : _currentLevel$anyLeve3.length) || 0)];
           if ((!exp[0].id || vNode.shadowId === currentLevel.parentShadowId) && _matchesExpression(vNode, exp[0])) {
             if (exp.length === 1) {
               if (!added && (!filter || filter(vNode))) {
@@ -25675,8 +25632,8 @@ module.exports = {
       return matchExpressions(domTree, expressions, filter);
     }
     var query_selector_all_filter_default = querySelectorAllFilter;
-    function preloadCssom(_ref73) {
-      var _ref73$treeRoot = _ref73.treeRoot, treeRoot = _ref73$treeRoot === void 0 ? axe._tree[0] : _ref73$treeRoot;
+    function preloadCssom(_ref72) {
+      var _ref72$treeRoot = _ref72.treeRoot, treeRoot = _ref72$treeRoot === void 0 ? axe._tree[0] : _ref72$treeRoot;
       var rootNodes = getAllRootNodesInTree(treeRoot);
       if (!rootNodes.length) {
         return Promise.resolve();
@@ -25706,8 +25663,8 @@ module.exports = {
     }
     function getCssomForAllRootNodes(rootNodes, convertDataToStylesheet) {
       var promises = [];
-      rootNodes.forEach(function(_ref74, index) {
-        var rootNode = _ref74.rootNode, shadowId = _ref74.shadowId;
+      rootNodes.forEach(function(_ref73, index) {
+        var rootNode = _ref73.rootNode, shadowId = _ref73.shadowId;
         var sheets = getStylesheetsOfRootNode(rootNode, shadowId, convertDataToStylesheet);
         if (!sheets) {
           return Promise.all(promises);
@@ -25793,10 +25750,10 @@ module.exports = {
         return true;
       });
     }
-    function preloadMedia(_ref75) {
-      var _ref75$treeRoot = _ref75.treeRoot, treeRoot = _ref75$treeRoot === void 0 ? axe._tree[0] : _ref75$treeRoot;
-      var mediaVirtualNodes = query_selector_all_filter_default(treeRoot, 'video, audio', function(_ref76) {
-        var actualNode = _ref76.actualNode;
+    function preloadMedia(_ref74) {
+      var _ref74$treeRoot = _ref74.treeRoot, treeRoot = _ref74$treeRoot === void 0 ? axe._tree[0] : _ref74$treeRoot;
+      var mediaVirtualNodes = query_selector_all_filter_default(treeRoot, 'video, audio', function(_ref75) {
+        var actualNode = _ref75.actualNode;
         if (actualNode.hasAttribute('src')) {
           return !!actualNode.getAttribute('src');
         }
@@ -25808,8 +25765,8 @@ module.exports = {
         }
         return true;
       });
-      return Promise.all(mediaVirtualNodes.map(function(_ref77) {
-        var actualNode = _ref77.actualNode;
+      return Promise.all(mediaVirtualNodes.map(function(_ref76) {
+        var actualNode = _ref76.actualNode;
         return isMediaElementReady(actualNode);
       }));
     }
@@ -25922,7 +25879,7 @@ module.exports = {
             throw new Error();
           }
           return msg;
-        } catch (e) {
+        } catch (_unused5) {
           if (typeof checkData.missingData === 'string') {
             return messages.incomplete[checkData.missingData];
           } else {
@@ -25962,7 +25919,7 @@ module.exports = {
     }
     var query_selector_all_default = querySelectorAll;
     function matchTags(rule, runOnly) {
-      var include, exclude, matching;
+      var include, exclude;
       var defaultExclude = axe._audit && axe._audit.tagExclude ? axe._audit.tagExclude : [];
       if (runOnly.hasOwnProperty('include') || runOnly.hasOwnProperty('exclude')) {
         include = runOnly.include || [];
@@ -25978,7 +25935,7 @@ module.exports = {
           return include.indexOf(tag) === -1;
         });
       }
-      matching = include.some(function(tag) {
+      var matching = include.some(function(tag) {
         return rule.tags.indexOf(tag) !== -1;
       });
       if (matching || include.length === 0 && rule.enabled !== false) {
@@ -26058,8 +26015,8 @@ module.exports = {
       }
       var outerIncludes = getOuterIncludes(context.include);
       var isInContext = getContextFilter(context);
-      for (var _i25 = 0; _i25 < outerIncludes.length; _i25++) {
-        candidate = outerIncludes[_i25];
+      for (var _i30 = 0; _i30 < outerIncludes.length; _i30++) {
+        candidate = outerIncludes[_i30];
         var nodes = query_selector_all_filter_default(candidate, selector, isInContext);
         result = mergeArrayUniques(result, nodes);
       }
@@ -26096,9 +26053,9 @@ module.exports = {
         arr1 = arr2;
         arr2 = temp;
       }
-      for (var _i26 = 0, l = arr2.length; _i26 < l; _i26++) {
-        if (!arr1.includes(arr2[_i26])) {
-          arr1.push(arr2[_i26]);
+      for (var _i31 = 0, l = arr2.length; _i31 < l; _i31++) {
+        if (!arr1.includes(arr2[_i31])) {
+          arr1.push(arr2[_i31]);
         }
       }
       return arr1;
@@ -26112,8 +26069,8 @@ module.exports = {
       }
     }
     function setScrollState(scrollState) {
-      scrollState.forEach(function(_ref79) {
-        var elm = _ref79.elm, top = _ref79.top, left = _ref79.left;
+      scrollState.forEach(function(_ref78) {
+        var elm = _ref78.elm, top = _ref78.top, left = _ref78.left;
         return setScroll(elm, top, left);
       });
     }
@@ -26141,8 +26098,8 @@ module.exports = {
       }
       return selectAllRecursive(selectorArr, doc);
     }
-    function selectAllRecursive(_ref80, doc) {
-      var _ref81 = _toArray(_ref80), selectorStr = _ref81[0], restSelector = _ref81.slice(1);
+    function selectAllRecursive(_ref79, doc) {
+      var _ref80 = _toArray(_ref79), selectorStr = _ref80[0], restSelector = _ref80.slice(1);
       var elms = doc.querySelectorAll(selectorStr);
       if (restSelector.length === 0) {
         return Array.from(elms);
@@ -26173,8 +26130,8 @@ module.exports = {
       while (lang.length < 3) {
         lang += '`';
       }
-      for (var _i27 = 0; _i27 <= lang.length - 1; _i27++) {
-        var index = lang.charCodeAt(_i27) - 96;
+      for (var _i32 = 0; _i32 <= lang.length - 1; _i32++) {
+        var index = lang.charCodeAt(_i32) - 96;
         array = array[index];
         if (!array) {
           return false;
@@ -26244,9 +26201,9 @@ module.exports = {
       nodeTypeToName[nodeNamesToTypes[nodeName2]] = nodeName2;
     });
     function normaliseProps(serialNode) {
-      var _serialNode$nodeName, _ref82, _serialNode$nodeType;
+      var _serialNode$nodeName, _ref81, _serialNode$nodeType;
       var nodeName2 = (_serialNode$nodeName = serialNode.nodeName) !== null && _serialNode$nodeName !== void 0 ? _serialNode$nodeName : nodeTypeToName[serialNode.nodeType];
-      var nodeType = (_ref82 = (_serialNode$nodeType = serialNode.nodeType) !== null && _serialNode$nodeType !== void 0 ? _serialNode$nodeType : nodeNamesToTypes[serialNode.nodeName]) !== null && _ref82 !== void 0 ? _ref82 : 1;
+      var nodeType = (_ref81 = (_serialNode$nodeType = serialNode.nodeType) !== null && _serialNode$nodeType !== void 0 ? _serialNode$nodeType : nodeNamesToTypes[serialNode.nodeName]) !== null && _ref81 !== void 0 ? _ref81 : 1;
       assert_default(typeof nodeType === 'number', 'nodeType has to be a number, got \''.concat(nodeType, '\''));
       assert_default(typeof nodeName2 === 'string', 'nodeName has to be a string, got \''.concat(nodeName2, '\''));
       nodeName2 = nodeName2.toLowerCase();
@@ -26267,8 +26224,8 @@ module.exports = {
       delete props.attributes;
       return Object.freeze(props);
     }
-    function normaliseAttrs(_ref83) {
-      var _ref83$attributes = _ref83.attributes, attributes2 = _ref83$attributes === void 0 ? {} : _ref83$attributes;
+    function normaliseAttrs(_ref82) {
+      var _ref82$attributes = _ref82.attributes, attributes2 = _ref82$attributes === void 0 ? {} : _ref82$attributes;
       var attrMap = {
         htmlFor: 'for',
         className: 'class'
@@ -26343,8 +26300,7 @@ module.exports = {
       }
     }
     function configure(spec) {
-      var audit;
-      audit = axe._audit;
+      var audit = axe._audit;
       if (!audit) {
         throw new Error('No audit configured');
       }
@@ -26650,8 +26606,8 @@ module.exports = {
         return true;
       }
       var bgColor, bgImage;
-      for (rowIndex = 0; rowIndex < rowLength; rowIndex++) {
-        row = node.rows[rowIndex];
+      for (var _rowIndex = 0; _rowIndex < rowLength; _rowIndex++) {
+        row = node.rows[_rowIndex];
         if (bgColor && bgColor !== window.getComputedStyle(row).getPropertyValue('background-color')) {
           return true;
         } else {
@@ -26961,8 +26917,8 @@ module.exports = {
             idRefs.get(_id3).push(node);
           }
         }
-        for (var _i28 = 0; _i28 < refAttrs.length; ++_i28) {
-          var attr = refAttrs[_i28];
+        for (var _i33 = 0; _i33 < refAttrs.length; ++_i33) {
+          var attr = refAttrs[_i33];
           var attrValue = sanitize_default(node.getAttribute(attr) || '');
           if (!attrValue) {
             continue;
@@ -26984,9 +26940,9 @@ module.exports = {
           }
         }
       }
-      for (var _i29 = 0; _i29 < node.childNodes.length; _i29++) {
-        if (node.childNodes[_i29].nodeType === 1) {
-          cacheIdRefs(node.childNodes[_i29], idRefs, refAttrs);
+      for (var _i34 = 0; _i34 < node.childNodes.length; _i34++) {
+        if (node.childNodes[_i34].nodeType === 1) {
+          cacheIdRefs(node.childNodes[_i34], idRefs, refAttrs);
         }
       }
     }
@@ -28834,8 +28790,8 @@ module.exports = {
       nodeName: [ 'abbr', 'address', 'canvas', 'div', 'p', 'pre', 'blockquote', 'ins', 'del', 'output', 'span', 'table', 'tbody', 'thead', 'tfoot', 'td', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark', 'ruby', 'rt', 'rp', 'bdi', 'bdo', 'br', 'wbr', 'th', 'tr' ]
     } ];
     lookupTable.evaluateRoleForElement = {
-      A: function A(_ref84) {
-        var node = _ref84.node, out = _ref84.out;
+      A: function A(_ref83) {
+        var node = _ref83.node, out = _ref83.out;
         if (node.namespaceURI === 'http://www.w3.org/2000/svg') {
           return true;
         }
@@ -28844,19 +28800,19 @@ module.exports = {
         }
         return true;
       },
-      AREA: function AREA(_ref85) {
-        var node = _ref85.node;
+      AREA: function AREA(_ref84) {
+        var node = _ref84.node;
         return !node.href;
       },
-      BUTTON: function BUTTON(_ref86) {
-        var node = _ref86.node, role = _ref86.role, out = _ref86.out;
+      BUTTON: function BUTTON(_ref85) {
+        var node = _ref85.node, role = _ref85.role, out = _ref85.out;
         if (node.getAttribute('type') === 'menu') {
           return role === 'menuitem';
         }
         return out;
       },
-      IMG: function IMG(_ref87) {
-        var node = _ref87.node, role = _ref87.role, out = _ref87.out;
+      IMG: function IMG(_ref86) {
+        var node = _ref86.node, role = _ref86.role, out = _ref86.out;
         switch (node.alt) {
          case null:
           return out;
@@ -28868,8 +28824,8 @@ module.exports = {
           return role !== 'presentation' && role !== 'none';
         }
       },
-      INPUT: function INPUT(_ref88) {
-        var node = _ref88.node, role = _ref88.role, out = _ref88.out;
+      INPUT: function INPUT(_ref87) {
+        var node = _ref87.node, role = _ref87.role, out = _ref87.out;
         switch (node.type) {
          case 'button':
          case 'image':
@@ -28899,32 +28855,32 @@ module.exports = {
           return false;
         }
       },
-      LI: function LI(_ref89) {
-        var node = _ref89.node, out = _ref89.out;
+      LI: function LI(_ref88) {
+        var node = _ref88.node, out = _ref88.out;
         var hasImplicitListitemRole = axe.utils.matchesSelector(node, 'ol li, ul li');
         if (hasImplicitListitemRole) {
           return out;
         }
         return true;
       },
-      MENU: function MENU(_ref90) {
-        var node = _ref90.node;
+      MENU: function MENU(_ref89) {
+        var node = _ref89.node;
         if (node.getAttribute('type') === 'context') {
           return false;
         }
         return true;
       },
-      OPTION: function OPTION(_ref91) {
-        var node = _ref91.node;
+      OPTION: function OPTION(_ref90) {
+        var node = _ref90.node;
         var withinOptionList = axe.utils.matchesSelector(node, 'select > option, datalist > option, optgroup > option');
         return !withinOptionList;
       },
-      SELECT: function SELECT(_ref92) {
-        var node = _ref92.node, role = _ref92.role;
+      SELECT: function SELECT(_ref91) {
+        var node = _ref91.node, role = _ref91.role;
         return !node.multiple && node.size <= 1 && role === 'menu';
       },
-      SVG: function SVG(_ref93) {
-        var node = _ref93.node, out = _ref93.out;
+      SVG: function SVG(_ref92) {
+        var node = _ref92.node, out = _ref92.out;
         if (node.parentNode && node.parentNode.namespaceURI === 'http://www.w3.org/2000/svg') {
           return true;
         }
@@ -28950,7 +28906,7 @@ module.exports = {
     var is_accessible_ref_default = isAccessibleRef;
     function _isComboboxPopup(virtualNode) {
       var _popupRoles;
-      var _ref94 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, popupRoles = _ref94.popupRoles;
+      var _ref93 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, popupRoles = _ref93.popupRoles;
       var role = get_role_default(virtualNode);
       (_popupRoles = popupRoles) !== null && _popupRoles !== void 0 ? _popupRoles : popupRoles = aria_attrs_default['aria-haspopup'].values;
       if (!popupRoles.includes(role)) {
@@ -29042,7 +28998,7 @@ module.exports = {
         try {
           var doc = get_root_node_default2(vNode.actualNode);
           return !!(value && doc.getElementById(value));
-        } catch (e) {
+        } catch (_unused6) {
           throw new TypeError('Cannot resolve id references for partial DOM');
         }
 
@@ -29133,8 +29089,8 @@ module.exports = {
       if (!virtualNode.children) {
         return void 0;
       }
-      var titleNode = virtualNode.children.find(function(_ref95) {
-        var props = _ref95.props;
+      var titleNode = virtualNode.children.find(function(_ref94) {
+        var props = _ref94.props;
         return props.nodeName === 'title';
       });
       if (!titleNode) {
@@ -29153,7 +29109,7 @@ module.exports = {
           });
           return false;
         }
-      } catch (e) {
+      } catch (_unused7) {
         return void 0;
       }
       return true;
@@ -29271,8 +29227,8 @@ module.exports = {
       }
       return false;
     }
-    function getNumberValue(domNode, _ref96) {
-      var cssProperty = _ref96.cssProperty, absoluteValues = _ref96.absoluteValues, normalValue = _ref96.normalValue;
+    function getNumberValue(domNode, _ref95) {
+      var cssProperty = _ref95.cssProperty, absoluteValues = _ref95.absoluteValues, normalValue = _ref95.normalValue;
       var computedStyle = window.getComputedStyle(domNode);
       var cssPropValue = computedStyle.getPropertyValue(cssProperty);
       if (cssPropValue === 'normal') {
@@ -29322,7 +29278,7 @@ module.exports = {
     function ariaLabelledbyEvaluate(node, options, virtualNode) {
       try {
         return !!sanitize_default(arialabelledby_text_default(virtualNode));
-      } catch (e) {
+      } catch (_unused8) {
         return void 0;
       }
     }
@@ -29419,8 +29375,8 @@ module.exports = {
       } else if (node !== document.body && has_content_default(node, true) && !isShallowlyHidden(virtualNode)) {
         return [ virtualNode ];
       } else {
-        return virtualNode.children.filter(function(_ref97) {
-          var actualNode = _ref97.actualNode;
+        return virtualNode.children.filter(function(_ref96) {
+          var actualNode = _ref96.actualNode;
           return actualNode.nodeType === 1;
         }).map(function(vNode) {
           return findRegionlessElms(vNode, options);
@@ -29502,16 +29458,16 @@ module.exports = {
       var outerText = elm.textContent.trim();
       var innerText = outerText;
       while (innerText === outerText && nextNode !== void 0) {
-        var _i30 = -1;
+        var _i35 = -1;
         elm = nextNode;
         if (elm.children.length === 0) {
           return elm;
         }
         do {
-          _i30++;
-          innerText = elm.children[_i30].textContent.trim();
-        } while (innerText === '' && _i30 + 1 < elm.children.length);
-        nextNode = elm.children[_i30];
+          _i35++;
+          innerText = elm.children[_i35].textContent.trim();
+        } while (innerText === '' && _i35 + 1 < elm.children.length);
+        nextNode = elm.children[_i35];
       }
       return elm;
     }
@@ -29568,7 +29524,7 @@ module.exports = {
     var separatorRegex = /[;,\s]/;
     var validRedirectNumRegex = /^[0-9.]+$/;
     function metaRefreshEvaluate(node, options, virtualNode) {
-      var _ref98 = options || {}, minDelay = _ref98.minDelay, maxDelay = _ref98.maxDelay;
+      var _ref97 = options || {}, minDelay = _ref97.minDelay, maxDelay = _ref97.maxDelay;
       var content = (virtualNode.attr('content') || '').trim();
       var _content$split = content.split(separatorRegex), _content$split2 = _slicedToArray(_content$split, 1), redirectStr = _content$split2[0];
       if (!redirectStr.match(validRedirectNumRegex)) {
@@ -29919,8 +29875,8 @@ module.exports = {
       if (a2.length !== b2.length) {
         return false;
       }
-      for (var i = 0; i < a2.length; ++i) {
-        if (a2[i] !== b2[i]) {
+      for (var _i36 = 0; _i36 < a2.length; ++_i36) {
+        if (a2[_i36] !== b2[_i36]) {
           return false;
         }
       }
@@ -29931,10 +29887,10 @@ module.exports = {
     var OPAQUE_STROKE_OFFSET_MIN_PX = 1.5;
     var edges = [ 'top', 'right', 'bottom', 'left' ];
     function _getStrokeColorsFromShadows(parsedShadows) {
-      var _ref99 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref99$ignoreEdgeCoun = _ref99.ignoreEdgeCount, ignoreEdgeCount = _ref99$ignoreEdgeCoun === void 0 ? false : _ref99$ignoreEdgeCoun;
+      var _ref98 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, _ref98$ignoreEdgeCoun = _ref98.ignoreEdgeCount, ignoreEdgeCount = _ref98$ignoreEdgeCoun === void 0 ? false : _ref98$ignoreEdgeCoun;
       var shadowMap = getShadowColorsMap(parsedShadows);
-      var shadowsByColor = Object.entries(shadowMap).map(function(_ref100) {
-        var _ref101 = _slicedToArray(_ref100, 2), colorStr = _ref101[0], sides = _ref101[1];
+      var shadowsByColor = Object.entries(shadowMap).map(function(_ref99) {
+        var _ref100 = _slicedToArray(_ref99, 2), colorStr = _ref100[0], sides = _ref100[1];
         var edgeCount = edges.filter(function(side) {
           return sides[side].length !== 0;
         }).length;
@@ -29944,8 +29900,8 @@ module.exports = {
           edgeCount: edgeCount
         };
       });
-      if (!ignoreEdgeCount && shadowsByColor.some(function(_ref102) {
-        var edgeCount = _ref102.edgeCount;
+      if (!ignoreEdgeCount && shadowsByColor.some(function(_ref101) {
+        var edgeCount = _ref101.edgeCount;
         return edgeCount > 1 && edgeCount < 4;
       })) {
         return null;
@@ -29987,8 +29943,8 @@ module.exports = {
       }
       return colorMap;
     }
-    function shadowGroupToColor(_ref103) {
-      var colorStr = _ref103.colorStr, sides = _ref103.sides, edgeCount = _ref103.edgeCount;
+    function shadowGroupToColor(_ref102) {
+      var colorStr = _ref102.colorStr, sides = _ref102.sides, edgeCount = _ref102.edgeCount;
       if (edgeCount !== 4) {
         return null;
       }
@@ -30039,8 +29995,8 @@ module.exports = {
           throw new Error('Unable to process text-shadows: '.concat(str));
         }
       }
-      shadows.forEach(function(_ref104) {
-        var pixels = _ref104.pixels;
+      shadows.forEach(function(_ref103) {
+        var pixels = _ref103.pixels;
         if (pixels.length === 2) {
           pixels.push(0);
         }
@@ -30048,7 +30004,7 @@ module.exports = {
       return shadows;
     }
     function _getTextShadowColors(node) {
-      var _ref105 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, minRatio = _ref105.minRatio, maxRatio = _ref105.maxRatio, ignoreEdgeCount = _ref105.ignoreEdgeCount;
+      var _ref104 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, minRatio = _ref104.minRatio, maxRatio = _ref104.maxRatio, ignoreEdgeCount = _ref104.ignoreEdgeCount;
       var shadowColors = [];
       var style = window.getComputedStyle(node);
       var textShadow = style.getPropertyValue('text-shadow');
@@ -30111,8 +30067,8 @@ module.exports = {
       }
       return shadowColors;
     }
-    function textShadowColor(_ref106) {
-      var colorStr = _ref106.colorStr, offsetX = _ref106.offsetX, offsetY = _ref106.offsetY, blurRadius = _ref106.blurRadius, fontSize = _ref106.fontSize;
+    function textShadowColor(_ref105) {
+      var colorStr = _ref105.colorStr, offsetX = _ref105.offsetX, offsetY = _ref105.offsetY, blurRadius = _ref105.blurRadius, fontSize = _ref105.fontSize;
       if (offsetX > blurRadius || offsetY > blurRadius) {
         return new color_default(0, 0, 0, 0);
       }
@@ -30141,13 +30097,13 @@ module.exports = {
         var _stackingOrder2;
         var bgVNode = get_node_from_tree_default(bgElm);
         var bgColor = getOwnBackgroundColor2(bgVNode);
-        var stackingOrder = bgVNode._stackingOrder.filter(function(_ref107) {
-          var vNode = _ref107.vNode;
+        var stackingOrder = bgVNode._stackingOrder.filter(function(_ref106) {
+          var vNode = _ref106.vNode;
           return !!vNode;
         });
-        stackingOrder.forEach(function(_ref108, index) {
+        stackingOrder.forEach(function(_ref107, index) {
           var _stackingOrder;
-          var vNode = _ref108.vNode;
+          var vNode = _ref107.vNode;
           var ancestorVNode2 = (_stackingOrder = stackingOrder[index - 1]) === null || _stackingOrder === void 0 ? void 0 : _stackingOrder.vNode;
           var context2 = addToStackingContext(contextMap, vNode, ancestorVNode2);
           if (index === 0 && !contextMap.get(vNode)) {
@@ -30255,8 +30211,8 @@ module.exports = {
           color: bgColors.reduce(_flattenShadowColors)
         } ];
       }
-      for (var _i31 = 0; _i31 < elmStack.length; _i31++) {
-        var bgElm = elmStack[_i31];
+      for (var _i37 = 0; _i37 < elmStack.length; _i37++) {
+        var bgElm = elmStack[_i37];
         var bgElmStyle = window.getComputedStyle(bgElm);
         if (element_has_image_default(bgElm, bgElmStyle)) {
           bgElms.push(bgElm);
@@ -30356,8 +30312,8 @@ module.exports = {
         });
       } ];
       var fgColors = [];
-      for (var _i32 = 0, _colorStack = colorStack; _i32 < _colorStack.length; _i32++) {
-        var colorFn = _colorStack[_i32];
+      for (var _i38 = 0, _colorStack = colorStack; _i38 < _colorStack.length; _i38++) {
+        var colorFn = _colorStack[_i38];
         var _color4 = colorFn();
         if (!_color4) {
           continue;
@@ -30383,8 +30339,8 @@ module.exports = {
     function getTextColor(nodeStyle) {
       return new color_default().parseString(nodeStyle.getPropertyValue('-webkit-text-fill-color') || nodeStyle.getPropertyValue('color'));
     }
-    function getStrokeColor(nodeStyle, _ref109) {
-      var _ref109$textStrokeEmM = _ref109.textStrokeEmMin, textStrokeEmMin = _ref109$textStrokeEmM === void 0 ? 0 : _ref109$textStrokeEmM;
+    function getStrokeColor(nodeStyle, _ref108) {
+      var _ref108$textStrokeEmM = _ref108.textStrokeEmMin, textStrokeEmMin = _ref108$textStrokeEmM === void 0 ? 0 : _ref108$textStrokeEmM;
       var strokeWidth = parseFloat(nodeStyle.getPropertyValue('-webkit-text-stroke-width'));
       if (strokeWidth === 0) {
         return null;
@@ -30546,8 +30502,8 @@ module.exports = {
       if (results.length < 2) {
         return results;
       }
-      var incompleteResults = results.filter(function(_ref110) {
-        var result = _ref110.result;
+      var incompleteResults = results.filter(function(_ref109) {
+        var result = _ref109.result;
         return result !== void 0;
       });
       var uniqueResults = [];
@@ -30559,12 +30515,12 @@ module.exports = {
         if (nameMap[name]) {
           return 1;
         }
-        var sameNameResults = incompleteResults.filter(function(_ref111, resultNum) {
-          var data = _ref111.data;
+        var sameNameResults = incompleteResults.filter(function(_ref110, resultNum) {
+          var data = _ref110.data;
           return data.name === name && resultNum !== index;
         });
-        var isSameUrl = sameNameResults.every(function(_ref112) {
-          var data = _ref112.data;
+        var isSameUrl = sameNameResults.every(function(_ref111) {
+          var data = _ref111.data;
           return isIdenticalObject(data.urlProps, urlProps);
         });
         if (sameNameResults.length && !isSameUrl) {
@@ -30590,7 +30546,7 @@ module.exports = {
       var headingRole = role && role.includes('heading');
       var ariaHeadingLevel = vNode.attr('aria-level');
       var ariaLevel = parseInt(ariaHeadingLevel, 10);
-      var _ref113 = vNode.props.nodeName.match(/h(\d)/) || [], _ref114 = _slicedToArray(_ref113, 2), headingLevel = _ref114[1];
+      var _ref112 = vNode.props.nodeName.match(/h(\d)/) || [], _ref113 = _slicedToArray(_ref112, 2), headingLevel = _ref113[1];
       if (!headingRole) {
         return -1;
       }
@@ -30650,14 +30606,14 @@ module.exports = {
     }
     function getHeadingOrder(results) {
       results = _toConsumableArray(results);
-      results.sort(function(_ref115, _ref116) {
-        var nodeA = _ref115.node;
-        var nodeB = _ref116.node;
+      results.sort(function(_ref114, _ref115) {
+        var nodeA = _ref114.node;
+        var nodeB = _ref115.node;
         return nodeA.ancestry.length - nodeB.ancestry.length;
       });
       var headingOrder = results.reduce(mergeHeadingOrder, []);
-      return headingOrder.filter(function(_ref117) {
-        var level = _ref117.level;
+      return headingOrder.filter(function(_ref116) {
+        var level = _ref116.level;
         return level !== -1;
       });
     }
@@ -30810,14 +30766,14 @@ module.exports = {
     }
     function getLargestUnobscuredArea(vNode, obscuredNodes) {
       var nodeRect = vNode.boundingClientRect;
-      var obscuringRects = obscuredNodes.map(function(_ref118) {
-        var rect = _ref118.boundingClientRect;
+      var obscuringRects = obscuredNodes.map(function(_ref117) {
+        var rect = _ref117.boundingClientRect;
         return rect;
       });
       var unobscuredRects;
       try {
         unobscuredRects = _splitRects(nodeRect, obscuringRects);
-      } catch (err2) {
+      } catch (_unused9) {
         return null;
       }
       return getLargestRect2(unobscuredRects);
@@ -30857,8 +30813,8 @@ module.exports = {
       return _contains(vAncestor, vNode) && !_isInTabOrder(vNode);
     }
     function mapActualNodes(vNodes) {
-      return vNodes.map(function(_ref119) {
-        var actualNode = _ref119.actualNode;
+      return vNodes.map(function(_ref118) {
+        var actualNode = _ref118.actualNode;
         return actualNode;
       });
     }
@@ -30917,8 +30873,8 @@ module.exports = {
         });
         return true;
       }
-      this.relatedNodes(closeNeighbors.map(function(_ref120) {
-        var actualNode = _ref120.actualNode;
+      this.relatedNodes(closeNeighbors.map(function(_ref119) {
+        var actualNode = _ref119.actualNode;
         return actualNode;
       }));
       if (!closeNeighbors.some(_isInTabOrder)) {
@@ -30939,7 +30895,7 @@ module.exports = {
       return Math.round(num * 10) / 10;
     }
     function metaViewportScaleEvaluate(node, options, virtualNode) {
-      var _ref121 = options || {}, _ref121$scaleMinimum = _ref121.scaleMinimum, scaleMinimum = _ref121$scaleMinimum === void 0 ? 2 : _ref121$scaleMinimum, _ref121$lowerBound = _ref121.lowerBound, lowerBound = _ref121$lowerBound === void 0 ? false : _ref121$lowerBound;
+      var _ref120 = options || {}, _ref120$scaleMinimum = _ref120.scaleMinimum, scaleMinimum = _ref120$scaleMinimum === void 0 ? 2 : _ref120$scaleMinimum, _ref120$lowerBound = _ref120.lowerBound, lowerBound = _ref120$lowerBound === void 0 ? false : _ref120$lowerBound;
       var content = virtualNode.attr('content') || '';
       if (!content) {
         return true;
@@ -30984,8 +30940,8 @@ module.exports = {
     }
     var meta_viewport_scale_evaluate_default = metaViewportScaleEvaluate;
     function cssOrientationLockEvaluate(node, options, virtualNode, context) {
-      var _ref122 = context || {}, _ref122$cssom = _ref122.cssom, cssom = _ref122$cssom === void 0 ? void 0 : _ref122$cssom;
-      var _ref123 = options || {}, _ref123$degreeThresho = _ref123.degreeThreshold, degreeThreshold = _ref123$degreeThresho === void 0 ? 0 : _ref123$degreeThresho;
+      var _ref121 = context || {}, _ref121$cssom = _ref121.cssom, cssom = _ref121$cssom === void 0 ? void 0 : _ref121$cssom;
+      var _ref122 = options || {}, _ref122$degreeThresho = _ref122.degreeThreshold, degreeThreshold = _ref122$degreeThresho === void 0 ? 0 : _ref122$degreeThresho;
       if (!cssom || !cssom.length) {
         return void 0;
       }
@@ -30993,14 +30949,14 @@ module.exports = {
       var relatedElements = [];
       var rulesGroupByDocumentFragment = groupCssomByDocument(cssom);
       var _loop9 = function _loop9() {
-        var key = _Object$keys3[_i33];
+        var key = _Object$keys3[_i39];
         var _rulesGroupByDocument = rulesGroupByDocumentFragment[key], root = _rulesGroupByDocument.root, rules = _rulesGroupByDocument.rules;
         var orientationRules = rules.filter(isMediaRuleWithOrientation);
         if (!orientationRules.length) {
           return 1;
         }
-        orientationRules.forEach(function(_ref124) {
-          var cssRules = _ref124.cssRules;
+        orientationRules.forEach(function(_ref123) {
+          var cssRules = _ref123.cssRules;
           Array.from(cssRules).forEach(function(cssRule) {
             var locked = getIsOrientationLocked(cssRule);
             if (locked && cssRule.selectorText.toUpperCase() !== 'HTML') {
@@ -31011,7 +30967,7 @@ module.exports = {
           });
         });
       };
-      for (var _i33 = 0, _Object$keys3 = Object.keys(rulesGroupByDocumentFragment); _i33 < _Object$keys3.length; _i33++) {
+      for (var _i39 = 0, _Object$keys3 = Object.keys(rulesGroupByDocumentFragment); _i39 < _Object$keys3.length; _i39++) {
         if (_loop9()) {
           continue;
         }
@@ -31024,8 +30980,8 @@ module.exports = {
       }
       return false;
       function groupCssomByDocument(cssObjectModel) {
-        return cssObjectModel.reduce(function(out, _ref125) {
-          var sheet = _ref125.sheet, root = _ref125.root, shadowId = _ref125.shadowId;
+        return cssObjectModel.reduce(function(out, _ref124) {
+          var sheet = _ref124.sheet, root = _ref124.root, shadowId = _ref124.shadowId;
           var key = shadowId ? shadowId : 'topDocument';
           if (!out[key]) {
             out[key] = {
@@ -31041,15 +30997,15 @@ module.exports = {
           return out;
         }, {});
       }
-      function isMediaRuleWithOrientation(_ref126) {
-        var type2 = _ref126.type, cssText = _ref126.cssText;
+      function isMediaRuleWithOrientation(_ref125) {
+        var type2 = _ref125.type, cssText = _ref125.cssText;
         if (type2 !== 4) {
           return false;
         }
         return /orientation:\s*landscape/i.test(cssText) || /orientation:\s*portrait/i.test(cssText);
       }
-      function getIsOrientationLocked(_ref127) {
-        var selectorText = _ref127.selectorText, style = _ref127.style;
+      function getIsOrientationLocked(_ref126) {
+        var selectorText = _ref126.selectorText, style = _ref126.style;
         if (!selectorText || style.length <= 0) {
           return false;
         }
@@ -31104,7 +31060,7 @@ module.exports = {
         }
       }
       function getAngleInDegrees(angleWithUnit) {
-        var _ref128 = angleWithUnit.match(/(deg|grad|rad|turn)/) || [], _ref129 = _slicedToArray(_ref128, 1), unit = _ref129[0];
+        var _ref127 = angleWithUnit.match(/(deg|grad|rad|turn)/) || [], _ref128 = _slicedToArray(_ref127, 1), unit = _ref128[0];
         if (!unit) {
           return 0;
         }
@@ -31241,8 +31197,8 @@ module.exports = {
         return false;
       }
       var hasDt = false, hasDd = false, nodeName2;
-      for (var i = 0; i < children.length; i++) {
-        nodeName2 = children[i].props.nodeName.toUpperCase();
+      for (var _i40 = 0; _i40 < children.length; _i40++) {
+        nodeName2 = children[_i40].props.nodeName.toUpperCase();
         if (nodeName2 === 'DT') {
           hasDt = true;
         }
@@ -31395,8 +31351,8 @@ module.exports = {
       this.relatedNodes(relatedNodes);
       return true;
     }
-    function getInvalidSelector(vChild, nested, _ref130) {
-      var _ref130$validRoles = _ref130.validRoles, validRoles = _ref130$validRoles === void 0 ? [] : _ref130$validRoles, _ref130$validNodeName = _ref130.validNodeNames, validNodeNames = _ref130$validNodeName === void 0 ? [] : _ref130$validNodeName;
+    function getInvalidSelector(vChild, nested, _ref129) {
+      var _ref129$validRoles = _ref129.validRoles, validRoles = _ref129$validRoles === void 0 ? [] : _ref129$validRoles, _ref129$validNodeName = _ref129.validNodeNames, validNodeNames = _ref129$validNodeName === void 0 ? [] : _ref129$validNodeName;
       var _vChild$props = vChild.props, nodeName2 = _vChild$props.nodeName, nodeType = _vChild$props.nodeType, nodeValue = _vChild$props.nodeValue;
       var selector = nested ? 'div > ' : '';
       if (nodeType === 3 && nodeValue.trim() !== '') {
@@ -31615,7 +31571,7 @@ module.exports = {
           return !!implicitLabel;
         }
         return false;
-      } catch (e) {
+      } catch (_unused10) {
         return void 0;
       }
     }
@@ -31632,7 +31588,7 @@ module.exports = {
           var name;
           try {
             name = _accessibleTextVirtual(virtualNode).trim();
-          } catch (e) {
+          } catch (_unused11) {
             return void 0;
           }
           var isNameEmpty = name === '';
@@ -31643,7 +31599,8 @@ module.exports = {
     }
     var hidden_explicit_label_evaluate_default = hiddenExplicitLabelEvaluate;
     function helpSameAsLabelEvaluate(node, options, virtualNode) {
-      var labelText2 = label_virtual_default2(virtualNode), check = node.getAttribute('title');
+      var labelText2 = label_virtual_default2(virtualNode);
+      var check = node.getAttribute('title');
       if (!labelText2) {
         return false;
       }
@@ -31689,7 +31646,7 @@ module.exports = {
             return !!explicitLabel;
           }
         });
-      } catch (e) {
+      } catch (_unused12) {
         return void 0;
       }
     }
@@ -31739,7 +31696,7 @@ module.exports = {
           this.relatedNodes(focusableDescendants2);
         }
         return false;
-      } catch (e) {
+      } catch (_unused13) {
         return void 0;
       }
     }
@@ -31792,7 +31749,7 @@ module.exports = {
         return !virtualNode.children.some(function(child) {
           return focusableDescendants(child);
         });
-      } catch (e) {
+      } catch (_unused14) {
         return void 0;
       }
     }
@@ -31841,14 +31798,14 @@ module.exports = {
       }
       try {
         return !_accessibleTextVirtual(virtualNode);
-      } catch (e) {
+      } catch (_unused15) {
         return void 0;
       }
     }
     var focusable_no_name_evaluate_default = focusableNoNameEvaluate;
     function focusableModalOpenEvaluate(node, options, virtualNode) {
-      var tabbableElements = virtualNode.tabbableElements.map(function(_ref131) {
-        var actualNode = _ref131.actualNode;
+      var tabbableElements = virtualNode.tabbableElements.map(function(_ref130) {
+        var actualNode = _ref130.actualNode;
         return actualNode;
       });
       if (!tabbableElements || !tabbableElements.length) {
@@ -31988,7 +31945,7 @@ module.exports = {
     function hasTextContentEvaluate(node, options, virtualNode) {
       try {
         return sanitize_default(subtree_text_default(virtualNode)) !== '';
-      } catch (e) {
+      } catch (_unused16) {
         return void 0;
       }
     }
@@ -32043,7 +32000,7 @@ module.exports = {
       return true;
     }
     var attr_non_space_content_evaluate_default = attrNonSpaceContentEvaluate;
-    function autocompleteValidEvaluate(node, options, virtualNode) {
+    function autocompleteValidEvaluate(_node, options, virtualNode) {
       var autocomplete2 = virtualNode.attr('autocomplete') || '';
       return is_valid_autocomplete_default(autocomplete2, options);
     }
@@ -32136,8 +32093,8 @@ module.exports = {
       return blockLike2.indexOf(display2) !== -1 || display2.substr(0, 6) === 'table-';
     }
     function hasPseudoContent(node) {
-      for (var _i34 = 0, _arr3 = [ 'before', 'after' ]; _i34 < _arr3.length; _i34++) {
-        var pseudo = _arr3[_i34];
+      for (var _i41 = 0, _arr3 = [ 'before', 'after' ]; _i41 < _arr3.length; _i41++) {
+        var pseudo = _arr3[_i41];
         var style = window.getComputedStyle(node, ':'.concat(pseudo));
         var content = style.getPropertyValue('content');
         if (content !== 'none') {
@@ -32243,7 +32200,7 @@ module.exports = {
       var bold = parseFloat(fontWeight) >= boldValue || fontWeight === 'bold';
       var ptSize = Math.ceil(fontSize * 72) / 96;
       var isSmallFont = bold && ptSize < boldTextPt || !bold && ptSize < largeTextPt;
-      var _ref132 = isSmallFont ? contrastRatio.normal : contrastRatio.large, expected = _ref132.expected, minThreshold = _ref132.minThreshold, maxThreshold = _ref132.maxThreshold;
+      var _ref131 = isSmallFont ? contrastRatio.normal : contrastRatio.large, expected = _ref131.expected, minThreshold = _ref131.minThreshold, maxThreshold = _ref131.maxThreshold;
       var pseudoElm = findPseudoElement(virtualNode, {
         ignorePseudo: ignorePseudo,
         pseudoSizeThreshold: pseudoSizeThreshold
@@ -32328,8 +32285,8 @@ module.exports = {
       }
       return isValid;
     }
-    function findPseudoElement(vNode, _ref133) {
-      var _ref133$pseudoSizeThr = _ref133.pseudoSizeThreshold, pseudoSizeThreshold = _ref133$pseudoSizeThr === void 0 ? .25 : _ref133$pseudoSizeThr, _ref133$ignorePseudo = _ref133.ignorePseudo, ignorePseudo = _ref133$ignorePseudo === void 0 ? false : _ref133$ignorePseudo;
+    function findPseudoElement(vNode, _ref132) {
+      var _ref132$pseudoSizeThr = _ref132.pseudoSizeThreshold, pseudoSizeThreshold = _ref132$pseudoSizeThr === void 0 ? .25 : _ref132$pseudoSizeThr, _ref132$ignorePseudo = _ref132.ignorePseudo, ignorePseudo = _ref132$ignorePseudo === void 0 ? false : _ref132$ignorePseudo;
       if (ignorePseudo) {
         return;
       }
@@ -32371,7 +32328,7 @@ module.exports = {
     }
     function parseUnit(str) {
       var unitRegex = /^([0-9.]+)([a-z]+)$/i;
-      var _ref134 = str.match(unitRegex) || [], _ref135 = _slicedToArray(_ref134, 3), _ref135$ = _ref135[1], value = _ref135$ === void 0 ? '' : _ref135$, _ref135$2 = _ref135[2], unit = _ref135$2 === void 0 ? '' : _ref135$2;
+      var _ref133 = str.match(unitRegex) || [], _ref134 = _slicedToArray(_ref133, 3), _ref134$ = _ref134[1], value = _ref134$ === void 0 ? '' : _ref134$, _ref134$2 = _ref134[2], unit = _ref134$2 === void 0 ? '' : _ref134$2;
       return {
         value: parseFloat(value),
         unit: unit.toLowerCase()
@@ -32437,7 +32394,7 @@ module.exports = {
       try {
         label3 = sanitize_default(label_text_default(virtualNode)).toLowerCase();
         accText = sanitize_default(_accessibleTextVirtual(virtualNode)).toLowerCase();
-      } catch (e) {
+      } catch (_unused17) {
         return void 0;
       }
       if (!accText && !label3) {
@@ -32540,7 +32497,7 @@ module.exports = {
       }
       try {
         return sanitize_default(_accessibleTextVirtual(virtualNode)) !== '';
-      } catch (_unused) {
+      } catch (_unused18) {
         return void 0;
       }
     }
@@ -32592,7 +32549,7 @@ module.exports = {
         var attrValue = virtualNode.attr(attrName);
         try {
           validValue = validate_attr_value_default(virtualNode, attrName);
-        } catch (e) {
+        } catch (_unused19) {
           needsReview = ''.concat(attrName, '="').concat(attrValue, '"');
           messageKey = 'idrefs';
           return;
@@ -32705,7 +32662,8 @@ module.exports = {
       return reqContext;
     }
     function getAriaOwners(element) {
-      var owners = [], o = null;
+      var owners = [];
+      var o = null;
       while (element) {
         if (element.getAttribute('id')) {
           var _id5 = escape_selector_default(element.getAttribute('id'));
@@ -32727,8 +32685,8 @@ module.exports = {
       }
       var owners = getAriaOwners(node);
       if (owners) {
-        for (var _i35 = 0, l = owners.length; _i35 < l; _i35++) {
-          missingParents = getMissingContext(get_node_from_tree_default(owners[_i35]), ownGroupRoles, missingParents, true);
+        for (var _i42 = 0, l = owners.length; _i42 < l; _i42++) {
+          missingParents = getMissingContext(get_node_from_tree_default(owners[_i42]), ownGroupRoles, missingParents, true);
           if (!missingParents) {
             return true;
           }
@@ -32748,19 +32706,19 @@ module.exports = {
         return true;
       }
       var ownedRoles = getOwnedRoles(virtualNode, required);
-      var unallowed = ownedRoles.filter(function(_ref136) {
-        var role = _ref136.role, vNode = _ref136.vNode;
+      var unallowed = ownedRoles.filter(function(_ref135) {
+        var role = _ref135.role, vNode = _ref135.vNode;
         return vNode.props.nodeType === 1 && !required.includes(role);
       });
       if (unallowed.length) {
-        this.relatedNodes(unallowed.map(function(_ref137) {
-          var vNode = _ref137.vNode;
+        this.relatedNodes(unallowed.map(function(_ref136) {
+          var vNode = _ref136.vNode;
           return vNode;
         }));
         this.data({
           messageKey: 'unallowed',
-          values: unallowed.map(function(_ref138) {
-            var vNode = _ref138.vNode, attr = _ref138.attr;
+          values: unallowed.map(function(_ref137) {
+            var vNode = _ref137.vNode, attr = _ref137.attr;
             return getUnallowedSelector(vNode, attr);
           }).filter(function(selector, index, array) {
             return array.indexOf(selector) === index;
@@ -32823,8 +32781,8 @@ module.exports = {
       return ownedRoles;
     }
     function hasRequiredChildren(required, ownedRoles) {
-      return ownedRoles.some(function(_ref139) {
-        var role = _ref139.role;
+      return ownedRoles.some(function(_ref138) {
+        var role = _ref138.role;
         return role && required.includes(role);
       });
     }
@@ -32849,14 +32807,15 @@ module.exports = {
       }
       return nodeName2;
     }
-    function isContent(_ref140) {
-      var vNode = _ref140.vNode;
+    function isContent(_ref139) {
+      var vNode = _ref139.vNode;
       if (vNode.props.nodeType === 3) {
         return vNode.props.nodeValue.trim().length > 0;
       }
       return has_content_virtual_default(vNode, false, true);
     }
     function ariaRequiredAttrEvaluate(node) {
+      var _virtualNode$attr3;
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       var virtualNode = arguments.length > 2 ? arguments[2] : undefined;
       var role = get_explicit_role_default(virtualNode);
@@ -32869,6 +32828,9 @@ module.exports = {
         return true;
       }
       if (isStaticSeparator(virtualNode, role) || isClosedCombobox(virtualNode, role)) {
+        return true;
+      }
+      if (role === 'slider' && (_virtualNode$attr3 = virtualNode.attr('aria-valuetext')) !== null && _virtualNode$attr3 !== void 0 && _virtualNode$attr3.trim()) {
         return true;
       }
       var elmSpec = get_element_spec_default(virtualNode);
@@ -32899,7 +32861,7 @@ module.exports = {
       var role = get_role_default(virtualNode, {
         chromium: true
       });
-      var prohibitedList = listProhibitedAttrs(role, nodeName2, elementsAllowedAriaLabel);
+      var prohibitedList = listProhibitedAttrs(virtualNode, role, nodeName2, elementsAllowedAriaLabel);
       var prohibited = prohibitedList.filter(function(attrName) {
         if (!virtualNode.attrNames.includes(attrName)) {
           return false;
@@ -32925,16 +32887,29 @@ module.exports = {
       }
       return true;
     }
-    function listProhibitedAttrs(role, nodeName2, elementsAllowedAriaLabel) {
+    function listProhibitedAttrs(vNode, role, nodeName2, elementsAllowedAriaLabel) {
       var roleSpec = standards_default.ariaRoles[role];
       if (roleSpec) {
         return roleSpec.prohibitedAttrs || [];
       }
-      if (!!role || elementsAllowedAriaLabel.includes(nodeName2)) {
+      if (!!role || elementsAllowedAriaLabel.includes(nodeName2) || getClosestAncestorRoleType(vNode) === 'widget') {
         return [];
       }
       return [ 'aria-label', 'aria-labelledby' ];
     }
+    var getClosestAncestorRoleType = memoize_default(function getClosestAncestorRoleTypeMemoized(vNode) {
+      if (!vNode) {
+        return;
+      }
+      var role = get_role_default(vNode, {
+        noPresentational: true,
+        chromium: true
+      });
+      if (role) {
+        return get_role_type_default(role);
+      }
+      return getClosestAncestorRoleType(vNode.parent);
+    });
     function ariaLevelEvaluate(node, options, virtualNode) {
       var ariaHeadingLevel = virtualNode.attr('aria-level');
       var ariaLevel = parseInt(ariaHeadingLevel, 10);
@@ -32964,7 +32939,7 @@ module.exports = {
         var idref;
         try {
           idref = attr && idrefs_default(virtualNode, 'aria-errormessage')[0];
-        } catch (e) {
+        } catch (_unused20) {
           this.data({
             messageKey: 'idrefs',
             values: token_list_default(attr)
@@ -32991,7 +32966,7 @@ module.exports = {
     }
     function ariaConditionalRowAttr(node) {
       var _invalidTableRowAttrs, _invalidTableRowAttrs2;
-      var _ref141 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, invalidTableRowAttrs = _ref141.invalidTableRowAttrs;
+      var _ref140 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {}, invalidTableRowAttrs = _ref140.invalidTableRowAttrs;
       var virtualNode = arguments.length > 2 ? arguments[2] : undefined;
       var invalidAttrs = (_invalidTableRowAttrs = invalidTableRowAttrs === null || invalidTableRowAttrs === void 0 || (_invalidTableRowAttrs2 = invalidTableRowAttrs.filter) === null || _invalidTableRowAttrs2 === void 0 ? void 0 : _invalidTableRowAttrs2.call(invalidTableRowAttrs, function(invalidAttr) {
         return virtualNode.hasAttr(invalidAttr);
@@ -33097,7 +33072,7 @@ module.exports = {
       try {
         for (_iterator21.s(); !(_step21 = _iterator21.n()).done; ) {
           var attrName = _step21.value;
-          if (validate_attr_default(attrName) && !allowed.includes(attrName)) {
+          if (validate_attr_default(attrName) && !allowed.includes(attrName) && !ignoredAttrs(attrName, virtualNode.attr(attrName), virtualNode)) {
             invalid.push(attrName);
           }
         }
@@ -33114,6 +33089,15 @@ module.exports = {
       }));
       if (!role && !is_html_element_default(virtualNode) && !_isFocusable(virtualNode)) {
         return void 0;
+      }
+      return false;
+    }
+    function ignoredAttrs(attrName, attrValue, vNode) {
+      if (attrName === 'aria-required' && attrValue === 'false') {
+        return true;
+      }
+      if (attrName === 'aria-multiline' && attrValue === 'false' && vNode.hasAttr('contenteditable')) {
+        return true;
       }
       return false;
     }
@@ -33145,7 +33129,7 @@ module.exports = {
           return true;
         }
         return !!closest_default(virtualNode, 'svg');
-      } catch (e) {
+      } catch (_unused21) {
         return false;
       }
     }
@@ -33189,6 +33173,24 @@ module.exports = {
       var role = get_role_default(vNode);
       return [ 'treegrid', 'grid', 'table' ].includes(role);
     }
+    function summaryIsInteractiveMatches(_, virtualNode) {
+      var parent = virtualNode.parent;
+      if (parent.props.nodeName !== 'details' || isSlottedElm(virtualNode)) {
+        return false;
+      }
+      var firstSummary = parent.children.find(function(child) {
+        return child.props.nodeName === 'summary';
+      });
+      if (firstSummary !== virtualNode) {
+        return false;
+      }
+      return true;
+    }
+    function isSlottedElm(vNode) {
+      var _vNode$actualNode;
+      var domParent = (_vNode$actualNode = vNode.actualNode) === null || _vNode$actualNode === void 0 ? void 0 : _vNode$actualNode.parentElement;
+      return domParent && domParent !== vNode.parent.actualNode;
+    }
     function skipLinkMatches(node) {
       return _isSkipLink(node) && is_offscreen_default(node);
     }
@@ -33225,7 +33227,7 @@ module.exports = {
       if (!role || [ 'none', 'presentation' ].includes(role)) {
         return true;
       }
-      var _ref142 = aria_roles_default[role] || {}, accessibleNameRequired = _ref142.accessibleNameRequired;
+      var _ref141 = aria_roles_default[role] || {}, accessibleNameRequired = _ref141.accessibleNameRequired;
       if (accessibleNameRequired || _isFocusable(virtualNode)) {
         return true;
       }
@@ -33323,7 +33325,6 @@ module.exports = {
       return !is_data_table_default(node) && !_isFocusable(node);
     }
     var layout_table_matches_default = dataTableMatches;
-    var excludedParentsForHeaderFooterLandmarks = [ 'article', 'aside', 'main', 'nav', 'section' ].join(',');
     function landmarkUniqueMatches(node, virtualNode) {
       return isLandmarkVirtual(virtualNode) && _isVisibleToScreenReaders(virtualNode);
     }
@@ -33334,17 +33335,11 @@ module.exports = {
         return false;
       }
       var nodeName2 = vNode.props.nodeName;
-      if (nodeName2 === 'header' || nodeName2 === 'footer') {
-        return isHeaderFooterLandmark(vNode);
-      }
       if (nodeName2 === 'section' || nodeName2 === 'form') {
         var accessibleText2 = _accessibleTextVirtual(vNode);
         return !!accessibleText2;
       }
       return landmarkRoles2.indexOf(role) >= 0 || role === 'region';
-    }
-    function isHeaderFooterLandmark(headerFooterElement) {
-      return !closest_default(headerFooterElement, excludedParentsForHeaderFooterLandmarks);
     }
     function landmarkHasBodyContextMatches(node, virtualNode) {
       var nativeScopeFilter = 'article, aside, main, nav, section';
@@ -33650,8 +33645,8 @@ module.exports = {
       var aria = /^aria-/;
       var attrs = virtualNode.attrNames;
       if (attrs.length) {
-        for (var _i36 = 0, l = attrs.length; _i36 < l; _i36++) {
-          if (aria.test(attrs[_i36])) {
+        for (var _i43 = 0, l = attrs.length; _i43 < l; _i43++) {
+          if (aria.test(attrs[_i43])) {
             return true;
           }
         }
@@ -33803,6 +33798,7 @@ module.exports = {
       'skip-link-evaluate': skip_link_evaluate_default,
       'skip-link-matches': skip_link_matches_default,
       'structured-dlitems-evaluate': structured_dlitems_evaluate_default,
+      'summary-interactive-matches': summaryIsInteractiveMatches,
       'svg-namespace-matches': svg_namespace_matches_default,
       'svg-non-empty-title-evaluate': svg_non_empty_title_evaluate_default,
       'tabindex-evaluate': tabindex_evaluate_default,
@@ -33886,7 +33882,7 @@ module.exports = {
     };
     Check.prototype.runSync = function runSync(node, options, context) {
       options = options || {};
-      var _options2 = options, _options2$enabled = _options2.enabled, enabled = _options2$enabled === void 0 ? this.enabled : _options2$enabled;
+      var _options3 = options, _options3$enabled = _options3.enabled, enabled = _options3$enabled === void 0 ? this.enabled : _options3$enabled;
       if (!enabled) {
         return null;
       }
@@ -34341,8 +34337,8 @@ module.exports = {
             lang: this.lang
           };
           var checkIDs = Object.keys(this.data.checks);
-          for (var _i37 = 0; _i37 < checkIDs.length; _i37++) {
-            var _id6 = checkIDs[_i37];
+          for (var _i44 = 0; _i44 < checkIDs.length; _i44++) {
+            var _id6 = checkIDs[_i44];
             var check = this.data.checks[_id6];
             var _check$messages = check.messages, pass = _check$messages.pass, fail = _check$messages.fail, incomplete = _check$messages.incomplete;
             locale.checks[_id6] = {
@@ -34352,8 +34348,8 @@ module.exports = {
             };
           }
           var ruleIDs = Object.keys(this.data.rules);
-          for (var _i38 = 0; _i38 < ruleIDs.length; _i38++) {
-            var _id7 = ruleIDs[_i38];
+          for (var _i45 = 0; _i45 < ruleIDs.length; _i45++) {
+            var _id7 = ruleIDs[_i45];
             var rule = this.data.rules[_id7];
             var description = rule.description, help = rule.help;
             locale.rules[_id7] = {
@@ -34362,8 +34358,8 @@ module.exports = {
             };
           }
           var failureSummaries = Object.keys(this.data.failureSummaries);
-          for (var _i39 = 0; _i39 < failureSummaries.length; _i39++) {
-            var type2 = failureSummaries[_i39];
+          for (var _i46 = 0; _i46 < failureSummaries.length; _i46++) {
+            var type2 = failureSummaries[_i46];
             var failureSummary2 = this.data.failureSummaries[type2];
             var failureMessage = failureSummary2.failureMessage;
             locale.failureSummaries[type2] = {
@@ -34386,8 +34382,8 @@ module.exports = {
         key: '_applyCheckLocale',
         value: function _applyCheckLocale(checks) {
           var keys = Object.keys(checks);
-          for (var _i40 = 0; _i40 < keys.length; _i40++) {
-            var _id8 = keys[_i40];
+          for (var _i47 = 0; _i47 < keys.length; _i47++) {
+            var _id8 = keys[_i47];
             if (!this.data.checks[_id8]) {
               throw new Error('Locale provided for unknown check: "'.concat(_id8, '"'));
             }
@@ -34398,8 +34394,8 @@ module.exports = {
         key: '_applyRuleLocale',
         value: function _applyRuleLocale(rules) {
           var keys = Object.keys(rules);
-          for (var _i41 = 0; _i41 < keys.length; _i41++) {
-            var _id9 = keys[_i41];
+          for (var _i48 = 0; _i48 < keys.length; _i48++) {
+            var _id9 = keys[_i48];
             if (!this.data.rules[_id9]) {
               throw new Error('Locale provided for unknown rule: "'.concat(_id9, '"'));
             }
@@ -34410,8 +34406,8 @@ module.exports = {
         key: '_applyFailureSummaries',
         value: function _applyFailureSummaries(messages) {
           var keys = Object.keys(messages);
-          for (var _i42 = 0; _i42 < keys.length; _i42++) {
-            var _key8 = keys[_i42];
+          for (var _i49 = 0; _i49 < keys.length; _i49++) {
+            var _key8 = keys[_i49];
             if (!this.data.failureSummaries[_key8]) {
               throw new Error('Locale provided for unknown failureMessage: "'.concat(_key8, '"'));
             }
@@ -34473,7 +34469,7 @@ module.exports = {
           this.checks = {};
           this.brand = 'axe';
           this.application = 'axeAPI';
-          this.tagExclude = [ 'experimental' ];
+          this.tagExclude = [ 'experimental', 'deprecated' ];
           this.noHtml = audit.noHtml;
           this.allowedOrigins = audit.allowedOrigins;
           unpackToObject(audit.rules, this, 'addRule');
@@ -34841,8 +34837,8 @@ module.exports = {
         });
       };
     }
-    function getHelpUrl(_ref143, ruleId, version) {
-      var brand = _ref143.brand, application = _ref143.application, lang = _ref143.lang;
+    function getHelpUrl(_ref142, ruleId, version) {
+      var brand = _ref142.brand, application = _ref142.application, lang = _ref142.lang;
       return constants_default.helpUrlBase + brand + '/' + (version || axe.version.substring(0, axe.version.lastIndexOf('.'))) + '/' + ruleId + '?application=' + encodeURIComponent(application) + (lang && lang !== 'en' ? '&lang=' + encodeURIComponent(lang) : '');
     }
     function setupGlobals(context) {
@@ -34917,7 +34913,15 @@ module.exports = {
             };
           }));
           if (context.initiator) {
+            if (options.performanceTimer) {
+              performance_timer_default.mark('auditAfterStart');
+            }
             results = audit.after(results, options);
+            if (options.performanceTimer) {
+              performance_timer_default.mark('auditAfterEnd');
+              performance_timer_default.measure('audit.after', 'auditAfterStart', 'auditAfterEnd');
+              performance_timer_default.logMeasures('audit.after');
+            }
             results.forEach(_publishMetaData);
             results = results.map(_finalizeRuleResult);
           }
@@ -35056,11 +35060,11 @@ module.exports = {
         toolOptions: options
       });
     }
-    function normalizeRunParams(_ref144) {
-      var _ref146, _options$reporter, _axe$_audit;
-      var _ref145 = _slicedToArray(_ref144, 3), context = _ref145[0], options = _ref145[1], callback = _ref145[2];
+    function normalizeRunParams(_ref143) {
+      var _ref145, _options$reporter, _axe$_audit;
+      var _ref144 = _slicedToArray(_ref143, 3), context = _ref144[0], options = _ref144[1], callback = _ref144[2];
       var typeErr = new TypeError('axe.run arguments are invalid');
-      if (!isContextSpec(context)) {
+      if (!_isContextSpec(context)) {
         if (callback !== void 0) {
           throw typeErr;
         }
@@ -35079,7 +35083,7 @@ module.exports = {
         throw typeErr;
       }
       options = _clone(options);
-      options.reporter = (_ref146 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit = axe._audit) === null || _axe$_audit === void 0 ? void 0 : _axe$_audit.reporter) !== null && _ref146 !== void 0 ? _ref146 : 'v1';
+      options.reporter = (_ref145 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit = axe._audit) === null || _axe$_audit === void 0 ? void 0 : _axe$_audit.reporter) !== null && _ref145 !== void 0 ? _ref145 : 'v1';
       return {
         context: context,
         options: options,
@@ -35102,10 +35106,16 @@ module.exports = {
       }
       axe._running = true;
       if (options.performanceTimer) {
-        axe.utils.performanceTimer.start();
+        performance_timer_default.start();
       }
       function handleRunRules(rawResults, teardown2) {
         var respond = function respond(results) {
+          if (options.performanceTimer) {
+            performance_timer_default.mark('reporterEnd');
+            performance_timer_default.measure('reporter', 'reporterStart', 'reporterEnd');
+            performance_timer_default.logMeasures('reporter');
+            performance_timer_default.end();
+          }
           axe._running = false;
           teardown2();
           try {
@@ -35123,10 +35133,10 @@ module.exports = {
             axe.log(e);
           }
         };
-        if (options.performanceTimer) {
-          axe.utils.performanceTimer.end();
-        }
         try {
+          if (options.performanceTimer) {
+            performance_timer_default.mark('reporterStart');
+          }
           createReport(rawResults, options, respond, wrappedReject);
         } catch (err2) {
           wrappedReject(err2);
@@ -35134,7 +35144,7 @@ module.exports = {
       }
       function errorRunRules(err2) {
         if (options.performanceTimer) {
-          axe.utils.performanceTimer.end();
+          performance_timer_default.end();
         }
         axe._running = false;
         callback(err2);
@@ -35194,8 +35204,8 @@ module.exports = {
         axe._audit.run(contextObj, options, res, rej);
       }).then(function(results) {
         results = node_serializer_default.mapRawResults(results);
-        var frames = contextObj.frames.map(function(_ref147) {
-          var node = _ref147.node;
+        var frames = contextObj.frames.map(function(_ref146) {
+          var node = _ref146.node;
           return node_serializer_default.toSpec(node);
         });
         var environmentData;
@@ -35216,14 +35226,14 @@ module.exports = {
       });
     }
     function finishRun(partialResults) {
-      var _ref149, _options$reporter2, _axe$_audit2;
+      var _ref148, _options$reporter2, _axe$_audit2;
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
       options = _clone(options);
-      var _ref148 = partialResults.find(function(r) {
+      var _ref147 = partialResults.find(function(r) {
         return r.environmentData;
-      }) || {}, environmentData = _ref148.environmentData;
+      }) || {}, environmentData = _ref147.environmentData;
       axe._audit.normalizeOptions(options);
-      options.reporter = (_ref149 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit2 = axe._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref149 !== void 0 ? _ref149 : 'v1';
+      options.reporter = (_ref148 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit2 = axe._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref148 !== void 0 ? _ref148 : 'v1';
       setFrameSpec(partialResults);
       var results = merge_results_default(partialResults);
       results = axe._audit.after(results, options);
@@ -35253,8 +35263,8 @@ module.exports = {
         _iterator23.f();
       }
     }
-    function getMergedFrameSpecs(_ref150) {
-      var childFrameSpecs = _ref150.frames, parentFrameSpec = _ref150.frameSpec;
+    function getMergedFrameSpecs(_ref149) {
+      var childFrameSpecs = _ref149.frames, parentFrameSpec = _ref149.frameSpec;
       if (!parentFrameSpec) {
         return childFrameSpecs;
       }
@@ -35287,7 +35297,7 @@ module.exports = {
         callback = options;
         options = {};
       }
-      var _options3 = options, environmentData = _options3.environmentData, toolOptions = _objectWithoutProperties(_options3, _excluded15);
+      var _options4 = options, environmentData = _options4.environmentData, toolOptions = _objectWithoutProperties(_options4, _excluded15);
       callback(_extends({}, _getEnvironmentData(environmentData), {
         toolOptions: toolOptions
       }, processAggregate(results, options)));
@@ -35298,7 +35308,7 @@ module.exports = {
         callback = options;
         options = {};
       }
-      var _options4 = options, environmentData = _options4.environmentData, toolOptions = _objectWithoutProperties(_options4, _excluded16);
+      var _options5 = options, environmentData = _options5.environmentData, toolOptions = _objectWithoutProperties(_options5, _excluded16);
       options.resultTypes = [ 'violations' ];
       var _processAggregate = processAggregate(results, options), violations = _processAggregate.violations;
       callback(_extends({}, _getEnvironmentData(environmentData), {
@@ -35318,8 +35328,8 @@ module.exports = {
       var transformedResults = results.map(function(result) {
         var transformedResult = _extends({}, result);
         var types = [ 'passes', 'violations', 'incomplete', 'inapplicable' ];
-        for (var _i43 = 0, _types = types; _i43 < _types.length; _i43++) {
-          var type2 = _types[_i43];
+        for (var _i50 = 0, _types = types; _i50 < _types.length; _i50++) {
+          var type2 = _types[_i50];
           transformedResult[type2] = node_serializer_default.mapRawNodeResults(transformedResult[type2]);
         }
         return transformedResult;
@@ -35332,7 +35342,7 @@ module.exports = {
         callback = options;
         options = {};
       }
-      var _options5 = options, environmentData = _options5.environmentData, toolOptions = _objectWithoutProperties(_options5, _excluded17);
+      var _options6 = options, environmentData = _options6.environmentData, toolOptions = _objectWithoutProperties(_options6, _excluded17);
       raw_default(results, toolOptions, function(raw) {
         var env = _getEnvironmentData(environmentData);
         callback({
@@ -35347,7 +35357,7 @@ module.exports = {
         callback = options;
         options = {};
       }
-      var _options6 = options, environmentData = _options6.environmentData, toolOptions = _objectWithoutProperties(_options6, _excluded18);
+      var _options7 = options, environmentData = _options7.environmentData, toolOptions = _objectWithoutProperties(_options7, _excluded18);
       var out = processAggregate(results, options);
       var addFailureSummaries = function addFailureSummaries(result) {
         result.nodes.forEach(function(nodeResult) {
@@ -35366,7 +35376,7 @@ module.exports = {
         callback = options;
         options = {};
       }
-      var _options7 = options, environmentData = _options7.environmentData, toolOptions = _objectWithoutProperties(_options7, _excluded19);
+      var _options8 = options, environmentData = _options8.environmentData, toolOptions = _objectWithoutProperties(_options8, _excluded19);
       var out = processAggregate(results, options);
       callback(_extends({}, _getEnvironmentData(environmentData), {
         toolOptions: toolOptions
@@ -35455,19 +35465,19 @@ module.exports = {
     data: {
       rules: {
         accesskeys: {
-          description: 'Ensures every accesskey attribute value is unique',
+          description: 'Ensure every accesskey attribute value is unique',
           help: 'accesskey attribute value should be unique'
         },
         'area-alt': {
-          description: 'Ensures <area> elements of image maps have alternate text',
-          help: 'Active <area> elements must have alternate text'
+          description: 'Ensure <area> elements of image maps have alternative text',
+          help: 'Active <area> elements must have alternative text'
         },
         'aria-allowed-attr': {
-          description: 'Ensures an element\'s role supports its ARIA attributes',
+          description: 'Ensure an element\'s role supports its ARIA attributes',
           help: 'Elements must only use supported ARIA attributes'
         },
         'aria-allowed-role': {
-          description: 'Ensures role attribute has an appropriate value for the element',
+          description: 'Ensure role attribute has an appropriate value for the element',
           help: 'ARIA role should be appropriate for the element'
         },
         'aria-braille-equivalent': {
@@ -35475,55 +35485,55 @@ module.exports = {
           help: 'aria-braille attributes must have a non-braille equivalent'
         },
         'aria-command-name': {
-          description: 'Ensures every ARIA button, link and menuitem has an accessible name',
+          description: 'Ensure every ARIA button, link and menuitem has an accessible name',
           help: 'ARIA commands must have an accessible name'
         },
         'aria-conditional-attr': {
-          description: 'Ensures ARIA attributes are used as described in the specification of the element\'s role',
+          description: 'Ensure ARIA attributes are used as described in the specification of the element\'s role',
           help: 'ARIA attributes must be used as specified for the element\'s role'
         },
         'aria-deprecated-role': {
-          description: 'Ensures elements do not use deprecated roles',
+          description: 'Ensure elements do not use deprecated roles',
           help: 'Deprecated ARIA roles must not be used'
         },
         'aria-dialog-name': {
-          description: 'Ensures every ARIA dialog and alertdialog node has an accessible name',
+          description: 'Ensure every ARIA dialog and alertdialog node has an accessible name',
           help: 'ARIA dialog and alertdialog nodes should have an accessible name'
         },
         'aria-hidden-body': {
-          description: 'Ensures aria-hidden="true" is not present on the document body.',
+          description: 'Ensure aria-hidden="true" is not present on the document body.',
           help: 'aria-hidden="true" must not be present on the document body'
         },
         'aria-hidden-focus': {
-          description: 'Ensures aria-hidden elements are not focusable nor contain focusable elements',
+          description: 'Ensure aria-hidden elements are not focusable nor contain focusable elements',
           help: 'ARIA hidden element must not be focusable or contain focusable elements'
         },
         'aria-input-field-name': {
-          description: 'Ensures every ARIA input field has an accessible name',
+          description: 'Ensure every ARIA input field has an accessible name',
           help: 'ARIA input fields must have an accessible name'
         },
         'aria-meter-name': {
-          description: 'Ensures every ARIA meter node has an accessible name',
+          description: 'Ensure every ARIA meter node has an accessible name',
           help: 'ARIA meter nodes must have an accessible name'
         },
         'aria-progressbar-name': {
-          description: 'Ensures every ARIA progressbar node has an accessible name',
+          description: 'Ensure every ARIA progressbar node has an accessible name',
           help: 'ARIA progressbar nodes must have an accessible name'
         },
         'aria-prohibited-attr': {
-          description: 'Ensures ARIA attributes are not prohibited for an element\'s role',
+          description: 'Ensure ARIA attributes are not prohibited for an element\'s role',
           help: 'Elements must only use permitted ARIA attributes'
         },
         'aria-required-attr': {
-          description: 'Ensures elements with ARIA roles have all required ARIA attributes',
+          description: 'Ensure elements with ARIA roles have all required ARIA attributes',
           help: 'Required ARIA attributes must be provided'
         },
         'aria-required-children': {
-          description: 'Ensures elements with an ARIA role that require child roles contain them',
+          description: 'Ensure elements with an ARIA role that require child roles contain them',
           help: 'Certain ARIA roles must contain particular children'
         },
         'aria-required-parent': {
-          description: 'Ensures elements with an ARIA role that require parent roles are contained by them',
+          description: 'Ensure elements with an ARIA role that require parent roles are contained by them',
           help: 'Certain ARIA roles must be contained by particular parents'
         },
         'aria-roledescription': {
@@ -35531,35 +35541,35 @@ module.exports = {
           help: 'aria-roledescription must be on elements with a semantic role'
         },
         'aria-roles': {
-          description: 'Ensures all elements with a role attribute use a valid value',
+          description: 'Ensure all elements with a role attribute use a valid value',
           help: 'ARIA roles used must conform to valid values'
         },
         'aria-text': {
-          description: 'Ensures role="text" is used on elements with no focusable descendants',
+          description: 'Ensure role="text" is used on elements with no focusable descendants',
           help: '"role=text" should have no focusable descendants'
         },
         'aria-toggle-field-name': {
-          description: 'Ensures every ARIA toggle field has an accessible name',
+          description: 'Ensure every ARIA toggle field has an accessible name',
           help: 'ARIA toggle fields must have an accessible name'
         },
         'aria-tooltip-name': {
-          description: 'Ensures every ARIA tooltip node has an accessible name',
+          description: 'Ensure every ARIA tooltip node has an accessible name',
           help: 'ARIA tooltip nodes must have an accessible name'
         },
         'aria-treeitem-name': {
-          description: 'Ensures every ARIA treeitem node has an accessible name',
+          description: 'Ensure every ARIA treeitem node has an accessible name',
           help: 'ARIA treeitem nodes should have an accessible name'
         },
         'aria-valid-attr-value': {
-          description: 'Ensures all ARIA attributes have valid values',
+          description: 'Ensure all ARIA attributes have valid values',
           help: 'ARIA attributes must conform to valid values'
         },
         'aria-valid-attr': {
-          description: 'Ensures attributes that begin with aria- are valid ARIA attributes',
+          description: 'Ensure attributes that begin with aria- are valid ARIA attributes',
           help: 'ARIA attributes must conform to valid names'
         },
         'audio-caption': {
-          description: 'Ensures <audio> elements have captions',
+          description: 'Ensure <audio> elements have captions',
           help: '<audio> elements must have a captions track'
         },
         'autocomplete-valid': {
@@ -35571,87 +35581,87 @@ module.exports = {
           help: 'Inline text spacing must be adjustable with custom stylesheets'
         },
         blink: {
-          description: 'Ensures <blink> elements are not used',
+          description: 'Ensure <blink> elements are not used',
           help: '<blink> elements are deprecated and must not be used'
         },
         'button-name': {
-          description: 'Ensures buttons have discernible text',
+          description: 'Ensure buttons have discernible text',
           help: 'Buttons must have discernible text'
         },
         bypass: {
-          description: 'Ensures each page has at least one mechanism for a user to bypass navigation and jump straight to the content',
+          description: 'Ensure each page has at least one mechanism for a user to bypass navigation and jump straight to the content',
           help: 'Page must have means to bypass repeated blocks'
         },
         'color-contrast-enhanced': {
-          description: 'Ensures the contrast between foreground and background colors meets WCAG 2 AAA enhanced contrast ratio thresholds',
+          description: 'Ensure the contrast between foreground and background colors meets WCAG 2 AAA enhanced contrast ratio thresholds',
           help: 'Elements must meet enhanced color contrast ratio thresholds'
         },
         'color-contrast': {
-          description: 'Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds',
+          description: 'Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds',
           help: 'Elements must meet minimum color contrast ratio thresholds'
         },
         'css-orientation-lock': {
-          description: 'Ensures content is not locked to any specific display orientation, and the content is operable in all display orientations',
+          description: 'Ensure content is not locked to any specific display orientation, and the content is operable in all display orientations',
           help: 'CSS Media queries must not lock display orientation'
         },
         'definition-list': {
-          description: 'Ensures <dl> elements are structured correctly',
+          description: 'Ensure <dl> elements are structured correctly',
           help: '<dl> elements must only directly contain properly-ordered <dt> and <dd> groups, <script>, <template> or <div> elements'
         },
         dlitem: {
-          description: 'Ensures <dt> and <dd> elements are contained by a <dl>',
+          description: 'Ensure <dt> and <dd> elements are contained by a <dl>',
           help: '<dt> and <dd> elements must be contained by a <dl>'
         },
         'document-title': {
-          description: 'Ensures each HTML document contains a non-empty <title> element',
+          description: 'Ensure each HTML document contains a non-empty <title> element',
           help: 'Documents must have <title> element to aid in navigation'
         },
         'duplicate-id-active': {
-          description: 'Ensures every id attribute value of active elements is unique',
+          description: 'Ensure every id attribute value of active elements is unique',
           help: 'IDs of active elements must be unique'
         },
         'duplicate-id-aria': {
-          description: 'Ensures every id attribute value used in ARIA and in labels is unique',
+          description: 'Ensure every id attribute value used in ARIA and in labels is unique',
           help: 'IDs used in ARIA and labels must be unique'
         },
         'duplicate-id': {
-          description: 'Ensures every id attribute value is unique',
+          description: 'Ensure every id attribute value is unique',
           help: 'id attribute value must be unique'
         },
         'empty-heading': {
-          description: 'Ensures headings have discernible text',
+          description: 'Ensure headings have discernible text',
           help: 'Headings should not be empty'
         },
         'empty-table-header': {
-          description: 'Ensures table headers have discernible text',
+          description: 'Ensure table headers have discernible text',
           help: 'Table header text should not be empty'
         },
         'focus-order-semantics': {
-          description: 'Ensures elements in the focus order have a role appropriate for interactive content',
+          description: 'Ensure elements in the focus order have a role appropriate for interactive content',
           help: 'Elements in the focus order should have an appropriate role'
         },
         'form-field-multiple-labels': {
-          description: 'Ensures form field does not have multiple label elements',
+          description: 'Ensure form field does not have multiple label elements',
           help: 'Form field must not have multiple label elements'
         },
         'frame-focusable-content': {
-          description: 'Ensures <frame> and <iframe> elements with focusable content do not have tabindex=-1',
+          description: 'Ensure <frame> and <iframe> elements with focusable content do not have tabindex=-1',
           help: 'Frames with focusable content must not have tabindex=-1'
         },
         'frame-tested': {
-          description: 'Ensures <iframe> and <frame> elements contain the axe-core script',
+          description: 'Ensure <iframe> and <frame> elements contain the axe-core script',
           help: 'Frames should be tested with axe-core'
         },
         'frame-title-unique': {
-          description: 'Ensures <iframe> and <frame> elements contain a unique title attribute',
+          description: 'Ensure <iframe> and <frame> elements contain a unique title attribute',
           help: 'Frames must have a unique title attribute'
         },
         'frame-title': {
-          description: 'Ensures <iframe> and <frame> elements have an accessible name',
+          description: 'Ensure <iframe> and <frame> elements have an accessible name',
           help: 'Frames must have an accessible name'
         },
         'heading-order': {
-          description: 'Ensures the order of headings is semantically correct',
+          description: 'Ensure the order of headings is semantically correct',
           help: 'Heading levels should only increase by one'
         },
         'hidden-content': {
@@ -35659,11 +35669,11 @@ module.exports = {
           help: 'Hidden content on the page should be analyzed'
         },
         'html-has-lang': {
-          description: 'Ensures every HTML document has a lang attribute',
+          description: 'Ensure every HTML document has a lang attribute',
           help: '<html> element must have a lang attribute'
         },
         'html-lang-valid': {
-          description: 'Ensures the lang attribute of the <html> element has a valid value',
+          description: 'Ensure the lang attribute of the <html> element has a valid value',
           help: '<html> element must have a valid value for the lang attribute'
         },
         'html-xml-lang-mismatch': {
@@ -35675,116 +35685,116 @@ module.exports = {
           help: 'Links with the same name must have a similar purpose'
         },
         'image-alt': {
-          description: 'Ensures <img> elements have alternate text or a role of none or presentation',
-          help: 'Images must have alternate text'
+          description: 'Ensure <img> elements have alternative text or a role of none or presentation',
+          help: 'Images must have alternative text'
         },
         'image-redundant-alt': {
           description: 'Ensure image alternative is not repeated as text',
           help: 'Alternative text of images should not be repeated as text'
         },
         'input-button-name': {
-          description: 'Ensures input buttons have discernible text',
+          description: 'Ensure input buttons have discernible text',
           help: 'Input buttons must have discernible text'
         },
         'input-image-alt': {
-          description: 'Ensures <input type="image"> elements have alternate text',
-          help: 'Image buttons must have alternate text'
+          description: 'Ensure <input type="image"> elements have alternative text',
+          help: 'Image buttons must have alternative text'
         },
         'label-content-name-mismatch': {
-          description: 'Ensures that elements labelled through their content must have their visible text as part of their accessible name',
+          description: 'Ensure that elements labelled through their content must have their visible text as part of their accessible name',
           help: 'Elements must have their visible text as part of their accessible name'
         },
         'label-title-only': {
-          description: 'Ensures that every form element has a visible label and is not solely labeled using hidden labels, or the title or aria-describedby attributes',
+          description: 'Ensure that every form element has a visible label and is not solely labeled using hidden labels, or the title or aria-describedby attributes',
           help: 'Form elements should have a visible label'
         },
         label: {
-          description: 'Ensures every form element has a label',
+          description: 'Ensure every form element has a label',
           help: 'Form elements must have labels'
         },
         'landmark-banner-is-top-level': {
-          description: 'Ensures the banner landmark is at top level',
+          description: 'Ensure the banner landmark is at top level',
           help: 'Banner landmark should not be contained in another landmark'
         },
         'landmark-complementary-is-top-level': {
-          description: 'Ensures the complementary landmark or aside is at top level',
+          description: 'Ensure the complementary landmark or aside is at top level',
           help: 'Aside should not be contained in another landmark'
         },
         'landmark-contentinfo-is-top-level': {
-          description: 'Ensures the contentinfo landmark is at top level',
+          description: 'Ensure the contentinfo landmark is at top level',
           help: 'Contentinfo landmark should not be contained in another landmark'
         },
         'landmark-main-is-top-level': {
-          description: 'Ensures the main landmark is at top level',
+          description: 'Ensure the main landmark is at top level',
           help: 'Main landmark should not be contained in another landmark'
         },
         'landmark-no-duplicate-banner': {
-          description: 'Ensures the document has at most one banner landmark',
+          description: 'Ensure the document has at most one banner landmark',
           help: 'Document should not have more than one banner landmark'
         },
         'landmark-no-duplicate-contentinfo': {
-          description: 'Ensures the document has at most one contentinfo landmark',
+          description: 'Ensure the document has at most one contentinfo landmark',
           help: 'Document should not have more than one contentinfo landmark'
         },
         'landmark-no-duplicate-main': {
-          description: 'Ensures the document has at most one main landmark',
+          description: 'Ensure the document has at most one main landmark',
           help: 'Document should not have more than one main landmark'
         },
         'landmark-one-main': {
-          description: 'Ensures the document has a main landmark',
+          description: 'Ensure the document has a main landmark',
           help: 'Document should have one main landmark'
         },
         'landmark-unique': {
-          help: 'Ensures landmarks are unique',
-          description: 'Landmarks should have a unique role or role/label/title (i.e. accessible name) combination'
+          description: 'Ensure landmarks are unique',
+          help: 'Landmarks should have a unique role or role/label/title (i.e. accessible name) combination'
         },
         'link-in-text-block': {
           description: 'Ensure links are distinguished from surrounding text in a way that does not rely on color',
           help: 'Links must be distinguishable without relying on color'
         },
         'link-name': {
-          description: 'Ensures links have discernible text',
+          description: 'Ensure links have discernible text',
           help: 'Links must have discernible text'
         },
         list: {
-          description: 'Ensures that lists are structured correctly',
+          description: 'Ensure that lists are structured correctly',
           help: '<ul> and <ol> must only directly contain <li>, <script> or <template> elements'
         },
         listitem: {
-          description: 'Ensures <li> elements are used semantically',
+          description: 'Ensure <li> elements are used semantically',
           help: '<li> elements must be contained in a <ul> or <ol>'
         },
         marquee: {
-          description: 'Ensures <marquee> elements are not used',
+          description: 'Ensure <marquee> elements are not used',
           help: '<marquee> elements are deprecated and must not be used'
         },
         'meta-refresh-no-exceptions': {
-          description: 'Ensures <meta http-equiv="refresh"> is not used for delayed refresh',
+          description: 'Ensure <meta http-equiv="refresh"> is not used for delayed refresh',
           help: 'Delayed refresh must not be used'
         },
         'meta-refresh': {
-          description: 'Ensures <meta http-equiv="refresh"> is not used for delayed refresh',
+          description: 'Ensure <meta http-equiv="refresh"> is not used for delayed refresh',
           help: 'Delayed refresh under 20 hours must not be used'
         },
         'meta-viewport-large': {
-          description: 'Ensures <meta name="viewport"> can scale a significant amount',
+          description: 'Ensure <meta name="viewport"> can scale a significant amount',
           help: 'Users should be able to zoom and scale the text up to 500%'
         },
         'meta-viewport': {
-          description: 'Ensures <meta name="viewport"> does not disable text scaling and zooming',
+          description: 'Ensure <meta name="viewport"> does not disable text scaling and zooming',
           help: 'Zooming and scaling must not be disabled'
         },
         'nested-interactive': {
-          description: 'Ensures interactive controls are not nested as they are not always announced by screen readers or can cause focus problems for assistive technologies',
+          description: 'Ensure interactive controls are not nested as they are not always announced by screen readers or can cause focus problems for assistive technologies',
           help: 'Interactive controls must not be nested'
         },
         'no-autoplay-audio': {
-          description: 'Ensures <video> or <audio> elements do not autoplay audio for more than 3 seconds without a control mechanism to stop or mute the audio',
+          description: 'Ensure <video> or <audio> elements do not autoplay audio for more than 3 seconds without a control mechanism to stop or mute the audio',
           help: '<video> or <audio> elements must not play automatically'
         },
         'object-alt': {
-          description: 'Ensures <object> elements have alternate text',
-          help: '<object> elements must have alternate text'
+          description: 'Ensure <object> elements have alternative text',
+          help: '<object> elements must have alternative text'
         },
         'p-as-heading': {
           description: 'Ensure bold, italic text and font-size is not used to style <p> elements as a heading',
@@ -35799,15 +35809,15 @@ module.exports = {
           help: 'Ensure elements marked as presentational are consistently ignored'
         },
         region: {
-          description: 'Ensures all page content is contained by landmarks',
+          description: 'Ensure all page content is contained by landmarks',
           help: 'All page content should be contained by landmarks'
         },
         'role-img-alt': {
-          description: 'Ensures [role="img"] elements have alternate text',
+          description: 'Ensure [role="img"] elements have alternative text',
           help: '[role="img"] elements must have an alternative text'
         },
         'scope-attr-valid': {
-          description: 'Ensures the scope attribute is used correctly on tables',
+          description: 'Ensure the scope attribute is used correctly on tables',
           help: 'scope attribute should be used correctly'
         },
         'scrollable-region-focusable': {
@@ -35815,35 +35825,39 @@ module.exports = {
           help: 'Scrollable region must have keyboard access'
         },
         'select-name': {
-          description: 'Ensures select element has an accessible name',
+          description: 'Ensure select element has an accessible name',
           help: 'Select element must have an accessible name'
         },
         'server-side-image-map': {
-          description: 'Ensures that server-side image maps are not used',
+          description: 'Ensure that server-side image maps are not used',
           help: 'Server-side image maps must not be used'
         },
         'skip-link': {
           description: 'Ensure all skip links have a focusable target',
           help: 'The skip-link target should exist and be focusable'
         },
+        'summary-name': {
+          description: 'Ensure summary elements have discernible text',
+          help: 'Summary elements must have discernible text'
+        },
         'svg-img-alt': {
-          description: 'Ensures <svg> elements with an img, graphics-document or graphics-symbol role have an accessible text',
+          description: 'Ensure <svg> elements with an img, graphics-document or graphics-symbol role have an accessible text',
           help: '<svg> elements with an img role must have an alternative text'
         },
         tabindex: {
-          description: 'Ensures tabindex attribute values are not greater than 0',
+          description: 'Ensure tabindex attribute values are not greater than 0',
           help: 'Elements should not have tabindex greater than zero'
         },
         'table-duplicate-name': {
           description: 'Ensure the <caption> element does not contain the same text as the summary attribute',
-          help: 'tables should not have the same summary and caption'
+          help: 'Tables should not have the same summary and caption'
         },
         'table-fake-caption': {
           description: 'Ensure that tables with a caption use the <caption> element.',
           help: 'Data or header cells must not be used to give caption to a data table.'
         },
         'target-size': {
-          description: 'Ensure touch target have sufficient size and space',
+          description: 'Ensure touch targets have sufficient size and space',
           help: 'All touch targets must be 24px large, or leave sufficient space'
         },
         'td-has-header': {
@@ -35859,11 +35873,11 @@ module.exports = {
           help: 'Table headers in a data table must refer to data cells'
         },
         'valid-lang': {
-          description: 'Ensures lang attributes have valid values',
+          description: 'Ensure lang attributes have valid values',
           help: 'lang attribute must have a valid value'
         },
         'video-caption': {
-          description: 'Ensures <video> elements have captions',
+          description: 'Ensure <video> elements have captions',
           help: '<video> elements must have captions'
         }
       },
@@ -35931,9 +35945,9 @@ module.exports = {
               hidden: 'aria-errormessage value `${data.values}` cannot reference a hidden element'
             },
             incomplete: {
-              singular: 'ensure aria-errormessage value `${data.values}` references an existing element',
-              plural: 'ensure aria-errormessage values `${data.values}` reference existing elements',
-              idrefs: 'unable to determine if aria-errormessage element exists on the page: ${data.values}'
+              singular: 'Ensure aria-errormessage value `${data.values}` references an existing element',
+              plural: 'Ensure aria-errormessage values `${data.values}` reference existing elements',
+              idrefs: 'Unable to determine if aria-errormessage element exists on the page: ${data.values}'
             }
           }
         },
@@ -36226,15 +36240,16 @@ module.exports = {
         'autocomplete-appropriate': {
           impact: 'serious',
           messages: {
-            pass: 'the autocomplete value is on an appropriate element',
-            fail: 'the autocomplete value is inappropriate for this type of input'
+            pass: 'The autocomplete value is on an appropriate element',
+            fail: 'The autocomplete value is inappropriate for this type of input'
           }
         },
         'autocomplete-valid': {
           impact: 'serious',
           messages: {
             pass: 'the autocomplete attribute is correctly formatted',
-            fail: 'the autocomplete attribute is incorrectly formatted'
+            fail: 'the autocomplete attribute is incorrectly formatted',
+            incomplete: 'the autocomplete attribute has a non-standard value. Check whether any standard value could be used instead.'
           }
         },
         accesskeys: {
@@ -36374,8 +36389,8 @@ module.exports = {
         'explicit-label': {
           impact: 'critical',
           messages: {
-            pass: 'Form element has an explicit <label>',
-            fail: 'Form element does not have an explicit <label>',
+            pass: 'Element has an explicit <label>',
+            fail: 'Element does not have an explicit <label>',
             incomplete: 'Unable to determine if form element has an explicit <label>'
           }
         },
@@ -36397,9 +36412,9 @@ module.exports = {
         'implicit-label': {
           impact: 'critical',
           messages: {
-            pass: 'Form element has an implicit (wrapped) <label>',
-            fail: 'Form element does not have an implicit (wrapped) <label>',
-            incomplete: 'Unable to determine if form element has an implicit (wrapped} <label>'
+            pass: 'Element has an implicit (wrapped) <label>',
+            fail: 'Element does not have an implicit (wrapped) <label>',
+            incomplete: 'Unable to determine if form element has an implicit (wrapped) <label>'
           }
         },
         'label-content-name-mismatch': {
@@ -36686,7 +36701,7 @@ module.exports = {
           messages: {
             pass: 'aria-labelledby attribute exists and references elements that are visible to screen readers',
             fail: 'aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty',
-            incomplete: 'ensure aria-labelledby references an existing element'
+            incomplete: 'Ensure aria-labelledby references an existing element'
           }
         },
         'avoid-inline-spacing': {
@@ -36817,7 +36832,7 @@ module.exports = {
         'presentational-role': {
           impact: 'minor',
           messages: {
-            pass: 'Element\'s default semantics were overriden with role="${data.role}"',
+            pass: 'Element\'s default semantics were overridden with role="${data.role}"',
             fail: {
               default: 'Element\'s default semantics were not overridden with role="none" or role="presentation"',
               globalAria: 'Element\'s role is not presentational because it has a global ARIA attribute',
@@ -36830,14 +36845,14 @@ module.exports = {
         'role-none': {
           impact: 'minor',
           messages: {
-            pass: 'Element\'s default semantics were overriden with role="none"',
+            pass: 'Element\'s default semantics were overridden with role="none"',
             fail: 'Element\'s default semantics were not overridden with role="none"'
           }
         },
         'role-presentation': {
           impact: 'minor',
           messages: {
-            pass: 'Element\'s default semantics were overriden with role="presentation"',
+            pass: 'Element\'s default semantics were overridden with role="presentation"',
             fail: 'Element\'s default semantics were not overridden with role="presentation"'
           }
         },
@@ -37301,7 +37316,8 @@ module.exports = {
       actIds: [ '73f2c2' ],
       all: [ {
         options: {
-          stateTerms: [ 'none', 'false', 'true', 'disabled', 'enabled', 'undefined', 'null' ]
+          stateTerms: [ 'none', 'false', 'true', 'disabled', 'enabled', 'undefined', 'null' ],
+          ignoredValues: [ 'text', 'pronouns', 'gender', 'message', 'content' ]
         },
         id: 'autocomplete-valid'
       } ],
@@ -37359,7 +37375,7 @@ module.exports = {
           attribute: 'title'
         },
         id: 'non-empty-title'
-      }, 'presentational-role' ],
+      }, 'implicit-label', 'explicit-label', 'presentational-role' ],
       none: []
     }, {
       id: 'bypass',
@@ -37747,7 +37763,7 @@ module.exports = {
           attribute: 'title'
         },
         id: 'non-empty-title'
-      }, 'presentational-role' ],
+      }, 'implicit-label', 'explicit-label', 'presentational-role' ],
       none: []
     }, {
       id: 'input-image-alt',
@@ -37767,7 +37783,7 @@ module.exports = {
           attribute: 'title'
         },
         id: 'non-empty-title'
-      } ],
+      }, 'implicit-label', 'explicit-label' ],
       none: []
     }, {
       id: 'label-content-name-mismatch',
@@ -38215,6 +38231,20 @@ module.exports = {
       any: [ 'skip-link' ],
       none: []
     }, {
+      id: 'summary-name',
+      impact: 'serious',
+      selector: 'summary',
+      matches: 'summary-interactive-matches',
+      tags: [ 'cat.name-role-value', 'wcag2a', 'wcag412', 'section508', 'section508.22.a', 'TTv5', 'TT6.a', 'EN-301-549', 'EN-9.4.1.2' ],
+      all: [],
+      any: [ 'has-visible-text', 'aria-label', 'aria-labelledby', {
+        options: {
+          attribute: 'title'
+        },
+        id: 'non-empty-title'
+      } ],
+      none: []
+    }, {
       id: 'svg-img-alt',
       impact: 'serious',
       selector: '[role="img"], [role="graphics-symbol"], svg[role="graphics-document"]',
@@ -38501,7 +38531,8 @@ module.exports = {
       id: 'autocomplete-valid',
       evaluate: 'autocomplete-valid-evaluate',
       options: {
-        stateTerms: [ 'none', 'false', 'true', 'disabled', 'enabled', 'undefined', 'null' ]
+        stateTerms: [ 'none', 'false', 'true', 'disabled', 'enabled', 'undefined', 'null' ],
+        ignoredValues: [ 'text', 'pronouns', 'gender', 'message', 'content' ]
       }
     }, {
       id: 'accesskeys',
@@ -38922,7 +38953,7 @@ module.exports = {
   });
 })(typeof window === 'object' ? window : this);
 }).call(this)}).call(this,require('_process'),require("timers").setImmediate)
-},{"_process":1,"timers":2}],16:[function(require,module,exports){
+},{"_process":1,"timers":2}],11:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -38933,8 +38964,8 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return _typeof(key) === "symbol" ? key : String(key); }
-function _toPrimitive(input, hint) { if (_typeof(input) !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (_typeof(res) !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 /**
  * @param root
  * @param options
@@ -38968,7 +38999,7 @@ function computeAccessibleDescription(root) {
   return description;
 }
 
-},{"./accessible-name-and-description":17,"./util":25}],17:[function(require,module,exports){
+},{"./accessible-name-and-description":12,"./util":20}],12:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39198,21 +39229,42 @@ function getSlotContents(slot) {
 function computeTextAlternative(root) {
   var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
   var consultedNodes = new _SetLike.default();
+  var computedStyles = typeof Map === "undefined" ? undefined : new Map();
   var window = (0, _util.safeWindow)(root);
   var _options$compute = options.compute,
     compute = _options$compute === void 0 ? "name" : _options$compute,
     _options$computedStyl = options.computedStyleSupportsPseudoElements,
     computedStyleSupportsPseudoElements = _options$computedStyl === void 0 ? options.getComputedStyle !== undefined : _options$computedStyl,
     _options$getComputedS = options.getComputedStyle,
-    getComputedStyle = _options$getComputedS === void 0 ? window.getComputedStyle.bind(window) : _options$getComputedS,
+    uncachedGetComputedStyle = _options$getComputedS === void 0 ? window.getComputedStyle.bind(window) : _options$getComputedS,
     _options$hidden = options.hidden,
     hidden = _options$hidden === void 0 ? false : _options$hidden;
+  var getComputedStyle = function getComputedStyle(el, pseudoElement) {
+    // We don't cache the pseudoElement styles and calls with psuedo elements
+    // should use the uncached version instead
+    if (pseudoElement !== undefined) {
+      throw new Error("use uncachedGetComputedStyle directly for pseudo elements");
+    }
+    // If Map is not available, it is probably faster to just use the uncached
+    // version since a polyfill lookup would be O(n) instead of O(1) and
+    // the getComputedStyle function in those environments(e.g. IE11) is fast
+    if (computedStyles === undefined) {
+      return uncachedGetComputedStyle(el);
+    }
+    var cachedStyles = computedStyles.get(el);
+    if (cachedStyles) {
+      return cachedStyles;
+    }
+    var style = uncachedGetComputedStyle(el, pseudoElement);
+    computedStyles.set(el, style);
+    return style;
+  };
 
   // 2F.i
   function computeMiscTextAlternative(node, context) {
     var accumulatedText = "";
     if ((0, _util.isElement)(node) && computedStyleSupportsPseudoElements) {
-      var pseudoBefore = getComputedStyle(node, "::before");
+      var pseudoBefore = uncachedGetComputedStyle(node, "::before");
       var beforeContent = getTextualContent(pseudoBefore);
       accumulatedText = "".concat(beforeContent, " ").concat(accumulatedText);
     }
@@ -39234,7 +39286,7 @@ function computeTextAlternative(root) {
       accumulatedText += "".concat(separator).concat(result).concat(separator);
     });
     if ((0, _util.isElement)(node) && computedStyleSupportsPseudoElements) {
-      var pseudoAfter = getComputedStyle(node, "::after");
+      var pseudoAfter = uncachedGetComputedStyle(node, "::after");
       var afterContent = getTextualContent(pseudoAfter);
       accumulatedText = "".concat(accumulatedText, " ").concat(afterContent);
     }
@@ -39380,7 +39432,6 @@ function computeTextAlternative(root) {
     if (consultedNodes.has(current)) {
       return "";
     }
-
     // 2A
     if (!hidden && isHidden(current, getComputedStyle) && !context.isReferenced) {
       consultedNodes.add(current);
@@ -39511,7 +39562,7 @@ function computeTextAlternative(root) {
   }));
 }
 
-},{"./polyfills/SetLike":23,"./polyfills/array.from":24,"./util":25}],18:[function(require,module,exports){
+},{"./polyfills/SetLike":18,"./polyfills/array.from":19,"./util":20}],13:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39539,7 +39590,7 @@ function computeAccessibleName(root) {
   return (0, _accessibleNameAndDescription.computeTextAlternative)(root, options);
 }
 
-},{"./accessible-name-and-description":17,"./util":25}],19:[function(require,module,exports){
+},{"./accessible-name-and-description":12,"./util":20}],14:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39732,7 +39783,7 @@ function getExplicitRole(element) {
   return null;
 }
 
-},{"./util":25}],20:[function(require,module,exports){
+},{"./util":20}],15:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39760,7 +39811,7 @@ var _isDisabled = require("./is-disabled");
 exports.isDisabled = _isDisabled.isDisabled;
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-},{"./accessible-description":16,"./accessible-name":18,"./getRole":19,"./is-disabled":21,"./is-inaccessible":22}],21:[function(require,module,exports){
+},{"./accessible-description":11,"./accessible-name":13,"./getRole":14,"./is-disabled":16,"./is-inaccessible":17}],16:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39781,7 +39832,7 @@ function isDisabled(element) {
   return elementsSupportingDisabledAttribute.has(localName) && element.hasAttribute("disabled") ? true : element.getAttribute("aria-disabled") === "true";
 }
 
-},{"./getRole":19}],22:[function(require,module,exports){
+},{"./getRole":14}],17:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39850,7 +39901,7 @@ function isSubtreeInaccessible(element) {
   return false;
 }
 
-},{}],23:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -39860,8 +39911,8 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor); } }
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); Object.defineProperty(Constructor, "prototype", { writable: false }); return Constructor; }
 function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return _typeof(key) === "symbol" ? key : String(key); }
-function _toPrimitive(input, hint) { if (_typeof(input) !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (_typeof(res) !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 // for environments without Set we fallback to arrays with unique members
 var SetLike = /*#__PURE__*/function () {
   function SetLike() {
@@ -39870,7 +39921,7 @@ var SetLike = /*#__PURE__*/function () {
     _defineProperty(this, "items", void 0);
     this.items = items;
   }
-  _createClass(SetLike, [{
+  return _createClass(SetLike, [{
     key: "add",
     value: function add(value) {
       if (this.has(value) === false) {
@@ -39911,12 +39962,10 @@ var SetLike = /*#__PURE__*/function () {
       return this.items.length;
     }
   }]);
-  return SetLike;
 }();
-var _default = typeof Set === "undefined" ? Set : SetLike;
-exports.default = _default;
+var _default = exports.default = typeof Set === "undefined" ? Set : SetLike;
 
-},{}],24:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -40008,7 +40057,7 @@ function arrayFrom(arrayLike, mapFn) {
   return A;
 }
 
-},{}],25:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 "use strict";
 
 function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
@@ -40032,10 +40081,9 @@ exports.queryIdRefs = queryIdRefs;
 exports.safeWindow = safeWindow;
 var _getRole = _interopRequireWildcard(require("./getRole"));
 exports.getLocalName = _getRole.getLocalName;
-function _getRequireWildcardCache(nodeInterop) { if (typeof WeakMap !== "function") return null; var cacheBabelInterop = new WeakMap(); var cacheNodeInterop = new WeakMap(); return (_getRequireWildcardCache = function _getRequireWildcardCache(nodeInterop) { return nodeInterop ? cacheNodeInterop : cacheBabelInterop; })(nodeInterop); }
-function _interopRequireWildcard(obj, nodeInterop) { if (!nodeInterop && obj && obj.__esModule) { return obj; } if (obj === null || _typeof(obj) !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(nodeInterop); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (key !== "default" && Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
-var presentationRoles = ["presentation", "none"];
-exports.presentationRoles = presentationRoles;
+function _getRequireWildcardCache(e) { if ("function" != typeof WeakMap) return null; var r = new WeakMap(), t = new WeakMap(); return (_getRequireWildcardCache = function _getRequireWildcardCache(e) { return e ? t : r; })(e); }
+function _interopRequireWildcard(e, r) { if (!r && e && e.__esModule) return e; if (null === e || "object" != _typeof(e) && "function" != typeof e) return { default: e }; var t = _getRequireWildcardCache(r); if (t && t.has(e)) return t.get(e); var n = { __proto__: null }, a = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var u in e) if ("default" !== u && {}.hasOwnProperty.call(e, u)) { var i = a ? Object.getOwnPropertyDescriptor(e, u) : null; i && (i.get || i.set) ? Object.defineProperty(n, u, i) : n[u] = e[u]; } return n.default = e, t && t.set(e, n), n; }
+var presentationRoles = exports.presentationRoles = ["presentation", "none"];
 function isElement(node) {
   return node !== null && node.nodeType === node.ELEMENT_NODE;
 }
@@ -40105,7 +40153,6 @@ function queryIdRefs(node, attributeName) {
     // TODO: why does this not narrow?
     );
   }
-
   return [];
 }
 function hasAnyConcreteRoles(node, roles) {
@@ -40115,7 +40162,7 @@ function hasAnyConcreteRoles(node, roles) {
   return false;
 }
 
-},{"./getRole":19}],26:[function(require,module,exports){
+},{"./getRole":14}],21:[function(require,module,exports){
 /*@license
 CalcNames: The AccName Computation Prototype, compute the Name and Description property values for a DOM node
 Returns an object with 'name' and 'desc' properties.
@@ -41822,7 +41869,7 @@ Plus roles extended for the Role Parity project.
   }
 })();
 
-},{}],27:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 (function (global){(function (){
 global.goog = {
 	provide: function() {},
@@ -41847,7 +41894,7 @@ require('accessibility-developer-tools/src/js/Properties');
 module.exports = global.axs;
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"accessibility-developer-tools/src/js/AccessibilityUtils":3,"accessibility-developer-tools/src/js/BrowserUtils":4,"accessibility-developer-tools/src/js/Color":5,"accessibility-developer-tools/src/js/Constants":6,"accessibility-developer-tools/src/js/DOMUtils":7,"accessibility-developer-tools/src/js/Properties":8}],28:[function(require,module,exports){
+},{"accessibility-developer-tools/src/js/AccessibilityUtils":3,"accessibility-developer-tools/src/js/BrowserUtils":4,"accessibility-developer-tools/src/js/Color":5,"accessibility-developer-tools/src/js/Constants":6,"accessibility-developer-tools/src/js/DOMUtils":7,"accessibility-developer-tools/src/js/Properties":8}],23:[function(require,module,exports){
 var ariaApi = require('aria-api');
 var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
@@ -41867,7 +41914,7 @@ var ex = function(fn, args, _this) {
 };
 
 var implementations = [{
-	name: 'aria-api (0.7.0)',
+	name: 'aria-api (0.8.0)',
 	url: 'https://github.com/xi/aria-api',
 	fn: function(el) {
 		return {
@@ -41881,7 +41928,7 @@ var implementations = [{
 	url: 'https://github.com/WhatSock/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {
-	name: 'dom-accessibility-api (0.6.3)',
+	name: 'dom-accessibility-api (0.7.0)',
 	url: 'https://github.com/eps1lon/dom-accessibility-api/',
 	fn: function(el) {
 		return {
@@ -41891,7 +41938,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'axe (4.9.1)',
+	name: 'axe (4.10.2)',
 	url: 'https://github.com/dequelabs/axe-core',
 	fn: function(el) {
 		axe._tree = axe.utils.getFlattenedTree(document.body);
@@ -41975,4 +42022,4 @@ try {
 	});
 }
 
-},{"./axs":27,"aria-api":9,"axe-core":15,"dom-accessibility-api":20,"w3c-alternative-text-computation":26}]},{},[28]);
+},{"./axs":22,"aria-api":9,"axe-core":10,"dom-accessibility-api":15,"w3c-alternative-text-computation":21}]},{},[23]);
