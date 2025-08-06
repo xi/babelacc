@@ -1,4 +1,4 @@
-var ariaApi = require('aria-api');
+var ariaApi = require('aria-api/dist/aria.js');
 var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
 var domAccessibilityApi = require('dom-accessibility-api');
