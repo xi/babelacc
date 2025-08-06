@@ -1,7 +1,6 @@
 var ariaApi = require('aria-api');
 var accdc = require('w3c-alternative-text-computation');
 var axe = require('axe-core');
-var axs = require('./axs');
 var domAccessibilityApi = require('dom-accessibility-api');
 
 var form = document.querySelector('#ba-form');
@@ -49,21 +48,6 @@ var implementations = [{
 			name: ex(axe.commons.text.accessibleText, [el]),
 			desc: '-',
 			role: ex(axe.commons.aria.getRole, [el]),
-		};
-	},
-}, {
-	name: 'axs (2.12.0)',
-	url: 'https://github.com/GoogleChrome/accessibility-developer-tools',
-	fn: function(el) {
-		return {
-			name: ex(axs.properties.findTextAlternatives, [el, {}]),
-			desc: '-',
-			role: ex(function() {
-				var roles = axs.utils.getRoles(el, true);
-				if (roles) {
-					return roles.roles.map(x => x.name).join(' ');
-				}
-			}),
 		};
 	},
 }];

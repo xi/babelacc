@@ -1,6 +1,6 @@
 all: babel.js
 
-babel.js: src/babel.js src/axs.js
+babel.js: src/babel.js
 	npx browserify $< -o $@
 
 .PHONY: clean
