@@ -4,9 +4,9 @@
   "description": "compare different implementations of accname",
   "devDependencies": {
     "aria-api": "^0.8.0",
-    "axe-core": "^4.10.2",
+    "axe-core": "^4.10.3",
     "dom-accessibility-api": "^0.7.0",
-    "w3c-alternative-text-computation": "github:WhatSock/w3c-alternative-text-computation#4b59f9877c9ae6282408edb150f64003a59fdb95"
+    "w3c-alternative-text-computation": "github:WhatSock/w3c-alternative-text-computation#8526b212921d0eefb54b411b2ba765bc554bf6b7"
   },
   "repository": {
     "type": "git",

@@ -26,7 +26,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'WhatSock (2.62)',
+	name: 'WhatSock (2.64)',
 	url: 'https://github.com/WhatSock/w3c-alternative-text-computation',
 	fn: accdc.calcNames,
 }, {
@@ -40,7 +40,7 @@ var implementations = [{
 		};
 	},
 }, {
-	name: 'axe (4.10.2)',
+	name: 'axe (4.10.3)',
 	url: 'https://github.com/dequelabs/axe-core',
 	fn: function(el) {
 		axe._tree = axe.utils.getFlattenedTree(document.body);
